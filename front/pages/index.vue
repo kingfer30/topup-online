@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, onMounted, nextTick, h, Component } from 'vue'
 
 // Language management
 const currentLang = ref('zh')
@@ -27,8 +27,8 @@ const langDict = {
     features_official_desc: "Using official iOS discounted zones",
     features_security: "Data Security",
     features_security_desc: "Full encryption, privacy guaranteed",
-    features_oem: "无人值守",
-    features_oem_desc: "24/7全天候自动操作",
+    features_oem: "Unattended",
+    features_oem_desc: "24/7 Automated Operation",
     steps_title: "How it works",
     step_1_title: "Get Token",
     step_1_desc: "Get your Token from ChatGPT account",
@@ -163,6 +163,29 @@ const initParticles = () => {
   }
 }
 
+// Flag icon components
+const USFlagIcon = () => h('span', { style: 'font-size: 16px;' }, '🇺🇸')
+const CNFlagIcon = () => h('span', { style: 'font-size: 16px;' }, '🇨🇳')
+
+// Icon render function (simplified)
+function renderIcon(icon: Component) {
+  return () => h(icon)
+}
+
+// Language options for dropdown
+const langOptions = [
+  {
+    label: 'English',
+    key: 'en',
+    icon: renderIcon(USFlagIcon)
+  },
+  {
+    label: '中文',
+    key: 'zh',
+    icon: renderIcon(CNFlagIcon)
+  }
+]
+
 // Lifecycle
 onMounted(async () => {
   // Initialize language
@@ -222,18 +245,16 @@ const t = computed(() => langDict[currentLang.value])
             <a href="#faq" class="nav-link">
               {{ t.nav_faq }}
             </a>
-            <button 
-              @click="switchLang('en')"
-              :class="['lang-switcher', { 'active': currentLang === 'en' }]"
+            <n-dropdown 
+              :options="langOptions"
+              @select="switchLang"
+              trigger="click"
             >
-              EN
-            </button>
-            <button 
-              @click="switchLang('zh')"
-              :class="['lang-switcher', { 'active': currentLang === 'zh' }]"
-            >
-              中文
-            </button>
+              <n-button size="small" class="ml-2 lang-dropdown-btn">
+                <span v-if="currentLang === 'zh'">🇨🇳 中文</span>
+                <span v-else>🇺🇸 English</span>
+              </n-button>
+            </n-dropdown>
           </nav>
         </div>
       </header>
@@ -287,7 +308,26 @@ const t = computed(() => langDict[currentLang.value])
             <div class="flex flex-col items-center">
               <span class="mb-2">
                 <svg width="32" height="32" fill="none" viewBox="0 0 24 24">
-                  <path fill="#818CF8" d="M19.43 12.98c.04-.32.07-.65.07-.98s-.03-.66-.07-.98l2.11-1.65a.5.5 0 0 0 .12-.64l-2-3.46a.5.5 0 0 0-.6-.22l-2.49 1a7.03 7.03 0 0 0-1.69-.98l-.38-2.65A.5.5 0 0 0 14 2h-4a.5.5 0 0 0-.5.42l-.38 2.65a7.03 7.03 0 0 0-1.69.98l-2.49-1a.5.5 0 0 0-.6.22l-2 3.46a.5.5 0 0 0 .12.64l2.11 1.65c-.04.32-.07.65-.07.98s.03.66.07.98l-2.11 1.65a.5.5 0 0 0-.12.64l2 3.46a.5.5 0 0 0 .6.22l2.49-1c.53.38 1.1.71 1.69.98l.38 2.65A.5.5 0 0 0 10 22h4a.5.5 0 0 0 .5-.42l.38-2.65c.59-.27 1.16-.6 1.69-.98l2.49 1a.5.5 0 0 0 .6-.22l2-3.46a.5.5 0 0 0-.12-.64l-2.11-1.65zM12 15.5A3.5 3.5 0 1 1 12 8.5a3.5 3.5 0 0 1 0 7z"/>
+                  <!-- 机器人头部 -->
+                  <rect x="7" y="6" width="10" height="8" rx="2" fill="#818CF8"/>
+                  <!-- 机器人眼睛 -->
+                  <circle cx="9.5" cy="9" r="1" fill="#fff"/>
+                  <circle cx="14.5" cy="9" r="1" fill="#fff"/>
+                  <!-- 机器人嘴巴 -->
+                  <rect x="10.5" y="11.5" width="3" height="0.5" rx="0.25" fill="#fff"/>
+                  <!-- 机器人身体 -->
+                  <rect x="8" y="14" width="8" height="6" rx="1" fill="#60A5FA"/>
+                  <!-- 机器人手臂 -->
+                  <rect x="5" y="15" width="2" height="3" rx="1" fill="#60A5FA"/>
+                  <rect x="17" y="15" width="2" height="3" rx="1" fill="#60A5FA"/>
+                  <!-- 机器人腿 -->
+                  <rect x="9" y="20" width="2" height="2" rx="1" fill="#818CF8"/>
+                  <rect x="13" y="20" width="2" height="2" rx="1" fill="#818CF8"/>
+                  <!-- 天线 -->
+                  <line x1="10" y1="6" x2="10" y2="4" stroke="#818CF8" stroke-width="1"/>
+                  <line x1="14" y1="6" x2="14" y2="4" stroke="#818CF8" stroke-width="1"/>
+                  <circle cx="10" cy="4" r="0.5" fill="#818CF8"/>
+                  <circle cx="14" cy="4" r="0.5" fill="#818CF8"/>
                 </svg>
               </span>
               <span class="font-bold text-lg mb-1">{{ t.features_oem }}</span>
@@ -518,23 +558,18 @@ const t = computed(() => langDict[currentLang.value])
   }
 }
 
-.lang-switcher {
-  padding: 0.2rem 1rem;
-  border-radius: 9999px;
-  border: 2px solid #111;
-  background: #fff;
-  margin-left: 0.4rem;
+.lang-dropdown-btn {
+  border: 2px solid #111 !important;
+  background: #fff !important;
+  color: #111 !important;
   font-weight: 500;
-  cursor: pointer;
   transition: border-color 0.18s, color 0.18s, background 0.15s;
-  color: #111;
 }
 
-.lang-switcher.active, 
-.lang-switcher:hover {
-  border-color: #60a5fa;
-  color: #3b82f6;
-  background: #f1f6fd;
+.lang-dropdown-btn:hover {
+  border-color: #60a5fa !important;
+  color: #3b82f6 !important;
+  background: #f1f6fd !important;
 }
 
 body { 
