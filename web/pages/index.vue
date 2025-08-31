@@ -274,20 +274,23 @@ const t = computed(() => langDict[currentLang.value])
     <div id="particles-js" class="fixed inset-0 -z-10"></div>
     
     <!-- Main Content -->
-    <div class="bg-gradient-to-br from-[#7e72d6] via-[#7bb6f8] to-[#e0ecff] text-gray-900 min-h-screen animate-[fadeIn_1s_ease-in-out]">
+    <div class="bg-gradient-to-br from-black via-gray-800 to-gray-100 text-gray-900 min-h-screen animate-[fadeIn_1s_ease-in-out]">
       
       <!-- Header -->
-      <header class="bg-white/10 backdrop-blur-sm p-4 sticky top-0 z-40 shadow-xl">
+      <header class="bg-white p-4 sticky top-0 z-40 shadow-xl border-b border-black/20">
         <div class="max-w-7xl mx-auto flex justify-between items-center flex-col sm:flex-row gap-3 sm:gap-0">
           <div>
             <button 
               @click="scrollToTop" 
-              class="nav-link"
+              class="nav-link-active"
             >
               {{ t.nav_home }}
             </button>
           </div>
           <nav class="flex gap-2 items-center justify-center">
+            <a href="" class="nav-link">
+              {{ t.hero_btn }}
+            </a>
             <a href="#features" class="nav-link">
               {{ t.nav_features }}
             </a>
@@ -325,10 +328,10 @@ const t = computed(() => langDict[currentLang.value])
       <section class="py-20 text-center px-4 relative z-10">
         <img 
           alt="ChatGPT Logo" 
-          class="w-16 mx-auto mb-5" 
-          src="https://upload.wikimedia.org/wikipedia/commons/0/04/ChatGPT_logo.svg"
+          class="w-16 h-16 mx-auto rounded-full animate-spin-slow" 
+          src="../assets/images/ChatGPT-Logo.svg"
         />
-        <h2 class="text-4xl sm:text-5xl font-bold mb-4 text-white drop-shadow">
+        <h2 class="text-4xl sm:text-5xl font-bold  mt-5 mb-4 text-white drop-shadow">
           {{ t.hero_title }}
         </h2>
         <p class="text-xl mb-8 text-white drop-shadow">
@@ -338,26 +341,14 @@ const t = computed(() => langDict[currentLang.value])
           <n-button 
             type="primary" 
             size="large"
-            class="bg-white text-indigo-700 font-semibold px-8 py-3 rounded-full shadow-lg hover:shadow-2xl hover:scale-105 transition-all text-lg"
+            class="bg-white text-black font-semibold px-8 py-3 rounded-full shadow-lg hover:shadow-2xl hover:scale-105 transition-all text-lg hover:bg-black hover:text-white"
             tag="a"
             href="https://www.ow520.com/"
             target="_blank"
           >
             {{ t.hero_btn }}
           </n-button>
-          <n-button 
-            secondary
-            size="large"
-            class="flex items-center gap-1 px-5 py-3 rounded-full border border-indigo-600 text-indigo-700 font-semibold hover:bg-indigo-50 transition-all text-base"
-            tag="a"
-            href="http://193.200.134.144?cid=2&mid=2"
-            target="_blank"
-          >
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-width="2" d="M8 10h.01M12 14h.01M16 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-            </svg>
-            {{ t.hero_card }}
-          </n-button>
+          
         </div>
       </section>
 
@@ -366,39 +357,16 @@ const t = computed(() => langDict[currentLang.value])
         <h3 class="text-4xl font-bold mb-10">{{ t.features_title }}</h3>
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 max-w-6xl mx-auto">
           <!-- OEM - 无人值守 -->
-          <n-card class="bg-gradient-to-br from-blue-100 via-indigo-100 to-white hover:scale-105 transition-transform">
+          <n-card class="bg-gradient-to-br from-gray-100 via-gray-50 to-white hover:scale-105 transition-transform">
             <div class="flex flex-col items-center">
-              <span class="mb-2">
-                <svg width="32" height="32" fill="none" viewBox="0 0 24 24">
-                  <!-- 机器人头部 -->
-                  <rect x="7" y="6" width="10" height="8" rx="2" fill="#818CF8"/>
-                  <!-- 机器人眼睛 -->
-                  <circle cx="9.5" cy="9" r="1" fill="#fff"/>
-                  <circle cx="14.5" cy="9" r="1" fill="#fff"/>
-                  <!-- 机器人嘴巴 -->
-                  <rect x="10.5" y="11.5" width="3" height="0.5" rx="0.25" fill="#fff"/>
-                  <!-- 机器人身体 -->
-                  <rect x="8" y="14" width="8" height="6" rx="1" fill="#60A5FA"/>
-                  <!-- 机器人手臂 -->
-                  <rect x="5" y="15" width="2" height="3" rx="1" fill="#60A5FA"/>
-                  <rect x="17" y="15" width="2" height="3" rx="1" fill="#60A5FA"/>
-                  <!-- 机器人腿 -->
-                  <rect x="9" y="20" width="2" height="2" rx="1" fill="#818CF8"/>
-                  <rect x="13" y="20" width="2" height="2" rx="1" fill="#818CF8"/>
-                  <!-- 天线 -->
-                  <line x1="10" y1="6" x2="10" y2="4" stroke="#818CF8" stroke-width="1"/>
-                  <line x1="14" y1="6" x2="14" y2="4" stroke="#818CF8" stroke-width="1"/>
-                  <circle cx="10" cy="4" r="0.5" fill="#818CF8"/>
-                  <circle cx="14" cy="4" r="0.5" fill="#818CF8"/>
-                </svg>
-              </span>
+              <span class="text-3xl mb-2">🤖</span>
               <span class="font-bold text-lg mb-1">{{ t.features_oem }}</span>
               <span class="text-gray-700 text-base">{{ t.features_oem_desc }}</span>
             </div>
           </n-card>
           
           <!-- Auto top-up -->
-          <n-card class="bg-gradient-to-br from-blue-100 via-indigo-100 to-white hover:scale-105 transition-transform">
+          <n-card class="bg-gradient-to-br from-gray-100 via-gray-50 to-white hover:scale-105 transition-transform">
             <div class="flex flex-col items-center">
               <span class="text-3xl mb-2">⚡</span>
               <span class="font-bold text-lg mb-1">{{ t.features_auto }}</span>
@@ -407,21 +375,16 @@ const t = computed(() => langDict[currentLang.value])
           </n-card>
           
           <!-- Official recharge -->
-          <n-card class="bg-gradient-to-br from-blue-100 via-indigo-100 to-white hover:scale-105 transition-transform">
+          <n-card class="bg-gradient-to-br from-gray-100 via-gray-50 to-white hover:scale-105 transition-transform">
             <div class="flex flex-col items-center">
-              <span class="mb-2">
-                <svg width="42" height="42" viewBox="0 0 42 42" fill="none">
-                  <path d="M21 6C21 6 9 10.2 9 14.4V24.6C9 31.2 21 36 21 36C21 36 33 31.2 33 24.6V14.4C33 10.2 21 6 21 6Z" fill="#22c55e"/>
-                  <path d="M16.7 23.6l4 4 7-7" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-              </span>
+              <span class="text-3xl mb-2">✅️</span>
               <span class="font-bold text-lg mb-1">{{ t.features_official }}</span>
               <span class="text-gray-700 text-base">{{ t.features_official_desc }}</span>
             </div>
           </n-card>
           
           <!-- Data security -->
-          <n-card class="bg-gradient-to-br from-blue-100 via-indigo-100 to-white hover:scale-105 transition-transform">
+          <n-card class="bg-gradient-to-br from-gray-100 via-gray-50 to-white hover:scale-105 transition-transform">
             <div class="flex flex-col items-center">
               <span class="text-3xl mb-2">🔒</span>
               <span class="font-bold text-lg mb-1">{{ t.features_security }}</span>
@@ -453,15 +416,7 @@ const t = computed(() => langDict[currentLang.value])
           
           <n-card class="hover:scale-105 transition-transform">
             <div class="flex flex-col items-center">
-              <div class="mb-3">
-                <svg width="40" height="40" fill="none" viewBox="0 0 24 24">
-                  <rect x="4" y="9" width="16" height="8" rx="4" fill="#818CF8"/>
-                  <rect x="8" y="2" width="8" height="4" rx="2" fill="#60A5FA"/>
-                  <rect x="7" y="17" width="10" height="2" rx="1" fill="#60A5FA"/>
-                  <circle cx="9.5" cy="13" r="1.2" fill="#fff"/>
-                  <circle cx="14.5" cy="13" r="1.2" fill="#fff"/>
-                </svg>
-              </div>
+              <div class="text-4xl mb-3">🤖</div>
               <div class="font-bold mb-1">{{ t.step_3_title }}</div>
               <div class="text-gray-700 text-base">{{ t.step_3_desc }}</div>
             </div>
@@ -544,11 +499,11 @@ const t = computed(() => langDict[currentLang.value])
       <footer class="bg-gray-100 text-center text-sm p-6 text-gray-600 flex flex-col sm:flex-row justify-center items-center gap-3">
         <span>{{ t.footer_copyright }}</span>
         <span class="hidden sm:inline-block mx-2">|</span>
-        <n-button text @click="showTechModal = true" class="underline hover:text-indigo-600">
+        <n-button text @click="showTechModal = true" class="underline hover:text-black">
           {{ t.footer_tech }}
         </n-button>
         <span class="hidden sm:inline-block mx-2">|</span>
-        <n-button text @click="showPrivacyModal = true" class="underline hover:text-indigo-600">
+        <n-button text @click="showPrivacyModal = true" class="underline hover:text-black">
           {{ t.footer_privacy }}
         </n-button>
       </footer>
@@ -595,43 +550,94 @@ const t = computed(() => langDict[currentLang.value])
   100% { opacity: 1; transform: translateY(0); }
 }
 
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.animate-spin-slow {
+  animation: spin-slow 3s linear infinite;
+}
+
 .nav-link {
-  color: #111; 
+  color: #374151; 
   font-weight: 500; 
   font-size: 1rem; 
-  padding: 0.2rem 1rem;
-  border-radius: 9999px; 
-  border: 2px solid #111; 
+  padding: 0.5rem 1.2rem;
+  border-radius: 25px; 
+  border: none; 
   background: transparent;
-  transition: border-color 0.18s, color 0.18s, background 0.15s;
-  margin: 0 0.05rem;
+  backdrop-filter: blur(10px);
+  transition: all 0.3s ease;
+  margin: 0 0.25rem;
+  text-decoration: none;
 }
 
 .nav-link:hover, .nav-link:focus {
-  border-color: #60a5fa;
-  color: #3b82f6;
-  background: #f1f6fd;
+  border-color: #000000;
+  color: #ffffff;
+  background: #000000;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.nav-link-active {
+  color: #ffffff; 
+  font-weight: 500; 
+  font-size: 1rem; 
+  padding: 0.5rem 1.2rem;
+  border-radius: 25px; 
+  border: 1px solid #000000; 
+  background: #000000;
+  backdrop-filter: blur(10px);
+  transition: none;
+  margin: 0 0.25rem;
+  text-decoration: none;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.nav-link-active:hover, .nav-link-active:focus {
+  border-color: #000000;
+  color: #ffffff;
+  background: #000000;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 @media (max-width: 600px) {
   .nav-link { 
     font-size: 0.92rem; 
-    padding: 0.14rem 0.5rem;
+    padding: 0.4rem 0.8rem;
+  }
+  
+  .nav-link-active { 
+    font-size: 0.92rem; 
+    padding: 0.4rem 0.8rem;
+  }
+  
+  .lang-dropdown-btn {
+    padding: 0.4rem 0.8rem !important;
   }
 }
 
 .lang-dropdown-btn {
-  border: 2px solid #111 !important;
-  background: #fff !important;
-  color: #111 !important;
+  border: 1px solid rgba(0, 0, 0, 0.3) !important;
+  background: rgba(0, 0, 0, 0.1) !important;
+  color: #374151 !important;
   font-weight: 500;
-  transition: border-color 0.18s, color 0.18s, background 0.15s;
+  border-radius: 25px !important;
+  backdrop-filter: blur(10px);
+  transition: all 0.3s ease;
+  padding: 0.5rem 1rem !important;
 }
 
 .lang-dropdown-btn:hover {
-  border-color: #60a5fa !important;
-  color: #3b82f6 !important;
-  background: #f1f6fd !important;
+  border-color: #000000 !important;
+  color: #ffffff !important;
+  background: #000000 !important;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 body { 
