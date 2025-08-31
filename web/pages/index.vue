@@ -357,7 +357,7 @@ const t = computed(() => langDict[currentLang.value])
         <h3 class="text-4xl font-bold mb-10">{{ t.features_title }}</h3>
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 max-w-6xl mx-auto">
           <!-- OEM - 无人值守 -->
-          <n-card class="bg-gradient-to-br from-gray-100 via-gray-50 to-white hover:scale-105 transition-transform">
+          <n-card class="feature-card">
             <div class="flex flex-col items-center">
               <span class="text-3xl mb-2">🤖</span>
               <span class="font-bold text-lg mb-1">{{ t.features_oem }}</span>
@@ -366,7 +366,7 @@ const t = computed(() => langDict[currentLang.value])
           </n-card>
           
           <!-- Auto top-up -->
-          <n-card class="bg-gradient-to-br from-gray-100 via-gray-50 to-white hover:scale-105 transition-transform">
+          <n-card class="feature-card">
             <div class="flex flex-col items-center">
               <span class="text-3xl mb-2">⚡</span>
               <span class="font-bold text-lg mb-1">{{ t.features_auto }}</span>
@@ -375,7 +375,7 @@ const t = computed(() => langDict[currentLang.value])
           </n-card>
           
           <!-- Official recharge -->
-          <n-card class="bg-gradient-to-br from-gray-100 via-gray-50 to-white hover:scale-105 transition-transform">
+          <n-card class="feature-card">
             <div class="flex flex-col items-center">
               <span class="text-3xl mb-2">✅️</span>
               <span class="font-bold text-lg mb-1">{{ t.features_official }}</span>
@@ -384,7 +384,7 @@ const t = computed(() => langDict[currentLang.value])
           </n-card>
           
           <!-- Data security -->
-          <n-card class="bg-gradient-to-br from-gray-100 via-gray-50 to-white hover:scale-105 transition-transform">
+          <n-card class="feature-card">
             <div class="flex flex-col items-center">
               <span class="text-3xl mb-2">🔒</span>
               <span class="font-bold text-lg mb-1">{{ t.features_security }}</span>
@@ -398,7 +398,7 @@ const t = computed(() => langDict[currentLang.value])
       <section class="bg-gray-50 py-20 px-6 text-center text-gray-900" id="steps">
         <h3 class="text-4xl font-bold mb-10">{{ t.steps_title }}</h3>
         <div class="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-8">
-          <n-card class="hover:scale-105 transition-transform">
+          <n-card class="feature-card">
             <div class="flex flex-col items-center">
               <div class="text-4xl mb-3">🔑</div>
               <div class="font-bold mb-1">{{ t.step_1_title }}</div>
@@ -406,7 +406,7 @@ const t = computed(() => langDict[currentLang.value])
             </div>
           </n-card>
           
-          <n-card class="hover:scale-105 transition-transform">
+          <n-card class="feature-card">
             <div class="flex flex-col items-center">
               <div class="text-4xl mb-3">📝</div>
               <div class="font-bold mb-1">{{ t.step_2_title }}</div>
@@ -414,7 +414,7 @@ const t = computed(() => langDict[currentLang.value])
             </div>
           </n-card>
           
-          <n-card class="hover:scale-105 transition-transform">
+          <n-card class="feature-card">
             <div class="flex flex-col items-center">
               <div class="text-4xl mb-3">🤖</div>
               <div class="font-bold mb-1">{{ t.step_3_title }}</div>
@@ -422,7 +422,7 @@ const t = computed(() => langDict[currentLang.value])
             </div>
           </n-card>
           
-          <n-card class="hover:scale-105 transition-transform">
+          <n-card class="feature-card">
             <div class="flex flex-col items-center">
               <div class="text-4xl mb-3">✅</div>
               <div class="font-bold mb-1">{{ t.step_4_title }}</div>
@@ -638,6 +638,26 @@ const t = computed(() => langDict[currentLang.value])
   background: #000000 !important;
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.feature-card {
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.feature-card:hover {
+  background: #000000;
+  color: #ffffff;
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+}
+
+.feature-card:hover span,
+.feature-card:hover div {
+  color: #ffffff;
 }
 
 body { 
