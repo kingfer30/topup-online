@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, nextTick, h, Component } from 'vue'
+import { getCountryFlag } from 'country-flag-icons'
+
 
 // Language management
 const currentLang = ref('zh')
@@ -163,10 +165,18 @@ const initParticles = () => {
   }
 }
 
-// Flag icon components
-const USFlagIcon = () => h('span', { style: 'font-size: 16px;' }, '🇺🇸')
-const CNFlagIcon = () => h('span', { style: 'font-size: 16px;' }, '🇨🇳')
+// 简化的国旗图标创建函数
+const createFlagIcon = (countryCode: string) => {
+  return () => h('div', { 
+    style: 'width: 16px; height: 12px; display: inline-flex; align-items: center;',
+    innerHTML: getCountryFlag(countryCode)?.replace('<svg', '<svg width="16" height="12"') || '🏳️'
+  })
+}
 
+// 创建国旗图标组件
+const USFlagIcon = createFlagIcon('US')
+const CNFlagIcon = createFlagIcon('CN')
+const JPFlagIcon = createFlagIcon('JP')  // 示例：日本国旗
 // Icon render function (simplified)
 function renderIcon(icon: Component) {
   return () => h(icon)

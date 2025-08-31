@@ -10,6 +10,7 @@
     "postinstall": "nuxt prepare"
   },
   "dependencies": {
+    "country-flag-icons": "^1.5.19",
     "naive-ui": "^2.42.0",
     "nuxt": "^3.17.7",
     "vue": "^3.5.20",
