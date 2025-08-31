@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { ref, onMounted, nextTick, h, Component } from 'vue'
-import { getCountryFlag } from 'country-flag-icons'
+// Use flag SVGs from public directory
+const cnFlag = '/flags/CN.svg'
+const usFlag = '/flags/US.svg'
+const ruFlag = '/flags/RU.svg'
 
 
 // Language management
@@ -93,6 +96,47 @@ const langDict = {
     footer_copyright: "© 2025 ChatGPT 自动充值平台 版权所有",
     footer_tech: "技术保障",
     footer_privacy: "隐私条款",
+  },
+  ru: {
+    page_title: "Платформа автоматического пополнения ChatGPT",
+    nav_home: "Главная",
+    nav_features: "Особенности", 
+    nav_steps: "Как это работает",
+    nav_faq: "FAQ",
+    hero_title: "Быстрая, безопасная, автоматизированная платформа пополнения ChatGPT",
+    hero_sub: "Без входа в систему, только токен, полностью автоматизированная система 24/7",
+    hero_btn: "Начать пополнение",
+    hero_card: "Покупка карты",
+    features_title: "Особенности",
+    features_auto: "Мгновенное пополнение",
+    features_auto_desc: "Пополнение за секунды, без ожидания",
+    features_official: "Официальное пополнение",
+    features_official_desc: "Использование официальных iOS зон со скидками",
+    features_security: "Безопасность данных",
+    features_security_desc: "Полное шифрование, гарантия конфиденциальности",
+    features_oem: "Автономная работа",
+    features_oem_desc: "Автоматическая работа 24/7",
+    steps_title: "Как это работает",
+    step_1_title: "Получить токен",
+    step_1_desc: "Получите токен из настроек аккаунта ChatGPT",
+    step_2_title: "Заполнить информацию",
+    step_2_desc: "Вставьте токен и выберите тариф",
+    step_3_title: "Отправить",
+    step_3_desc: "Автоматизированная обработка системой",
+    step_4_title: "Мгновенное поступление",
+    step_4_desc: "Пополнение поступает мгновенно, синхронизируется",
+    faq_title: "Часто задаваемые вопросы",
+    faq_q1: "Это официальное пополнение?",
+    faq_a1: "Мы используем официальные API подписок iOS со скидками, 100% подлинные.",
+    faq_q2: "Истечет ли срок действия кода карты?",
+    faq_a2: "Код карты становится недействительным только после успешного пополнения.",
+    faq_q3: "Нужно ли входить в систему?",
+    faq_a3: "Нет. Нужен только ваш токен, без логина/пароля аккаунта.",
+    faq_q4: "Что делать, если пополнение не удалось?",
+    faq_a4: "Редко может произойти сбой из-за сети. Если это произойдет, проверьте, есть ли у вас подписка; если нет, просто повторите попытку.",
+    footer_copyright: "© 2025 Платформа пополнения ChatGPT. Все права защищены.",
+    footer_tech: "Техническая поддержка",
+    footer_privacy: "Политика конфиденциальности",
   }
 }
 
@@ -104,6 +148,7 @@ const showPrivacyModal = ref(false)
 const detectLang = () => {
   const lang = navigator.language || navigator.userLanguage
   if (lang.startsWith('zh')) return 'zh'
+  if (lang.startsWith('ru')) return 'ru'
   return 'en'
 }
 
@@ -165,21 +210,13 @@ const initParticles = () => {
   }
 }
 
-// 简化的国旗图标创建函数
-const createFlagIcon = (countryCode: string) => {
-  return () => h('div', { 
-    style: 'width: 16px; height: 12px; display: inline-flex; align-items: center;',
-    innerHTML: getCountryFlag(countryCode)?.replace('<svg', '<svg width="16" height="12"') || '🏳️'
+// Helper function to render flag icons
+const renderIcon = (flagSvg: string) => {
+  return () => h('img', { 
+    src: flagSvg, 
+    style: 'width: 20px; height: 15px; border-radius: 2px;',
+    alt: 'Flag'
   })
-}
-
-// 创建国旗图标组件
-const USFlagIcon = createFlagIcon('US')
-const CNFlagIcon = createFlagIcon('CN')
-const JPFlagIcon = createFlagIcon('JP')  // 示例：日本国旗
-// Icon render function (simplified)
-function renderIcon(icon: Component) {
-  return () => h(icon)
 }
 
 // Language options for dropdown
@@ -187,12 +224,17 @@ const langOptions = [
   {
     label: 'English',
     key: 'en',
-    icon: renderIcon(USFlagIcon)
+    icon: renderIcon(usFlag)
   },
   {
     label: '中文',
     key: 'zh',
-    icon: renderIcon(CNFlagIcon)
+    icon: renderIcon(cnFlag)
+  },
+  {
+    label: 'Русский',
+    key: 'ru',
+    icon: renderIcon(ruFlag)
   }
 ]
 
@@ -261,8 +303,18 @@ const t = computed(() => langDict[currentLang.value])
               trigger="click"
             >
               <n-button size="small" class="ml-2 lang-dropdown-btn">
-                <span v-if="currentLang === 'zh'">🇨🇳 中文</span>
-                <span v-else>🇺🇸 English</span>
+                <span v-if="currentLang === 'zh'" class="flex items-center gap-1">
+                  <img :src="cnFlag" alt="China Flag" style="width: 20px; height: 15px; border-radius: 2px;" />
+                  中文
+                </span>
+                <span v-else-if="currentLang === 'ru'" class="flex items-center gap-1">
+                  <img :src="ruFlag" alt="Russia Flag" style="width: 20px; height: 15px; border-radius: 2px;" />
+                  Русский
+                </span>
+                <span v-else class="flex items-center gap-1">
+                  <img :src="usFlag" alt="US Flag" style="width: 20px; height: 15px; border-radius: 2px;" />
+                  English
+                </span>
               </n-button>
             </n-dropdown>
           </nav>

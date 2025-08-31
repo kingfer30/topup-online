@@ -4,7 +4,9 @@
       "Bash(npm run dev:*)",
       "Bash(powershell:*)",
       "Bash(npm install:*)",
-      "Bash(npx tailwindcss:*)"
+      "Bash(npx tailwindcss:*)",
+      "Bash(npm run postinstall:*)",
+      "Bash(dir:*)"
     ],
     "deny": [],
     "ask": []
