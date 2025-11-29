@@ -39,3 +39,4 @@ export default {
   footer_tech: "Tech Assurance",
   footer_privacy: "Privacy Policy",
 }
+

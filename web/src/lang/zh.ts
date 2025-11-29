@@ -39,3 +39,4 @@ export default {
   footer_tech: "技术保障",
   footer_privacy: "隐私条款",
 }
+

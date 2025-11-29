@@ -39,3 +39,4 @@ export default {
   footer_tech: "Техническая поддержка",
   footer_privacy: "Политика конфиденциальности",
 }
+

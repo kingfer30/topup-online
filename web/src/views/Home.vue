@@ -1,10 +1,18 @@
 <script setup lang="ts">
-import { ref, onMounted, nextTick, h, Component } from 'vue'
+import { ref, onMounted, nextTick, h, computed } from 'vue'
+import { 
+  NButton, 
+  NDropdown, 
+  NCard, 
+  NCollapseTransition, 
+  NModal 
+} from 'naive-ui'
+import '@/styles/custom.css'
+
 // Use flag SVGs from public directory
 const cnFlag = '/flags/CN.svg'
 const usFlag = '/flags/US.svg'
 const ruFlag = '/flags/RU.svg'
-
 
 // Language management
 const currentLang = ref('zh')
@@ -14,15 +22,12 @@ const isLoading = ref(true)
 const faqOpenStates = ref([false, false, false, false])
 
 // Import language files
-import enLang from '../lang/en.js'
-import zhLang from '../lang/zh.js'
-import ruLang from '../lang/ru.js'
-
-// Import component styles
-import '../assets/css/index.css'
+import enLang from '@/lang/en'
+import zhLang from '@/lang/zh'
+import ruLang from '@/lang/ru'
 
 // Language dictionary
-const langDict = {
+const langDict: Record<string, any> = {
   en: enLang,
   zh: zhLang,
   ru: ruLang
@@ -34,7 +39,7 @@ const showPrivacyModal = ref(false)
 
 // Language detection and management
 const detectLang = () => {
-  const lang = navigator.language || navigator.userLanguage
+  const lang = navigator.language || (navigator as any).userLanguage
   if (lang.startsWith('zh')) return 'zh'
   if (lang.startsWith('ru')) return 'ru'
   return 'en'
@@ -43,9 +48,7 @@ const detectLang = () => {
 const switchLang = (lang: string) => {
   currentLang.value = lang
   localStorage.setItem('lang', lang)
-  useHead({
-    title: langDict[lang].page_title
-  })
+  document.title = langDict[lang].page_title
 }
 
 const toggleFaq = (index: number) => {
@@ -59,8 +62,8 @@ const scrollToTop = () => {
 }
 
 const initParticles = () => {
-  if (process.client && window.particlesJS) {
-    window.particlesJS("particles-js", {
+  if (typeof window !== 'undefined' && (window as any).particlesJS) {
+    (window as any).particlesJS("particles-js", {
       particles: {
         number: { value: 60, density: { enable: true, value_area: 800 } },
         color: { value: "#ffffff" },
@@ -133,12 +136,10 @@ onMounted(async () => {
   currentLang.value = savedLang
   
   // Set page title
-  useHead({
-    title: langDict[savedLang].page_title
-  })
+  document.title = langDict[savedLang].page_title
   
   // Load particles.js
-  if (process.client) {
+  if (typeof window !== 'undefined') {
     const script = document.createElement('script')
     script.src = 'https://cdn.jsdelivr.net/npm/particles.js@2.0.0/particles.min.js'
     script.onload = () => {
@@ -168,15 +169,16 @@ const t = computed(() => langDict[currentLang.value])
       <header class="bg-white p-4 sticky top-0 z-40 shadow-xl border-b border-black/20">
         <div class="max-w-7xl mx-auto flex justify-between items-center flex-col sm:flex-row gap-3 sm:gap-0">
           <div>
-            <button 
+            <n-button 
               @click="scrollToTop" 
               class="nav-link-active"
+              :bordered="false"
             >
               {{ t.nav_home }}
-            </button>
+            </n-button>
           </div>
           <nav class="flex gap-2 items-center justify-center">
-            <a href="" class="nav-link">
+            <a href="https://www.ow520.com/" class="nav-link" target="_blank">
               {{ t.hero_btn }}
             </a>
             <a href="#features" class="nav-link">
@@ -217,9 +219,9 @@ const t = computed(() => langDict[currentLang.value])
         <img 
           alt="ChatGPT Logo" 
           class="w-16 h-16 mx-auto rounded-full animate-spin-slow" 
-          src="../assets/images/ChatGPT-Logo.svg"
+          src="@/assets/images/ChatGPT-Logo.svg"
         />
-        <h2 class="text-4xl sm:text-5xl font-bold  mt-5 mb-4 text-white drop-shadow">
+        <h2 class="text-4xl sm:text-5xl font-bold mt-5 mb-4 text-white drop-shadow">
           {{ t.hero_title }}
         </h2>
         <p class="text-xl mb-8 text-white drop-shadow">
@@ -236,7 +238,6 @@ const t = computed(() => langDict[currentLang.value])
           >
             {{ t.hero_btn }}
           </n-button>
-          
         </div>
       </section>
 
@@ -398,7 +399,7 @@ const t = computed(() => langDict[currentLang.value])
 
       <!-- Tech Modal -->
       <n-modal v-model:show="showTechModal">
-        <n-card style="width: 600px" title="Tech Assurance" :bordered="false" size="huge" role="dialog" aria-modal="true">
+        <n-card style="width: 600px; max-width: 90vw;" title="Tech Assurance" :bordered="false" size="huge" role="dialog" aria-modal="true">
           <div class="space-y-4">
             <p>Our platform provides comprehensive technical assurance:</p>
             <ul class="list-disc pl-6 space-y-2">
@@ -414,7 +415,7 @@ const t = computed(() => langDict[currentLang.value])
 
       <!-- Privacy Modal -->
       <n-modal v-model:show="showPrivacyModal">
-        <n-card style="width: 600px" title="Privacy Policy" :bordered="false" size="huge" role="dialog" aria-modal="true">
+        <n-card style="width: 600px; max-width: 90vw;" title="Privacy Policy" :bordered="false" size="huge" role="dialog" aria-modal="true">
           <div class="space-y-4">
             <p>We are committed to protecting your privacy:</p>
             <ul class="list-disc pl-6 space-y-2">
@@ -431,4 +432,3 @@ const t = computed(() => langDict[currentLang.value])
     </div>
   </div>
 </template>
-
