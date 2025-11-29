@@ -1,10 +1,15 @@
 package main
 
 import (
+	"os"
+
 	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 	redis "github.com/kingfer30/topup-online/config/cache"
 	"github.com/kingfer30/topup-online/constants"
+	"github.com/kingfer30/topup-online/controller"
 	"github.com/kingfer30/topup-online/middleware"
+	"github.com/kingfer30/topup-online/model"
 	"github.com/kingfer30/topup-online/router"
 	"github.com/kingfer30/topup-online/utils/client"
 	"github.com/kingfer30/topup-online/utils/logger"
@@ -12,10 +17,27 @@ import (
 
 func main() {
 	logger.SetupLogger()
+
+	// 加载.env文件（如果存在），使用Overload强制覆盖已存在的环境变量
+	// 这样可以确保.env文件中的配置优先级最高
+	_ = godotenv.Overload()
+
+	// 检查是否已初始化，如果已初始化则连接数据库
+	if _, err := os.Stat(".initialized"); err == nil {
+		logger.SysLog("System is initialized, connecting to database...")
+		model.InitDB()
+		// 传递数据库连接给controller
+		controller.SetDB(model.DB)
+		logger.SysLog("Database connection established")
+	} else {
+		logger.SysLog("System not initialized yet, waiting for initialization...")
+	}
+
 	// 创建 Gin 实例
 	server := gin.Default()
 	server.Use(gin.Recovery())
 	server.Use(middleware.RequestId())
+	server.Use(middleware.CORS()) // 添加CORS支持
 
 	// Initialize Redis
 	err := redis.InitRedisClient()

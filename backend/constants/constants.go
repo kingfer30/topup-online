@@ -10,7 +10,7 @@ var ServerPort = env.String(os.Getenv("PORT"), "3030")
 var DebugEnabled = env.Bool(os.Getenv("DEBUG"), false)
 var DebugSQLEnabled = env.Bool(os.Getenv("DEBUG_SQL"), false)
 var RelayProxy = env.String(os.Getenv("RELAY_PROXY"), "")
-var RelayTimeout = env.Int("RELAY_TIMEOUT", 0)     // unit is second
+var RelayTimeout = env.Int("RELAY_TIMEOUT", 0)       // unit is second
 var CacheFrequency = env.Int("CACHE_FREQUENCY", 300) // unit is second
 
 // common

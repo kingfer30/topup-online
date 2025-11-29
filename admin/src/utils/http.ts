@@ -13,7 +13,7 @@ const getBaseURL = () => {
 // 创建axios实例
 const service: AxiosInstance = axios.create({
   baseURL: getBaseURL(),
-  timeout: 15000, // 请求超时时间
+  timeout: 180000, // 请求超时时间（3分钟），用于初始化等耗时操作
   headers: {
     'Content-Type': 'application/json;charset=UTF-8',
   },
@@ -24,7 +24,7 @@ service.interceptors.request.use(
   (config) => {
     // 在发送请求之前做些什么
     // 例如：添加token
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('admin_token')
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
@@ -43,10 +43,13 @@ service.interceptors.response.use(
     // 对响应数据做点什么
     const res = response.data
     
-    // 根据后端返回的状态码进行处理
-    if (res.code !== 200) {
-      console.error('响应错误:', res.message || '请求失败')
-      return Promise.reject(new Error(res.message || '请求失败'))
+    // 如果是401未授权，且不是登录接口，清除token并跳转到登录页
+    // 登录接口的401应该由业务层自己处理（用户名或密码错误）
+    if (res.code === 401 && !response.config.url?.includes('/admin/login')) {
+      localStorage.removeItem('admin_token')
+      localStorage.removeItem('admin_info')
+      window.location.href = '/login'
+      return Promise.reject(new Error('未授权'))
     }
     
     return res
@@ -59,7 +62,9 @@ service.interceptors.response.use(
       switch (error.response.status) {
         case 401:
           // 未授权，跳转到登录页
-          console.error('未授权，请重新登录')
+          localStorage.removeItem('admin_token')
+          localStorage.removeItem('admin_info')
+          window.location.href = '/login'
           break
         case 403:
           console.error('拒绝访问')
