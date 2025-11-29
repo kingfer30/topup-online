@@ -1,5 +1,9 @@
 <template>
-  <n-config-provider :locale="zhCN" :date-locale="dateZhCN">
+  <n-config-provider 
+    :locale="zhCN" 
+    :date-locale="dateZhCN"
+    :theme-overrides="themeOverrides"
+  >
     <n-message-provider>
       <n-dialog-provider>
         <n-notification-provider>
@@ -23,6 +27,7 @@ import {
   dateZhCN,
 } from 'naive-ui'
 import AppContent from './components/AppContent.vue'
+import { themeOverrides } from './theme'
 </script>
 
 <style>

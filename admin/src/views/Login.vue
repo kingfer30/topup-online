@@ -1,10 +1,10 @@
 <template>
   <div class="login-container min-h-screen flex items-center justify-center">
-    <!-- AI粒子动画背景 -->
-    <canvas ref="canvasRef" class="particle-canvas"></canvas>
+    <!-- 星空背景 -->
+    <canvas ref="starsRef" class="stars-canvas"></canvas>
     
-    <!-- 渐变背景层 -->
-    <div class="gradient-overlay"></div>
+    <!-- Particles.js 容器 -->
+    <div id="particles-js"></div>
     
     <n-card class="w-full max-w-md shadow-2xl login-card">
       <div class="text-center mb-6">
@@ -89,7 +89,7 @@ const message = useMessage()
 
 const formRef = ref()
 const loading = ref(false)
-const canvasRef = ref<HTMLCanvasElement>()
+const starsRef = ref<HTMLCanvasElement>()
 
 const formValue = ref({
   username: '',
@@ -97,101 +97,234 @@ const formValue = ref({
   remember: false,
 })
 
-// AI粒子动画
-let animationId: number
-let particles: Array<{
+// 星空动画
+let starsAnimationId: number
+interface Star {
   x: number
   y: number
+  radius: number
   vx: number
   vy: number
-  radius: number
-}> = []
+  opacity: number
+}
 
-const initParticles = () => {
-  if (!canvasRef.value) return
+const initStars = () => {
+  if (!starsRef.value) return
   
-  const canvas = canvasRef.value
+  const canvas = starsRef.value
   const ctx = canvas.getContext('2d')
   if (!ctx) return
   
-  // 设置canvas尺寸
   canvas.width = window.innerWidth
   canvas.height = window.innerHeight
   
-  // 创建粒子
-  const particleCount = 80
-  particles = []
+  // 创建星星
+  const stars: Star[] = []
+  const starCount = 200
   
-  for (let i = 0; i < particleCount; i++) {
-    particles.push({
+  for (let i = 0; i < starCount; i++) {
+    stars.push({
       x: Math.random() * canvas.width,
       y: Math.random() * canvas.height,
-      vx: (Math.random() - 0.5) * 0.5,
-      vy: (Math.random() - 0.5) * 0.5,
-      radius: Math.random() * 2 + 1,
+      radius: Math.random() * 1.5,
+      vx: (Math.random() - 0.5) * 0.3,
+      vy: (Math.random() - 0.5) * 0.3,
+      opacity: Math.random() * 0.5 + 0.5
     })
   }
   
-  // 动画循环
   const animate = () => {
-    ctx.clearRect(0, 0, canvas.width, canvas.height)
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.05)'
+    ctx.fillRect(0, 0, canvas.width, canvas.height)
     
-    // 更新和绘制粒子
-    particles.forEach((particle, i) => {
-      // 更新位置
-      particle.x += particle.vx
-      particle.y += particle.vy
+    stars.forEach(star => {
+      star.x += star.vx
+      star.y += star.vy
       
-      // 边界检测
-      if (particle.x < 0 || particle.x > canvas.width) particle.vx *= -1
-      if (particle.y < 0 || particle.y > canvas.height) particle.vy *= -1
+      if (star.x < 0 || star.x > canvas.width) star.vx *= -1
+      if (star.y < 0 || star.y > canvas.height) star.vy *= -1
       
-      // 绘制粒子
+      // 闪烁效果
+      star.opacity += (Math.random() - 0.5) * 0.02
+      star.opacity = Math.max(0.3, Math.min(1, star.opacity))
+      
       ctx.beginPath()
-      ctx.arc(particle.x, particle.y, particle.radius, 0, Math.PI * 2)
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.8)'
+      ctx.arc(star.x, star.y, star.radius, 0, Math.PI * 2)
+      ctx.fillStyle = `rgba(255, 255, 255, ${star.opacity})`
       ctx.fill()
       
-      // 绘制连线
-      particles.slice(i + 1).forEach(otherParticle => {
-        const dx = particle.x - otherParticle.x
-        const dy = particle.y - otherParticle.y
-        const distance = Math.sqrt(dx * dx + dy * dy)
-        
-        if (distance < 150) {
-          ctx.beginPath()
-          ctx.moveTo(particle.x, particle.y)
-          ctx.lineTo(otherParticle.x, otherParticle.y)
-          ctx.strokeStyle = `rgba(255, 255, 255, ${0.2 * (1 - distance / 150)})`
-          ctx.lineWidth = 0.5
-          ctx.stroke()
-        }
-      })
+      // 添加星星光晕
+      if (star.radius > 1) {
+        ctx.beginPath()
+        ctx.arc(star.x, star.y, star.radius * 2, 0, Math.PI * 2)
+        ctx.fillStyle = `rgba(255, 87, 88, ${star.opacity * 0.2})`
+        ctx.fill()
+      }
     })
     
-    animationId = requestAnimationFrame(animate)
+    starsAnimationId = requestAnimationFrame(animate)
   }
   
   animate()
 }
 
+// 加载 particles.js 库
+const loadParticlesJS = (): Promise<void> => {
+  return new Promise((resolve) => {
+    if (typeof (window as any).particlesJS !== 'undefined') {
+      resolve()
+      return
+    }
+    
+    const script = document.createElement('script')
+    script.src = 'https://cdn.jsdelivr.net/particles.js/2.0.0/particles.min.js'
+    script.onload = () => resolve()
+    script.onerror = () => {
+      console.error('Failed to load particles.js')
+      resolve()
+    }
+    document.head.appendChild(script)
+  })
+}
+
+// 初始化 particles.js
+const initParticles = () => {
+  if (typeof (window as any).particlesJS === 'undefined') {
+    console.error('particles.js is not loaded')
+    return
+  }
+  
+  // 参考 particles.js 官网配置 - 红色主题
+  ;(window as any).particlesJS('particles-js', {
+    particles: {
+      number: {
+        value: 80,
+        density: {
+          enable: true,
+          value_area: 800
+        }
+      },
+      color: {
+        value: '#ff5758'
+      },
+      shape: {
+        type: 'circle',
+        stroke: {
+          width: 0,
+          color: '#000000'
+        },
+        polygon: {
+          nb_sides: 5
+        }
+      },
+      opacity: {
+        value: 0.5,
+        random: false,
+        anim: {
+          enable: false,
+          speed: 1,
+          opacity_min: 0.1,
+          sync: false
+        }
+      },
+      size: {
+        value: 3,
+        random: true,
+        anim: {
+          enable: false,
+          speed: 40,
+          size_min: 0.1,
+          sync: false
+        }
+      },
+      line_linked: {
+        enable: true,
+        distance: 150,
+        color: '#ff5758',
+        opacity: 0.4,
+        width: 1
+      },
+      move: {
+        enable: true,
+        speed: 6,
+        direction: 'none',
+        random: false,
+        straight: false,
+        out_mode: 'out',
+        bounce: false,
+        attract: {
+          enable: false,
+          rotateX: 600,
+          rotateY: 1200
+        }
+      }
+    },
+    interactivity: {
+      detect_on: 'canvas',
+      events: {
+        onhover: {
+          enable: true,
+          mode: 'repulse'
+        },
+        onclick: {
+          enable: true,
+          mode: 'push'
+        },
+        resize: true
+      },
+      modes: {
+        grab: {
+          distance: 400,
+          line_linked: {
+            opacity: 1
+          }
+        },
+        bubble: {
+          distance: 400,
+          size: 40,
+          duration: 2,
+          opacity: 8,
+          speed: 3
+        },
+        repulse: {
+          distance: 200,
+          duration: 0.4
+        },
+        push: {
+          particles_nb: 4
+        },
+        remove: {
+          particles_nb: 2
+        }
+      }
+    },
+    retina_detect: true
+  })
+}
+
 // 窗口大小改变时重新初始化
 const handleResize = () => {
-  if (canvasRef.value) {
-    canvasRef.value.width = window.innerWidth
-    canvasRef.value.height = window.innerHeight
+  if (starsRef.value) {
+    starsRef.value.width = window.innerWidth
+    starsRef.value.height = window.innerHeight
   }
 }
 
 // 页面加载时，读取保存的用户名并初始化动画
-onMounted(() => {
+onMounted(async () => {
   const savedUsername = localStorage.getItem('remember_username')
   if (savedUsername) {
     formValue.value.username = savedUsername
     formValue.value.remember = true
   }
   
-  // 初始化粒子动画
+  // 初始化星空背景
+  setTimeout(() => {
+    initStars()
+  }, 50)
+  
+  // 加载并初始化 particles.js
+  await loadParticlesJS()
   setTimeout(() => {
     initParticles()
   }, 100)
@@ -200,10 +333,18 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  if (animationId) {
-    cancelAnimationFrame(animationId)
-  }
   window.removeEventListener('resize', handleResize)
+  
+  // 清理星空动画
+  if (starsAnimationId) {
+    cancelAnimationFrame(starsAnimationId)
+  }
+  
+  // 清理 particles.js
+  if ((window as any).pJSDom && (window as any).pJSDom.length > 0) {
+    (window as any).pJSDom[0].pJS.fn.vendors.destroypJS()
+    ;(window as any).pJSDom = []
+  }
 })
 
 const rules = {
@@ -288,78 +429,124 @@ const handleLogin = () => {
 .login-container {
   position: relative;
   overflow: hidden;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: #000000;
 }
 
-.particle-canvas {
+/* 星空背景 */
+.stars-canvas {
   position: absolute;
-  top: 0;
-  left: 0;
   width: 100%;
   height: 100%;
+  top: 0;
+  left: 0;
   z-index: 1;
 }
 
-.gradient-overlay {
+/* Particles.js 容器 */
+#particles-js {
   position: absolute;
-  top: 0;
-  left: 0;
   width: 100%;
   height: 100%;
-  background: linear-gradient(
-    135deg,
-    rgba(102, 126, 234, 0.8) 0%,
-    rgba(118, 75, 162, 0.8) 100%
-  );
+  top: 0;
+  left: 0;
   z-index: 2;
-  animation: gradientShift 15s ease infinite;
 }
 
-@keyframes gradientShift {
-  0%, 100% {
-    opacity: 0.8;
-  }
-  50% {
-    opacity: 0.6;
-  }
-}
-
+/* 登录卡片 */
 .login-card {
   position: relative;
-  z-index: 3;
-  backdrop-filter: blur(10px);
-  background: rgba(255, 255, 255, 0.95) !important;
+  z-index: 10;
+  backdrop-filter: blur(16px) saturate(180%);
+  background: rgba(20, 20, 20, 0.85) !important;
+  border: 1px solid rgba(255, 87, 88, 0.3);
+  box-shadow: 
+    0 8px 32px 0 rgba(255, 87, 88, 0.3),
+    0 0 40px 0 rgba(255, 87, 88, 0.1),
+    0 0 0 1px rgba(255, 87, 88, 0.2) inset;
+  transition: all 0.3s ease;
 }
 
-/* 为卡片添加悬浮动画 */
-.login-card {
-  animation: cardFloat 6s ease-in-out infinite;
+.login-card:hover {
+  box-shadow: 
+    0 12px 40px 0 rgba(255, 87, 88, 0.4),
+    0 0 50px 0 rgba(255, 87, 88, 0.2),
+    0 0 0 1px rgba(255, 87, 88, 0.3) inset;
 }
 
-@keyframes cardFloat {
-  0%, 100% {
-    transform: translateY(0px);
-  }
-  50% {
-    transform: translateY(-10px);
-  }
-}
-
-/* 标题添加AI光效 */
+/* 标题样式 */
 :deep(.n-card__content) h1 {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  animation: titleGlow 3s ease-in-out infinite;
+  color: #ff5758 !important;
+  text-shadow: 0 0 20px rgba(255, 87, 88, 0.3);
+  font-weight: 800;
+  letter-spacing: 1px;
 }
 
-@keyframes titleGlow {
-  0%, 100% {
-    filter: brightness(1);
-  }
-  50% {
-    filter: brightness(1.2);
+/* 副标题 */
+:deep(.n-card__content) p {
+  color: rgba(255, 255, 255, 0.7);
+  font-weight: 500;
+}
+
+/* 输入框样式 */
+:deep(.n-input) {
+  background: rgba(40, 40, 40, 0.6) !important;
+  border: 1px solid rgba(255, 87, 88, 0.2) !important;
+  color: #fff !important;
+  transition: all 0.3s ease;
+}
+
+:deep(.n-input:focus-within) {
+  border-color: rgba(255, 87, 88, 0.6) !important;
+  box-shadow: 0 0 15px rgba(255, 87, 88, 0.3);
+  transform: translateY(-2px);
+}
+
+:deep(.n-input input) {
+  color: #fff !important;
+}
+
+:deep(.n-input input::placeholder) {
+  color: rgba(255, 255, 255, 0.4) !important;
+}
+
+:deep(.n-icon) {
+  color: rgba(255, 87, 88, 0.8) !important;
+}
+
+/* 按钮样式 - 主题色已在全局配置 */
+:deep(.n-button--primary) {
+  font-weight: 700;
+  letter-spacing: 1px;
+  box-shadow: 0 4px 20px rgba(255, 87, 88, 0.4);
+  transition: all 0.3s ease;
+}
+
+:deep(.n-button--primary:hover) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 25px rgba(255, 87, 88, 0.6);
+}
+
+:deep(.n-button--primary:active) {
+  transform: translateY(0);
+}
+
+/* 复选框样式 - 主题色已在全局配置 */
+:deep(.n-checkbox) {
+  transition: all 0.3s ease;
+}
+
+:deep(.n-checkbox__label) {
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+
+:deep(.n-checkbox:hover) {
+  transform: scale(1.05);
+}
+
+/* 响应式 */
+@media (max-width: 768px) {
+  .login-card {
+    margin: 1rem;
   }
 }
 </style>
