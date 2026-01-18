@@ -24,6 +24,14 @@ func SetApiRouter(router *gin.Engine) {
 		apiRouter.POST("/admin/logout", controller.Logout)
 		apiRouter.POST("/admin/change-password", controller.ChangePassword)
 
+		// 用户认证相关（无需认证）
+		apiRouter.POST("/user/register", controller.Register)
+		apiRouter.POST("/user/login", controller.Login)
+
+		// 用户相关（需要认证）
+		apiRouter.GET("/user/info", controller.GetUserInfo)
+		apiRouter.POST("/user/logout", controller.UserLogout)
+
 		// 卡密相关
 		apiRouter.GET("/cdk/:number", controller.GetCardDetail)
 		apiRouter.POST("/cdk/check", controller.GetCardDetail)

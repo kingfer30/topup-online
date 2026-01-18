@@ -1,0 +1,422 @@
+@keyframes fadeIn {
+  0% { opacity: 0; transform: translateY(20px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.animate-spin-slow {
+  animation: spin-slow 3s linear infinite;
+}
+
+a.nav-link,
+a.nav-link:link,
+a.nav-link:visited {
+  color: #000000 !important; 
+  font-weight: 500; 
+  font-size: 1rem; 
+  padding: 0.5rem 1.2rem !important;
+  border-radius: 25px !important; 
+  border: none !important; 
+  background: transparent !important;
+  backdrop-filter: blur(10px);
+  transition: all 0.3s ease !important;
+  margin: 0 0.25rem;
+  text-decoration: none !important;
+  display: inline-block;
+  cursor: pointer;
+}
+
+a.nav-link:hover, 
+a.nav-link:focus,
+a.nav-link:active {
+  border-color: #000000 !important;
+  color: #ffffff !important;
+  background: #000000 !important;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  text-decoration: none !important;
+}
+
+.nav-link-active,
+.nav-link-active.n-button,
+.nav-link-active .n-button__content {
+  color: #ffffff !important; 
+  font-weight: 500; 
+  font-size: 1rem; 
+}
+
+.nav-link-active.n-button {
+  padding: 0.5rem 1.2rem !important;
+  border-radius: 25px !important; 
+  border: 1px solid #000000 !important; 
+  background: #000000 !important;
+  backdrop-filter: blur(10px);
+  transition: all 0.3s ease !important;
+  margin: 0 0.25rem;
+  text-decoration: none;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
+}
+
+.nav-link-active:hover, 
+.nav-link-active:focus,
+.nav-link-active.n-button:hover,
+.nav-link-active.n-button:focus,
+.nav-link-active:hover .n-button__content,
+.nav-link-active:focus .n-button__content {
+  border-color: #000000 !important;
+  color: #ffffff !important;
+  background: #000000 !important;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
+}
+
+@media (max-width: 600px) {
+  a.nav-link,
+  a.nav-link:link,
+  a.nav-link:visited { 
+    font-size: 0.92rem !important; 
+    padding: 0.4rem 0.8rem !important;
+  }
+  
+  .nav-link-active,
+  .nav-link-active.n-button { 
+    font-size: 0.92rem !important; 
+    padding: 0.4rem 0.8rem !important;
+  }
+  
+  .lang-dropdown-btn {
+    padding: 0.4rem 0.8rem !important;
+  }
+}
+
+.lang-dropdown-btn,
+.lang-dropdown-btn.n-button {
+  color: #000 !important;
+  font-weight: 500;
+  border-radius: 25px !important;
+  backdrop-filter: blur(10px);
+  transition: all 0.3s ease;
+  padding: 0.5rem 1rem !important;
+}
+
+.lang-dropdown-btn:hover,
+.lang-dropdown-btn.n-button:hover {
+  color: #ffffff !important;
+  background: #000000 !important;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+/* 首页和登录页语言切换按钮 - 圆形样式，只显示国旗 */
+.lang-dropdown-btn[circle],
+.lang-dropdown-btn.n-button--circle,
+.lang-dropdown-btn {
+  width: 40px !important;
+  height: 40px !important;
+  padding: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  transition: all 0.3s;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid #e0e0e0 !important;
+  border-radius: 50% !important;
+  overflow: hidden !important;
+}
+
+.lang-dropdown-btn[circle] .n-button__content,
+.lang-dropdown-btn.n-button--circle .n-button__content,
+.lang-dropdown-btn .n-button__content {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 100% !important;
+  height: 100% !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+.lang-dropdown-btn[circle]:hover,
+.lang-dropdown-btn.n-button--circle:hover,
+.lang-dropdown-btn:hover {
+  background: rgba(102, 126, 234, 0.1) !important;
+  transform: scale(1.05);
+  border-color: rgba(102, 126, 234, 0.3) !important;
+}
+
+/* 国旗图标样式 */
+.flag-icon {
+  width: 24px !important;
+  height: 18px !important;
+  border-radius: 2px;
+  object-fit: cover;
+  display: block !important;
+}
+
+.feature-card {
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.feature-card:hover {
+  background: #000000;
+  color: #ffffff;
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+}
+
+.feature-card:hover span,
+.feature-card:hover div {
+  color: #ffffff;
+}
+
+body { 
+  font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; 
+}
+
+/* 用户按钮样式 */
+.user-btn,
+.user-btn.n-button {
+  color: #000 !important;
+  font-weight: 500;
+  border-radius: 25px !important;
+  backdrop-filter: blur(10px);
+  transition: all 0.3s ease;
+  padding: 0.5rem 1rem !important;
+  border: 1px solid #e0e0e0 !important;
+}
+
+.user-btn:hover,
+.user-btn.n-button:hover {
+  color: #ffffff !important;
+  background: #000000 !important;
+  border-color: #000000 !important;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.user-icon {
+  font-size: 16px;
+}
+
+/* 登录按钮样式 */
+.login-btn,
+.login-btn.n-button {
+  font-weight: 600;
+  border-radius: 25px !important;
+  padding: 0.5rem 1.2rem !important;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  border: none !important;
+  color: #ffffff !important;
+  transition: all 0.3s ease;
+}
+
+.login-btn:hover,
+.login-btn.n-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+}
+
+/* ==================== 全局移除按钮 focus 边框样式 ==================== */
+
+/* 移除所有元素的默认 focus outline - 最高优先级 */
+*,
+*::before,
+*::after,
+button,
+button:focus,
+button:focus-visible,
+button:focus-within,
+button:active,
+a,
+a:focus,
+a:focus-visible,
+a:focus-within,
+a:active,
+input,
+input:focus,
+input:focus-visible,
+textarea,
+textarea:focus,
+textarea:focus-visible,
+select,
+select:focus,
+select:focus-visible {
+  outline: none !important;
+  outline-width: 0 !important;
+  outline-style: none !important;
+  outline-color: transparent !important;
+  -webkit-tap-highlight-color: transparent !important;
+}
+
+/* 移除 Naive UI 按钮的所有 focus 相关样式 */
+.n-button,
+.n-button *,
+.n-button:hover,
+.n-button:focus,
+.n-button:focus-visible,
+.n-button:focus-within,
+.n-button:active,
+.n-button[focus],
+.n-button[focus-visible],
+.n-button.n-button--focus,
+.n-button.n-button--pressed {
+  outline: none !important;
+  outline-width: 0 !important;
+  outline-style: none !important;
+  outline-color: transparent !important;
+  box-shadow: none !important;
+  border: none !important;
+  -webkit-tap-highlight-color: transparent !important;
+}
+
+/* 移除 Naive UI 按钮的内部边框元素 */
+.n-button .n-button__border,
+.n-button__border,
+.n-base-wave,
+.n-button .n-base-wave {
+  display: none !important;
+  opacity: 0 !important;
+  border: none !important;
+  outline: none !important;
+}
+
+/* 移除 Naive UI 按钮 focus 时的伪元素效果 */
+.n-button::before,
+.n-button::after,
+.n-button:focus::before,
+.n-button:focus::after,
+.n-button:focus-visible::before,
+.n-button:focus-visible::after,
+.n-button:focus:not(:active)::before,
+.n-button:focus-visible:not(:active)::before {
+  display: none !important;
+  opacity: 0 !important;
+  content: none !important;
+  border: none !important;
+  outline: none !important;
+}
+
+/* 移除 Naive UI Tabs 的所有 focus 样式 */
+.n-tabs,
+.n-tabs *,
+.n-tabs-tab,
+.n-tabs-tab:focus,
+.n-tabs-tab:focus-visible,
+.n-tabs-tab:focus-within,
+.n-tabs-tab:active,
+.n-tabs-tab-wrapper,
+.n-tabs-tab-wrapper:focus,
+.n-tabs-tab-wrapper:focus-visible {
+  outline: none !important;
+  outline-width: 0 !important;
+  outline-style: none !important;
+  outline-color: transparent !important;
+}
+
+/* 移除 Naive UI Dropdown 的所有 focus 样式 */
+.n-dropdown,
+.n-dropdown *,
+.n-dropdown-option,
+.n-dropdown-option:focus,
+.n-dropdown-option:focus-visible,
+.n-dropdown-option:focus-within,
+.n-dropdown-menu,
+.n-dropdown-menu:focus,
+.n-dropdown-menu:focus-visible {
+  outline: none !important;
+  outline-width: 0 !important;
+  outline-style: none !important;
+  outline-color: transparent !important;
+}
+
+/* 移除 Naive UI Input 的默认 focus 边框 */
+.n-input,
+.n-input *,
+.n-input__input,
+.n-input-wrapper,
+.n-input:focus,
+.n-input:focus-visible,
+.n-input:focus-within,
+.n-input__input:focus,
+.n-input__input:focus-visible {
+  outline: none !important;
+  outline-width: 0 !important;
+  outline-style: none !important;
+  outline-color: transparent !important;
+}
+
+/* 移除 Naive UI Checkbox 的所有 focus 样式 */
+.n-checkbox,
+.n-checkbox *,
+.n-checkbox:focus,
+.n-checkbox:focus-visible,
+.n-checkbox:focus-within,
+.n-checkbox__box,
+.n-checkbox__box:focus,
+.n-checkbox__box:focus-visible,
+.n-checkbox-box,
+.n-checkbox-box:focus,
+.n-checkbox-box:focus-visible {
+  outline: none !important;
+  outline-width: 0 !important;
+  outline-style: none !important;
+  outline-color: transparent !important;
+}
+
+/* 移除 Naive UI Modal 和 Card 的所有 focus 样式 */
+.n-modal,
+.n-modal *,
+.n-modal:focus,
+.n-modal:focus-visible,
+.n-modal:focus-within,
+.n-card,
+.n-card *,
+.n-card:focus,
+.n-card:focus-visible,
+.n-card:focus-within {
+  outline: none !important;
+  outline-width: 0 !important;
+  outline-style: none !important;
+  outline-color: transparent !important;
+}
+
+/* 移除所有 Naive UI 组件的通用 focus 样式 */
+[class*="n-"]:focus,
+[class*="n-"]:focus-visible,
+[class*="n-"]:focus-within {
+  outline: none !important;
+  outline-width: 0 !important;
+  outline-style: none !important;
+  outline-color: transparent !important;
+}
+
+/* 针对性移除绿色边框 - 可能是浏览器默认的 focus-visible 样式 */
+:focus-visible {
+  outline: none !important;
+  outline-width: 0 !important;
+  outline-style: none !important;
+  outline-color: transparent !important;
+  box-shadow: none !important;
+}
+
+/* 移除浏览器默认的焦点环 */
+::-moz-focus-inner {
+  border: 0 !important;
+  outline: none !important;
+}
+
+::-moz-focus-outer {
+  border: 0 !important;
+  outline: none !important;
+}
+
+
