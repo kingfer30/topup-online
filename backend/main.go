@@ -29,6 +29,13 @@ func main() {
 		// 传递数据库连接给controller
 		controller.SetDB(model.DB)
 		logger.SysLog("Database connection established")
+
+		// 在main.go中也执行一次数据库迁移，确保所有表结构都是最新的
+		logger.SysLog("Running database migration...")
+		if err := model.MigrateDB(); err != nil {
+			logger.FatalLog("failed to migrate database in main: " + err.Error())
+		}
+		logger.SysLog("Database migration completed")
 	} else {
 		logger.SysLog("System not initialized yet, waiting for initialization...")
 	}

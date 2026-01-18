@@ -173,6 +173,7 @@ func InitializeSystem(c *gin.Context) {
 		&model.User{},
 		&model.Order{},
 		&model.Card{},
+		&model.MirrorCard{},
 	)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{

@@ -2,12 +2,15 @@ package controller
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/kingfer30/topup-online/constants"
 	"github.com/kingfer30/topup-online/model"
 	crypto "github.com/kingfer30/topup-online/utils/cypto"
+	"github.com/kingfer30/topup-online/utils/email"
 	"github.com/kingfer30/topup-online/utils/random"
+	"gorm.io/gorm"
 )
 
 // UserRegisterRequest 用户注册请求
@@ -15,6 +18,7 @@ type UserRegisterRequest struct {
 	Username string `json:"username" binding:"required,min=3,max=50"`
 	Email    string `json:"email" binding:"required,email,max=100"`
 	Password string `json:"password" binding:"required,len=64"` // SHA256加密后的密码固定64位
+	Source   string `json:"source"`                             // 用户来源
 }
 
 // UserLoginRequest 用户登录请求
@@ -75,20 +79,46 @@ func Register(c *gin.Context) {
 	// 生成邀请码
 	affCode := random.GetRandomString(8)
 
+	// 获取用户来源（优先使用请求体中的 source 字段）
+	source := req.Source
+	if source == "" {
+		source = "未知"
+	}
+
+	// 尝试自动绑定镜像卡密
+	var mirrorCardId int = 0
+	availableCard, err := model.GetAvailableMirrorCard()
+	if err != nil {
+		if err != gorm.ErrRecordNotFound {
+			// 如果是其他错误，记录日志但继续注册流程
+			c.JSON(http.StatusOK, gin.H{
+				"code":    500,
+				"message": "获取可用卡密失败: " + err.Error(),
+			})
+			return
+		}
+		// 没有可用卡密，发送告警邮件
+		go func() {
+			subject := "镜像卡密已用尽，请及时补充"
+			body := "新用户 " + req.Username + " 注册时，已无未绑定的卡密可以使用，请及时补充库存后为该用户做绑定处理。"
+			_ = email.SendAlertEmail(subject, body)
+		}()
+	} else {
+		// 有可用卡密，记录ID，后面创建用户后再绑定
+		mirrorCardId = availableCard.ID
+	}
+
 	// 创建用户
 	user := model.User{
 		Username:     req.Username,
 		Password:     hashedPassword,
 		Email:        req.Email,
 		DisplayName:  req.Username,
-		Role:         constants.RoleCommonUser,
 		Status:       constants.UserStatusEnabled,
 		AccessToken:  accessToken,
 		AffCode:      affCode,
-		Quota:        0,
-		UsedQuota:    0,
-		RequestCount: 0,
-		Group:        "default",
+		MirrorCardId: mirrorCardId,
+		Source:       source,
 	}
 
 	// 保存到数据库
@@ -98,6 +128,18 @@ func Register(c *gin.Context) {
 			"message": "注册失败: " + err.Error(),
 		})
 		return
+	}
+
+	// 如果有可用卡密，更新卡密的绑定状态
+	if mirrorCardId > 0 {
+		if err := model.BindMirrorCardToUser(mirrorCardId, user.Id); err != nil {
+			// 绑定失败不影响注册，只记录日志
+			c.JSON(http.StatusOK, gin.H{
+				"code":    500,
+				"message": "绑定卡密失败: " + err.Error(),
+			})
+			return
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -137,14 +179,27 @@ func Login(c *gin.Context) {
 	// 如果access_token为空，生成新的token
 	if user.AccessToken == "" {
 		user.AccessToken = random.GetUUID()
-		if err := model.DB.Model(&user).Update("access_token", user.AccessToken).Error; err != nil {
-			c.JSON(http.StatusOK, gin.H{
-				"code":    500,
-				"message": "生成token失败",
-			})
-			return
-		}
 	}
+
+	// 更新用户的最后登录时间和access_token
+	now := time.Now()
+	updates := map[string]interface{}{
+		"last_login": now,
+	}
+	if user.AccessToken != "" {
+		updates["access_token"] = user.AccessToken
+	}
+
+	if err := model.DB.Model(&user).Updates(updates).Error; err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"code":    500,
+			"message": "更新登录信息失败",
+		})
+		return
+	}
+
+	// 更新user对象的last_login字段
+	user.LastLogin = &now
 
 	// 清空密码字段，不返回给前端
 	user.Password = ""

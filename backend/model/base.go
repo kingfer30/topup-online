@@ -6,40 +6,14 @@ import (
 	"time"
 
 	"github.com/kingfer30/topup-online/constants"
-	crypto "github.com/kingfer30/topup-online/utils/cypto"
 	"github.com/kingfer30/topup-online/utils/env"
 	"github.com/kingfer30/topup-online/utils/logger"
-	"github.com/kingfer30/topup-online/utils/random"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 )
 
 var DB *gorm.DB
 var LOG_DB *gorm.DB
-
-func CreateRootAccountIfNeed() error {
-	var user User
-	//if user.Status != util.UserStatusEnabled {
-	if err := DB.First(&user).Error; err != nil {
-		logger.SysLog("no user exists, creating a root user for you: username is root, password is 123456")
-		hashedPassword, err := crypto.Password2Hash("123456")
-		if err != nil {
-			return err
-		}
-		accessToken := random.GetUUID()
-		rootUser := User{
-			Username:    "root",
-			Password:    hashedPassword,
-			Role:        constants.RoleRootUser,
-			Status:      constants.UserStatusEnabled,
-			DisplayName: "Root User",
-			AccessToken: accessToken,
-			Quota:       500000000000000,
-		}
-		DB.Create(&rootUser)
-	}
-	return nil
-}
 
 func openMySQL(dsn string) (*gorm.DB, error) {
 	logger.SysLog("using MySQL as database")
@@ -69,10 +43,31 @@ func InitDB() {
 
 func migrateDB() error {
 	var err error
+	// 迁移所有表
 	if err = DB.AutoMigrate(&User{}); err != nil {
 		return err
 	}
+	if err = DB.AutoMigrate(&MirrorCard{}); err != nil {
+		return err
+	}
+	if err = DB.AutoMigrate(&SystemConfig{}); err != nil {
+		return err
+	}
+	if err = DB.AutoMigrate(&Admin{}); err != nil {
+		return err
+	}
+	if err = DB.AutoMigrate(&Order{}); err != nil {
+		return err
+	}
+	if err = DB.AutoMigrate(&Card{}); err != nil {
+		return err
+	}
 	return nil
+}
+
+// MigrateDB 公开的数据库迁移方法，供外部调用
+func MigrateDB() error {
+	return migrateDB()
 }
 
 func setDBConns(db *gorm.DB) *sql.DB {

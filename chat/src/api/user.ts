@@ -18,6 +18,7 @@ export const logout = () => {
 
 // 注册用户
 export const register = (data: RegisterRequest) => {
-  return http.post<ApiResponse>('/user/register', data)
+  // 添加 source 标识为 chat
+  return http.post<ApiResponse>('/user/register', { ...data, source: 'chat' })
 }
 

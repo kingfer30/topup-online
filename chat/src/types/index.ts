@@ -24,9 +24,6 @@ export interface User {
   avatar?: string
   role?: number
   status?: number
-  quota?: number
-  used_quota?: number
-  group?: string
 }
 
 // 登录请求类型
@@ -40,6 +37,7 @@ export interface RegisterRequest {
   username: string
   email: string
   password: string
+  source?: string
 }
 
 // 登录响应数据类型

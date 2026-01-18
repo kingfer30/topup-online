@@ -68,6 +68,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '生成卡密', requiresAuth: true },
       },
       {
+        path: 'mirror-cards',
+        name: 'MirrorCards',
+        component: () => import('@/views/MirrorCards.vue'),
+        meta: { title: '卡密管理', requiresAuth: true },
+      },
+      {
         path: 'settings',
         name: 'Settings',
         component: () => import('@/views/Settings.vue'),

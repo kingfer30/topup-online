@@ -1,17 +1,8 @@
 <template>
   <n-layout has-sider class="h-screen">
     <!-- 左侧菜单栏 -->
-    <n-layout-sider
-      bordered
-      collapse-mode="width"
-      :collapsed-width="64"
-      :width="240"
-      :collapsed="collapsed"
-      show-trigger
-      @collapse="collapsed = true"
-      @expand="collapsed = false"
-      :native-scrollbar="false"
-    >
+    <n-layout-sider bordered collapse-mode="width" :collapsed-width="64" :width="240" :collapsed="collapsed"
+      show-trigger @collapse="collapsed = true" @expand="collapsed = false" :native-scrollbar="false">
       <div class="p-4 flex items-center justify-center border-b border-gray-200">
         <h1 v-if="!collapsed" class="text-xl font-bold text-primary-600">
           后台管理系统
@@ -20,15 +11,9 @@
           管理
         </h1>
       </div>
-      
-      <n-menu
-        v-model:value="activeKey"
-        :collapsed="collapsed"
-        :collapsed-width="64"
-        :collapsed-icon-size="22"
-        :options="menuOptions"
-        @update:value="handleMenuSelect"
-      />
+
+      <n-menu v-model:value="activeKey" :collapsed="collapsed" :collapsed-width="64" :collapsed-icon-size="22"
+        :options="menuOptions" @update:value="handleMenuSelect" />
     </n-layout-sider>
 
     <!-- 右侧内容区域 -->
@@ -50,21 +35,16 @@
             </template>
           </n-button>
 
-                    <!-- 用户信息 -->
-                    <n-dropdown :options="userOptions" @select="handleUserAction">
-                      <n-button>
-                        <template #icon>
-                          <n-avatar size="small">
-                            {{ adminInfo?.username || '管理员' }}
-                          </n-avatar>
-                        </template>
-                      </n-button>
-                    </n-dropdown>
-
-          <!-- 返回前台 -->
-          <n-button tag="a" href="http://localhost:3000" target="_blank">
-            返回前台
-          </n-button>
+          <!-- 用户信息 -->
+          <n-dropdown :options="userOptions" @select="handleUserAction">
+            <n-button>
+              <template #icon>
+                <n-avatar size="small">
+                  {{ adminInfo?.username || '管理员' }}
+                </n-avatar>
+              </template>
+            </n-button>
+          </n-dropdown>
         </n-space>
       </n-layout-header>
 
@@ -237,6 +217,24 @@ const menuOptions = computed<MenuOption[]>(() => [
     ],
   },
   {
+    label: '镜像管理',
+    key: 'mirror',
+    icon: renderIcon('🔐'),
+    children: [
+      {
+        label: () =>
+          h(
+            RouterLink,
+            {
+              to: '/admin/mirror-cards',
+            },
+            { default: () => '卡密管理' }
+          ),
+        key: 'mirror-cards',
+      },
+    ],
+  },
+  {
     label: '系统设置',
     key: 'system',
     icon: renderIcon('⚙️'),
@@ -279,10 +277,11 @@ const breadcrumbs = computed(() => {
     '/admin/refunds': '退款管理',
     '/admin/cards': '卡密列表',
     '/admin/card-generate': '生成卡密',
+    '/admin/mirror-cards': '镜像卡密管理',
     '/admin/settings': '基础设置',
     '/admin/logs': '操作日志',
   }
-  
+
   return [
     { name: 'admin', label: '后台管理' },
     { name: path, label: breadcrumbMap[path] || '详情' },
@@ -344,4 +343,3 @@ const handleUserAction = async (key: string) => {
   background: transparent;
 }
 </style>
-

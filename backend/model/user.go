@@ -1,41 +1,35 @@
 package model
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
 	"time"
 
-	redis "github.com/kingfer30/topup-online/config/cache"
 	"github.com/kingfer30/topup-online/config/db/blacklist"
 	"github.com/kingfer30/topup-online/constants"
 	crypto "github.com/kingfer30/topup-online/utils/cypto"
-	"github.com/kingfer30/topup-online/utils/logger"
 	"github.com/kingfer30/topup-online/utils/random"
-	"gorm.io/gorm"
 )
 
 type User struct {
-	Id               int    `json:"id"`
-	Username         string `json:"username" gorm:"unique;index" validate:"max=12"`
-	Password         string `json:"password" gorm:"not null;" validate:"min=8,max=20"`
-	DisplayName      string `json:"display_name" gorm:"index" validate:"max=20"`
-	Role             int    `json:"role" gorm:"type:int;default:1"`   // admin, util
-	Status           int    `json:"status" gorm:"type:int;default:1"` // enabled, disabled
-	Email            string `json:"email" gorm:"index" validate:"max=50"`
-	GitHubId         string `json:"github_id" gorm:"column:github_id;index"`
-	WeChatId         string `json:"wechat_id" gorm:"column:wechat_id;index"`
-	LarkId           string `json:"lark_id" gorm:"column:lark_id;index"`
-	OidcId           string `json:"oidc_id" gorm:"column:oidc_id;index"`
-	VerificationCode string `json:"verification_code" gorm:"-:all"`                                    // this field is only for Email verification, don't save it to database!
-	AccessToken      string `json:"access_token" gorm:"type:char(32);column:access_token;uniqueIndex"` // this token is for system management
-	Quota            int64  `json:"quota" gorm:"bigint;default:0"`
-	UsedQuota        int64  `json:"used_quota" gorm:"bigint;default:0;column:used_quota"` // used quota
-	RequestCount     int    `json:"request_count" gorm:"type:int;default:0;"`             // request number
-	Group            string `json:"group" gorm:"type:varchar(32);default:'default'"`
-	AffCode          string `json:"aff_code" gorm:"type:varchar(32);column:aff_code;uniqueIndex"`
-	InviterId        int    `json:"inviter_id" gorm:"type:int;column:inviter_id;index"`
+	Id               int        `json:"id"`
+	Username         string     `json:"username" gorm:"unique;index" validate:"max=12"`
+	Password         string     `json:"password" gorm:"not null;" validate:"min=8,max=20"`
+	DisplayName      string     `json:"display_name" gorm:"index" validate:"max=20"`
+	Status           int        `json:"status" gorm:"type:int;default:1"` // enabled, disabled
+	Email            string     `json:"email" gorm:"index" validate:"max=50"`
+	GitHubId         string     `json:"github_id" gorm:"column:github_id;index"`
+	WeChatId         string     `json:"wechat_id" gorm:"column:wechat_id;index"`
+	LarkId           string     `json:"lark_id" gorm:"column:lark_id;index"`
+	OidcId           string     `json:"oidc_id" gorm:"column:oidc_id;index"`
+	VerificationCode string     `json:"verification_code" gorm:"-:all"`                                    // this field is only for Email verification, don't save it to database!
+	AccessToken      string     `json:"access_token" gorm:"type:char(32);column:access_token;uniqueIndex"` // this token is for system management
+	AffCode          string     `json:"aff_code" gorm:"type:varchar(32);column:aff_code;uniqueIndex"`
+	InviterId        int        `json:"inviter_id" gorm:"type:int;column:inviter_id;index"`
+	LastLogin        *time.Time `json:"last_login" gorm:"type:datetime;comment:'最后登录时间'"`
+	MirrorCardId     int        `json:"mirror_card_id" gorm:"type:int;default:0;index;comment:'绑定的镜像卡密ID'"`
+	Source           string     `json:"source" gorm:"type:varchar(20);default:'';comment:'用户来源: chat/充值站/手动添加'"`
 }
 
 func GetMaxUserId() int {
@@ -47,16 +41,8 @@ func GetMaxUserId() int {
 func GetAllUsers(startIdx int, num int, order string) (users []*User, err error) {
 	query := DB.Limit(num).Offset(startIdx).Omit("password").Where("status != ?", constants.UserStatusDeleted)
 
-	switch order {
-	case "quota":
-		query = query.Order("quota desc")
-	case "used_quota":
-		query = query.Order("used_quota desc")
-	case "request_count":
-		query = query.Order("request_count desc")
-	default:
-		query = query.Order("id desc")
-	}
+	// 只支持按ID排序
+	query = query.Order("id desc")
 
 	err = query.Find(&users).Error
 	return users, err
@@ -243,19 +229,6 @@ func ResetUserPasswordByEmail(email string, password string) error {
 	return err
 }
 
-func IsAdmin(userId int) bool {
-	if userId == 0 {
-		return false
-	}
-	var user User
-	err := DB.Where("id = ?", userId).Select("role").Find(&user).Error
-	if err != nil {
-		logger.SysError("no such user " + err.Error())
-		return false
-	}
-	return user.Role >= constants.RoleAdminUser
-}
-
 func IsUserEnabled(userId int) (bool, error) {
 	if userId == 0 {
 		return false, errors.New("user id is empty")
@@ -280,104 +253,9 @@ func ValidateAccessToken(token string) (user *User) {
 	return nil
 }
 
-func GetUserQuota(id int) (quota int64, err error) {
-	err = DB.Model(&User{}).Where("id = ?", id).Select("quota").Find(&quota).Error
-	return quota, err
-}
-
-func GetUserUsedQuota(id int) (quota int64, err error) {
-	err = DB.Model(&User{}).Where("id = ?", id).Select("used_quota").Find(&quota).Error
-	return quota, err
-}
-
 func GetUserEmail(id int) (email string, err error) {
 	err = DB.Model(&User{}).Where("id = ?", id).Select("email").Find(&email).Error
 	return email, err
-}
-
-func GetUserGroup(id int) (group string, err error) {
-	groupCol := "`group`"
-
-	err = DB.Model(&User{}).Where("id = ?", id).Select(groupCol).Find(&group).Error
-	return group, err
-}
-
-func IncreaseUserQuota(id int, quota int64) (err error) {
-	if quota < 0 {
-		return errors.New("quota 不能为负数！")
-	}
-	return increaseUserQuota(id, quota)
-}
-
-func increaseUserQuota(id int, quota int64) (err error) {
-	err = DB.Model(&User{}).Where("id = ?", id).Update("quota", gorm.Expr("quota + ?", quota)).Error
-	return err
-}
-
-func DecreaseUserQuota(id int, quota int64) (err error) {
-	if quota < 0 {
-		return errors.New("quota 不能为负数！")
-	}
-	return decreaseUserQuota(id, quota)
-}
-
-func decreaseUserQuota(id int, quota int64) (err error) {
-	err = DB.Model(&User{}).Where("id = ?", id).Update("quota", gorm.Expr("quota - ?", quota)).Error
-	return err
-}
-
-func GetRootUserEmail() (email string) {
-	var user User
-	userStr, err := redis.Get("admin_info")
-	if err == nil && userStr != "" {
-		//找到缓存信息优先返回
-		err = json.Unmarshal([]byte(userStr), &user)
-		if err == nil {
-			return user.Email
-		}
-	}
-	//找不到再查数据库
-	DB.Model(&user).Where("role = ?", constants.RoleRootUser).Find(&user)
-	jsonBytes, err := json.Marshal(user)
-	if err == nil {
-		redis.SetNx("admin_info", string(jsonBytes), time.Duration(constants.CacheFrequency)*time.Second)
-	}
-	return user.Email
-}
-
-func UpdateUserUsedQuotaAndRequestCount(id int, quota int64) {
-
-	updateUserUsedQuotaAndRequestCount(id, quota, 1)
-}
-
-func updateUserUsedQuotaAndRequestCount(id int, quota int64, count int) {
-	err := DB.Model(&User{}).Where("id = ?", id).Updates(
-		map[string]interface{}{
-			"used_quota":    gorm.Expr("used_quota + ?", quota),
-			"request_count": gorm.Expr("request_count + ?", count),
-		},
-	).Error
-	if err != nil {
-		logger.SysError("failed to update user used quota and request count: " + err.Error())
-	}
-}
-
-func updateUserUsedQuota(id int, quota int64) {
-	err := DB.Model(&User{}).Where("id = ?", id).Updates(
-		map[string]interface{}{
-			"used_quota": gorm.Expr("used_quota + ?", quota),
-		},
-	).Error
-	if err != nil {
-		logger.SysError("failed to update user used quota: " + err.Error())
-	}
-}
-
-func updateUserRequestCount(id int, count int) {
-	err := DB.Model(&User{}).Where("id = ?", id).Update("request_count", gorm.Expr("request_count + ?", count)).Error
-	if err != nil {
-		logger.SysError("failed to update user request count: " + err.Error())
-	}
 }
 
 func GetUsernameById(id int) (username string) {

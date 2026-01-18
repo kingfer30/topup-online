@@ -41,12 +41,22 @@ export interface PageData<T = any> {
 
 // 用户类型
 export interface User {
-  id: string
+  id: number
   username: string
+  password?: string
+  display_name: string
+  status: number // 1-启用 2-禁用 3-已删除
   email: string
-  avatar?: string
-  createdAt: string
-  updatedAt: string
+  github_id?: string
+  wechat_id?: string
+  lark_id?: string
+  oidc_id?: string
+  access_token?: string
+  aff_code: string
+  inviter_id: number
+  last_login?: string
+  mirror_card_id?: number
+  source?: string
 }
 
 // 登录请求类型
@@ -59,5 +69,41 @@ export interface LoginRequest {
 export interface LoginResponse {
   token: string
   user: User
+}
+
+// 用户列表查询参数
+export interface UserListParams {
+  page?: number
+  page_size?: number
+  keyword?: string
+}
+
+// 用户列表响应
+export interface UserListResponse {
+  list: User[]
+  total: number
+  page: number
+  page_size: number
+}
+
+// 创建用户请求
+export interface CreateUserRequest {
+  username: string
+  password: string
+  display_name?: string
+  email?: string
+  status?: number
+  source?: string
+}
+
+// 更新用户请求
+export interface UpdateUserRequest {
+  username?: string
+  password?: string
+  display_name?: string
+  email?: string
+  status?: number
+  source?: string
+  mirror_card_id?: number
 }
 

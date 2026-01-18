@@ -9,9 +9,6 @@ interface UserInfo {
   avatar?: string
   role?: number
   status?: number
-  quota?: number
-  used_quota?: number
-  group?: string
 }
 
 export const useUserStore = defineStore('user', () => {
