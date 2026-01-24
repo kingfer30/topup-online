@@ -1,17 +1,34 @@
 package constants
 
 import (
-	"os"
-
 	"github.com/kingfer30/topup-online/utils/env"
 )
 
-var ServerPort = env.String(os.Getenv("PORT"), "3030")
-var DebugEnabled = env.Bool(os.Getenv("DEBUG"), false)
-var DebugSQLEnabled = env.Bool(os.Getenv("DEBUG_SQL"), false)
-var RelayProxy = env.String(os.Getenv("RELAY_PROXY"), "")
-var RelayTimeout = env.Int("RELAY_TIMEOUT", 0)       // unit is second
-var CacheFrequency = env.Int("CACHE_FREQUENCY", 300) // unit is second
+// GetServerPort 延迟读取端口号，确保能读取到 .env 中的配置
+func GetServerPort() string {
+	return env.String("PORT", "3030")
+}
+
+// 其他环境变量也建议改为函数调用以保证一致性
+func GetDebugEnabled() bool {
+	return env.Bool("DEBUG", false)
+}
+
+func GetDebugSQLEnabled() bool {
+	return env.Bool("DEBUG_SQL", false)
+}
+
+func GetRelayProxy() string {
+	return env.String("RELAY_PROXY", "")
+}
+
+func GetRelayTimeout() int {
+	return env.Int("RELAY_TIMEOUT", 0)
+}
+
+func GetCacheFrequency() int {
+	return env.Int("CACHE_FREQUENCY", 300)
+}
 
 // common
 const (

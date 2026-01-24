@@ -151,7 +151,7 @@ func TopUp(c *gin.Context) {
 		return
 	}
 	if count, serr := redis.Exists(fmt.Sprintf("Thread:%s", param.Account)); serr != nil || count == 0 {
-		if ok, err := redis.SetNx(fmt.Sprintf("Thread:%s", param.Account), "1", time.Duration(constants.CacheFrequency)*time.Second); ok || err == nil {
+		if ok, err := redis.SetNx(fmt.Sprintf("Thread:%s", param.Account), "1", time.Duration(constants.GetCacheFrequency())*time.Second); ok || err == nil {
 			status, data := createThread(c, param)
 			c.JSON(status, data)
 			return
@@ -205,7 +205,7 @@ func createThread(c *gin.Context, param constants.CDKTopupRequest) (int, gin.H) 
 		}
 	}
 	var threadId = random.GetRandomString(32)
-	redis.SetNx(threadId, resData.TaskId, time.Duration(constants.CacheFrequency)*time.Second)
+	redis.SetNx(threadId, resData.TaskId, time.Duration(constants.GetCacheFrequency())*time.Second)
 	return http.StatusOK, gin.H{
 		"success": true,
 		"message": "success",

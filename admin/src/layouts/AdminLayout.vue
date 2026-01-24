@@ -57,7 +57,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, h, onMounted } from 'vue'
+import { ref, computed, h, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import {
   NLayout,
@@ -85,8 +85,33 @@ const message = useMessage()
 // 侧边栏折叠状态
 const collapsed = ref(false)
 
-// 当前激活的菜单项
-const activeKey = ref<string>('dashboard')
+// 路由路径到菜单key的映射
+const routeToMenuKey = (path: string): string => {
+  const pathMap: Record<string, string> = {
+    '/admin/dashboard': 'dashboard',
+    '/admin/users': 'users',
+    '/admin/roles': 'roles',
+    '/admin/orders': 'orders',
+    '/admin/refunds': 'refunds',
+    '/admin/cards': 'cards',
+    '/admin/card-generate': 'card-generate',
+    '/admin/mirror-cards': 'mirror-cards',
+    '/admin/settings': 'settings',
+    '/admin/logs': 'logs',
+  }
+  return pathMap[path] || 'dashboard'
+}
+
+// 当前激活的菜单项 - 根据当前路由初始化
+const activeKey = ref<string>(routeToMenuKey(route.path))
+
+// 监听路由变化，更新菜单激活状态
+watch(
+  () => route.path,
+  (newPath) => {
+    activeKey.value = routeToMenuKey(newPath)
+  }
+)
 
 // 管理员信息
 const adminInfo = ref<any>(null)

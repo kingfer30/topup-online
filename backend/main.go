@@ -11,16 +11,21 @@ import (
 	"github.com/kingfer30/topup-online/middleware"
 	"github.com/kingfer30/topup-online/model"
 	"github.com/kingfer30/topup-online/router"
+	"github.com/kingfer30/topup-online/scheduler"
 	"github.com/kingfer30/topup-online/utils/client"
 	"github.com/kingfer30/topup-online/utils/logger"
 )
 
-func main() {
-	logger.SetupLogger()
-
+// init 函数在包初始化时执行，先于 main 函数
+// 必须在这里加载 .env 文件，确保后续读取环境变量时能获取到正确的值
+func init() {
 	// 加载.env文件（如果存在），使用Overload强制覆盖已存在的环境变量
 	// 这样可以确保.env文件中的配置优先级最高
 	_ = godotenv.Overload()
+}
+
+func main() {
+	logger.SetupLogger()
 
 	// 检查是否已初始化，如果已初始化则连接数据库
 	if _, err := os.Stat(".initialized"); err == nil {
@@ -36,6 +41,12 @@ func main() {
 			logger.FatalLog("failed to migrate database in main: " + err.Error())
 		}
 		logger.SysLog("Database migration completed")
+
+		// 启动镜像卡密 Token 定时获取任务（每 30 分钟执行一次）
+		logger.SysLog("Starting MirrorCard Token Scheduler...")
+		tokenScheduler := scheduler.NewMirrorCardTokenScheduler(30)
+		tokenScheduler.Start()
+		logger.SysLog("MirrorCard Token Scheduler started successfully")
 	} else {
 		logger.SysLog("System not initialized yet, waiting for initialization...")
 	}
@@ -55,5 +66,5 @@ func main() {
 	middleware.SetUpLogger(server)
 	router.SetRouter(server)
 	// 启动服务
-	server.Run(":" + constants.ServerPort)
+	server.Run(":" + constants.GetServerPort())
 }

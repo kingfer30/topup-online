@@ -10,6 +10,8 @@ type MirrorCard struct {
 	ID           int        `json:"id" gorm:"primaryKey"`
 	Username     string     `json:"username" gorm:"type:varchar(100);not null"`
 	Password     string     `json:"password" gorm:"type:varchar(100);not null"`
+	Token        string     `json:"token" gorm:"type:varchar(500);comment:'ChatShare登录Token'"`
+	NodeURL      string     `json:"node_url" gorm:"type:varchar(200);comment:'ChatShare节点URL'"`
 	BindStatus   int        `json:"bind_status" gorm:"type:int;default:0;comment:'0-未绑定 1-已绑定'"`
 	BindUserId   int        `json:"bind_user_id" gorm:"type:int;default:0;index"`
 	BindUserName string     `json:"bind_user_name" gorm:"-"` // 不存储到数据库，仅用于返回
@@ -39,7 +41,7 @@ func GetMirrorCardList(page, pageSize int, keyword string) ([]*MirrorCard, int64
 		// 先查找匹配的用户ID
 		var userIds []int
 		DB.Model(&User{}).Where("username LIKE ?", "%"+keyword+"%").Pluck("id", &userIds)
-		
+
 		if len(userIds) > 0 {
 			query = query.Where("username LIKE ? OR password LIKE ? OR bind_user_id IN ?", "%"+keyword+"%", "%"+keyword+"%", userIds)
 		} else {
@@ -167,4 +169,28 @@ func BatchCreateMirrorCards(cards []*MirrorCard) error {
 		return errors.New("卡密列表为空")
 	}
 	return DB.Create(&cards).Error
+}
+
+// GetMirrorCardsWithoutToken 获取状态为启用且 token 为空的卡密列表
+// 用于定时任务批量获取 token
+func GetMirrorCardsWithoutToken(limit int) ([]*MirrorCard, error) {
+	var cards []*MirrorCard
+	err := DB.Where("status = ? AND (token IS NULL OR token = '')", MirrorCardStatusEnabled).
+		Limit(limit).
+		Find(&cards).Error
+	if err != nil {
+		return nil, err
+	}
+	return cards, nil
+}
+
+// UpdateMirrorCardToken 更新镜像卡密的 token 和节点 URL
+func UpdateMirrorCardToken(id int, token, nodeURL string) error {
+	if id == 0 {
+		return errors.New("id 为空")
+	}
+	return DB.Model(&MirrorCard{}).Where("id = ?", id).Updates(map[string]interface{}{
+		"token":    token,
+		"node_url": nodeURL,
+	}).Error
 }

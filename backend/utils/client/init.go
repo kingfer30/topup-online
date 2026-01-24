@@ -14,24 +14,24 @@ var HTTPClient *http.Client
 
 func Init() {
 	var transport http.RoundTripper
-	if constants.RelayProxy != "" {
-		logger.SysLog(fmt.Sprintf("using %s as api relay proxy", constants.RelayProxy))
-		proxyURL, err := url.Parse(constants.RelayProxy)
+	if constants.GetRelayProxy() != "" {
+		logger.SysLog(fmt.Sprintf("using %s as api relay proxy", constants.GetRelayProxy()))
+		proxyURL, err := url.Parse(constants.GetRelayProxy())
 		if err != nil {
-			logger.FatalLog(fmt.Sprintf("USER_CONTENT_REQUEST_PROXY set but invalid: %s", constants.RelayProxy))
+			logger.FatalLog(fmt.Sprintf("USER_CONTENT_REQUEST_PROXY set but invalid: %s", constants.GetRelayProxy()))
 		}
 		transport = &http.Transport{
 			Proxy: http.ProxyURL(proxyURL),
 		}
 	}
 
-	if constants.RelayTimeout == 0 {
+	if constants.GetRelayTimeout() == 0 {
 		HTTPClient = &http.Client{
 			Transport: transport,
 		}
 	} else {
 		HTTPClient = &http.Client{
-			Timeout:   time.Duration(constants.RelayTimeout) * time.Second,
+			Timeout:   time.Duration(constants.GetRelayTimeout()) * time.Second,
 			Transport: transport,
 		}
 	}

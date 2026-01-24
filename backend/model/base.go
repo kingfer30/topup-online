@@ -71,7 +71,7 @@ func MigrateDB() error {
 }
 
 func setDBConns(db *gorm.DB) *sql.DB {
-	if constants.DebugSQLEnabled {
+	if constants.GetDebugSQLEnabled() {
 		db = db.Debug()
 	}
 
