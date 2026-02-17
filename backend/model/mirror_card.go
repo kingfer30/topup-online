@@ -7,18 +7,25 @@ import (
 
 // MirrorCard 镜像卡密
 type MirrorCard struct {
-	ID           int        `json:"id" gorm:"primaryKey"`
-	Username     string     `json:"username" gorm:"type:varchar(100);not null"`
-	Password     string     `json:"password" gorm:"type:varchar(100);not null"`
-	Token        string     `json:"token" gorm:"type:varchar(500);comment:'ChatShare登录Token'"`
-	NodeURL      string     `json:"node_url" gorm:"type:varchar(200);comment:'ChatShare节点URL'"`
-	BindStatus   int        `json:"bind_status" gorm:"type:int;default:0;comment:'0-未绑定 1-已绑定'"`
-	BindUserId   int        `json:"bind_user_id" gorm:"type:int;default:0;index"`
-	BindUserName string     `json:"bind_user_name" gorm:"-"` // 不存储到数据库，仅用于返回
-	BindTime     *time.Time `json:"bind_time" gorm:"type:datetime"`
-	Status       int        `json:"status" gorm:"type:int;default:1;comment:'1-启用 2-禁用'"`
-	CreatedAt    time.Time  `json:"created_at"`
-	UpdatedAt    time.Time  `json:"updated_at"`
+	ID              int        `json:"id" gorm:"primaryKey"`
+	Username        string     `json:"username" gorm:"type:varchar(100);not null"`
+	Password        string     `json:"password" gorm:"type:varchar(100);not null"`
+	Token           string     `json:"token" gorm:"type:varchar(500);comment:'ChatShare登录Token'"`
+	NodeURL         string     `json:"node_url" gorm:"type:varchar(200);comment:'ChatShare节点URL'"`
+	BindStatus      int        `json:"bind_status" gorm:"type:int;default:0;comment:'0-未绑定 1-已绑定'"`
+	BindUserId      int        `json:"bind_user_id" gorm:"type:int;default:0;index"`
+	BindUserName    string     `json:"bind_user_name" gorm:"-"` // 不存储到数据库，仅用于返回
+	BindTime        *time.Time `json:"bind_time" gorm:"type:datetime"`
+	Status          int        `json:"status" gorm:"type:int;default:1;comment:'1-启用 2-禁用'"`
+	UserID          string     `json:"user_id" gorm:"type:varchar(50);comment:'用户ID'"`
+	AvailCount      int        `json:"avail_count" gorm:"type:int;default:0;comment:'对话次数限制(-1表示无限)'"`
+	GPTFreqLimit    int        `json:"gpt_freq_limit" gorm:"type:int;default:0;comment:'GPT请求限制(-1表示无限)'"`
+	ClaudeFreqLimit int        `json:"claude_freq_limit" gorm:"type:int;default:0;comment:'Claude请求限制(-1表示无限)'"`
+	GeminiFreqLimit int        `json:"gemini_freq_limit" gorm:"type:int;default:0;comment:'Gemini请求限制(-1表示无限)'"`
+	MJFreqLimit     int        `json:"mj_freq_limit" gorm:"type:int;default:0;comment:'MJ请求限制(-1表示无限)'"`
+	ExpireTime      *time.Time `json:"expire_time" gorm:"type:datetime;comment:'订阅过期时间'"`
+	CreatedAt       time.Time  `json:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
 }
 
 const (
@@ -192,5 +199,46 @@ func UpdateMirrorCardToken(id int, token, nodeURL string) error {
 	return DB.Model(&MirrorCard{}).Where("id = ?", id).Updates(map[string]interface{}{
 		"token":    token,
 		"node_url": nodeURL,
+	}).Error
+}
+
+// GetMirrorCardsWithValidToken 获取已启用且 token 不为空且未过期的卡密列表
+// 用于定时任务同步用户信息
+func GetMirrorCardsWithValidToken(limit int) ([]*MirrorCard, error) {
+	var cards []*MirrorCard
+	now := time.Now()
+	err := DB.Where("status = ? AND token IS NOT NULL AND token != ? AND (expire_time IS NULL OR expire_time > ?)",
+		MirrorCardStatusEnabled, "", now).
+		Limit(limit).
+		Find(&cards).Error
+	if err != nil {
+		return nil, err
+	}
+	return cards, nil
+}
+
+// UpdateMirrorCardUserInfo 更新镜像卡密的用户信息
+func UpdateMirrorCardUserInfo(id int, userID string, availCount, gptFreq, claudeFreq, geminiFreq, mjFreq int, expireTime *time.Time) error {
+	if id == 0 {
+		return errors.New("id 为空")
+	}
+	return DB.Model(&MirrorCard{}).Where("id = ?", id).Updates(map[string]interface{}{
+		"user_id":           userID,
+		"avail_count":       availCount,
+		"gpt_freq_limit":    gptFreq,
+		"claude_freq_limit": claudeFreq,
+		"gemini_freq_limit": geminiFreq,
+		"mj_freq_limit":     mjFreq,
+		"expire_time":       expireTime,
+	}).Error
+}
+
+// ClearMirrorCardToken 清空镜像卡密的 token（登录态失效时使用）
+func ClearMirrorCardToken(id int) error {
+	if id == 0 {
+		return errors.New("id 为空")
+	}
+	return DB.Model(&MirrorCard{}).Where("id = ?", id).Updates(map[string]interface{}{
+		"token": "",
 	}).Error
 }

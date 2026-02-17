@@ -59,7 +59,7 @@ func migrateDB() error {
 	if err = DB.AutoMigrate(&Order{}); err != nil {
 		return err
 	}
-	if err = DB.AutoMigrate(&Card{}); err != nil {
+	if err = DB.AutoMigrate(&Menu{}); err != nil {
 		return err
 	}
 	return nil

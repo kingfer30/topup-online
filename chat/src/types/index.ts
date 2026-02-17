@@ -49,3 +49,33 @@ export interface LoginResponseData {
 // 登录响应类型（包含API响应包装）
 export interface LoginResponse extends ApiResponse<LoginResponseData> {}
 
+// 房间类型
+export interface RoomItem {
+  sort: number
+  carid: string
+  carname: string
+  count: number
+  available: boolean
+}
+
+// 房间列表响应数据类型
+export interface RoomListData {
+  list: RoomItem[]
+  totalCount: number
+  page: number
+  pageSize: number
+}
+
+// 房间列表请求参数
+export interface RoomListParams {
+  page?: number
+  pageSize?: number
+  platform_type: string
+}
+
+// 加入房间响应数据类型
+export interface JoinRoomData {
+  url: string
+  token: string
+}
+

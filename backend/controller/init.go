@@ -172,7 +172,6 @@ func InitializeSystem(c *gin.Context) {
 		&model.Admin{},
 		&model.User{},
 		&model.Order{},
-		&model.Card{},
 		&model.MirrorCard{},
 	)
 	if err != nil {

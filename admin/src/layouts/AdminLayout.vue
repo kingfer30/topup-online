@@ -12,7 +12,7 @@
         </h1>
       </div>
 
-      <n-menu v-model:value="activeKey" :collapsed="collapsed" :collapsed-width="64" :collapsed-icon-size="22"
+      <n-menu v-model:value="activeKey" v-model:expanded-keys="expandedKeys" :collapsed="collapsed" :collapsed-width="64" :collapsed-icon-size="22"
         :options="menuOptions" @update:value="handleMenuSelect" />
     </n-layout-sider>
 
@@ -57,7 +57,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, h, onMounted, watch } from 'vue'
+import { ref, computed, h, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import {
   NLayout,
@@ -77,6 +77,7 @@ import {
 } from 'naive-ui'
 import { RouterLink } from 'vue-router'
 import { adminLogout } from '@/api/admin'
+import { getMenuTree, type Menu } from '@/api/menu'
 
 const router = useRouter()
 const route = useRoute()
@@ -85,32 +86,110 @@ const message = useMessage()
 // 侧边栏折叠状态
 const collapsed = ref(false)
 
-// 路由路径到菜单key的映射
-const routeToMenuKey = (path: string): string => {
-  const pathMap: Record<string, string> = {
-    '/admin/dashboard': 'dashboard',
-    '/admin/users': 'users',
-    '/admin/roles': 'roles',
-    '/admin/orders': 'orders',
-    '/admin/refunds': 'refunds',
-    '/admin/cards': 'cards',
-    '/admin/card-generate': 'card-generate',
-    '/admin/mirror-cards': 'mirror-cards',
-    '/admin/settings': 'settings',
-    '/admin/logs': 'logs',
-  }
-  return pathMap[path] || 'dashboard'
+// 菜单数据
+const menus = ref<Menu[]>([])
+const menuPathMap = ref<Record<string, string>>({})
+const menuTitleMap = ref<Record<string, string>>({})
+const menuParentMap = ref<Record<string, string>>({})
+
+// 渲染图标
+const renderIcon = (icon?: string) => {
+  if (!icon) return undefined
+  return () => h('span', { class: 'text-xl' }, icon)
 }
 
-// 当前激活的菜单项 - 根据当前路由初始化
-const activeKey = ref<string>(routeToMenuKey(route.path))
-
-// 监听路由变化，更新菜单激活状态
-watch(
-  () => route.path,
-  (newPath) => {
-    activeKey.value = routeToMenuKey(newPath)
+// 将 Menu 转换为 MenuOption
+const convertMenuToOption = (menu: Menu, parentKey?: string): MenuOption => {
+  const option: MenuOption = {
+    label: menu.path
+      ? () =>
+          h(
+            RouterLink,
+            {
+              to: menu.path as string,
+            },
+            { default: () => menu.title }
+          )
+      : menu.title,
+    key: menu.key,
+    icon: renderIcon(menu.icon),
   }
+
+  // 记录路径和标题映射
+  if (menu.path) {
+    menuPathMap.value[menu.path] = menu.key
+    menuTitleMap.value[menu.path] = menu.title
+  }
+
+  // 记录父子关系
+  if (parentKey) {
+    menuParentMap.value[menu.key] = parentKey
+  }
+
+  // 处理子菜单
+  if (menu.children && menu.children.length > 0) {
+    option.children = menu.children.map(child => convertMenuToOption(child, menu.key))
+  }
+
+  return option
+}
+
+// 菜单选项
+const menuOptions = computed<MenuOption[]>(() => {
+  return menus.value.map(menu => convertMenuToOption(menu))
+})
+
+// 路由路径到菜单key的映射（包含查询参数）
+const routeToMenuKey = (path: string, query: any = {}): string => {
+  // 先尝试精确匹配（包含查询参数）
+  const queryString = new URLSearchParams(query).toString()
+  const fullPath = queryString ? `${path}?${queryString}` : path
+  
+  if (menuPathMap.value[fullPath]) {
+    return menuPathMap.value[fullPath]
+  }
+  
+  // 如果没有精确匹配，尝试只匹配路径
+  if (menuPathMap.value[path]) {
+    return menuPathMap.value[path]
+  }
+  
+  // 默认返回 dashboard
+  return 'dashboard'
+}
+
+// 获取菜单项的所有父级菜单key
+const getParentKeys = (menuKey: string): string[] => {
+  const parents: string[] = []
+  let currentKey = menuKey
+  
+  while (menuParentMap.value[currentKey]) {
+    const parentKey = menuParentMap.value[currentKey]
+    parents.push(parentKey)
+    currentKey = parentKey
+  }
+  
+  return parents
+}
+
+// 当前激活的菜单项 - 初始为空，等菜单加载后设置
+const activeKey = ref<string>('')
+
+// 展开的菜单项（父菜单）
+const expandedKeys = ref<string[]>([])
+
+// 监听路由变化，更新菜单激活状态和展开状态
+watch(
+  () => [route.path, route.query] as const,
+  ([newPath, newQuery]) => {
+    const key = routeToMenuKey(newPath, newQuery)
+    if (key) {
+      activeKey.value = key
+      // 展开当前菜单项的所有父级菜单
+      expandedKeys.value = getParentKeys(key)
+    }
+  },
+  { immediate: false }
 )
 
 // 管理员信息
@@ -123,8 +202,33 @@ const toggleTheme = () => {
   isDark.value = !isDark.value
 }
 
+// 加载菜单数据
+const loadMenus = async () => {
+  try {
+    const response = await getMenuTree()
+    if (response.code === 200) {
+      menus.value = response.data || []
+      // 等待 computed 更新完成，确保 menuPathMap 和 menuParentMap 已经构建
+      await nextTick()
+      // 根据当前路由设置激活的菜单项
+      const key = routeToMenuKey(route.path, route.query)
+      if (key) {
+        activeKey.value = key
+        // 展开当前菜单项的所有父级菜单
+        expandedKeys.value = getParentKeys(key)
+      }
+    } else {
+      console.error('加载菜单失败:', response.message)
+      message.error(response.message || '加载菜单失败')
+    }
+  } catch (error) {
+    console.error('加载菜单失败', error)
+    message.error('加载菜单失败')
+  }
+}
+
 // 加载管理员信息
-onMounted(() => {
+onMounted(async () => {
   const info = localStorage.getItem('admin_info')
   if (info) {
     try {
@@ -133,183 +237,27 @@ onMounted(() => {
       console.error('解析管理员信息失败', e)
     }
   }
+
+  // 加载菜单
+  await loadMenus()
+
+  // 监听菜单刷新事件
+  window.addEventListener('refreshMenus', loadMenus)
 })
 
-// 渲染图标
-const renderIcon = (icon: string) => {
-  return () => h('span', { class: 'text-xl' }, icon)
-}
-
-// 菜单选项
-const menuOptions = computed<MenuOption[]>(() => [
-  {
-    label: () =>
-      h(
-        RouterLink,
-        {
-          to: '/admin/dashboard',
-        },
-        { default: () => '控制台' }
-      ),
-    key: 'dashboard',
-    icon: renderIcon('📊'),
-  },
-  {
-    label: '用户管理',
-    key: 'user',
-    icon: renderIcon('👥'),
-    children: [
-      {
-        label: () =>
-          h(
-            RouterLink,
-            {
-              to: '/admin/users',
-            },
-            { default: () => '用户列表' }
-          ),
-        key: 'users',
-      },
-      {
-        label: () =>
-          h(
-            RouterLink,
-            {
-              to: '/admin/roles',
-            },
-            { default: () => '角色管理' }
-          ),
-        key: 'roles',
-      },
-    ],
-  },
-  {
-    label: '订单管理',
-    key: 'order',
-    icon: renderIcon('📦'),
-    children: [
-      {
-        label: () =>
-          h(
-            RouterLink,
-            {
-              to: '/admin/orders',
-            },
-            { default: () => '订单列表' }
-          ),
-        key: 'orders',
-      },
-      {
-        label: () =>
-          h(
-            RouterLink,
-            {
-              to: '/admin/refunds',
-            },
-            { default: () => '退款管理' }
-          ),
-        key: 'refunds',
-      },
-    ],
-  },
-  {
-    label: '卡密管理',
-    key: 'card',
-    icon: renderIcon('🎫'),
-    children: [
-      {
-        label: () =>
-          h(
-            RouterLink,
-            {
-              to: '/admin/cards',
-            },
-            { default: () => '卡密列表' }
-          ),
-        key: 'cards',
-      },
-      {
-        label: () =>
-          h(
-            RouterLink,
-            {
-              to: '/admin/card-generate',
-            },
-            { default: () => '生成卡密' }
-          ),
-        key: 'card-generate',
-      },
-    ],
-  },
-  {
-    label: '镜像管理',
-    key: 'mirror',
-    icon: renderIcon('🔐'),
-    children: [
-      {
-        label: () =>
-          h(
-            RouterLink,
-            {
-              to: '/admin/mirror-cards',
-            },
-            { default: () => '卡密管理' }
-          ),
-        key: 'mirror-cards',
-      },
-    ],
-  },
-  {
-    label: '系统设置',
-    key: 'system',
-    icon: renderIcon('⚙️'),
-    children: [
-      {
-        label: () =>
-          h(
-            RouterLink,
-            {
-              to: '/admin/settings',
-            },
-            { default: () => '基础设置' }
-          ),
-        key: 'settings',
-      },
-      {
-        label: () =>
-          h(
-            RouterLink,
-            {
-              to: '/admin/logs',
-            },
-            { default: () => '操作日志' }
-          ),
-        key: 'logs',
-      },
-    ],
-  },
-])
+// 组件卸载时移除事件监听
+onUnmounted(() => {
+  window.removeEventListener('refreshMenus', loadMenus)
+})
 
 // 面包屑
 const breadcrumbs = computed(() => {
   const path = route.path
-  const breadcrumbMap: Record<string, string> = {
-    '/admin': '首页',
-    '/admin/dashboard': '控制台',
-    '/admin/users': '用户列表',
-    '/admin/roles': '角色管理',
-    '/admin/orders': '订单列表',
-    '/admin/refunds': '退款管理',
-    '/admin/cards': '卡密列表',
-    '/admin/card-generate': '生成卡密',
-    '/admin/mirror-cards': '镜像卡密管理',
-    '/admin/settings': '基础设置',
-    '/admin/logs': '操作日志',
-  }
+  const title = menuTitleMap.value[path] || '详情'
 
   return [
     { name: 'admin', label: '后台管理' },
-    { name: path, label: breadcrumbMap[path] || '详情' },
+    { name: path, label: title },
   ]
 })
 

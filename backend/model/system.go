@@ -43,19 +43,3 @@ type Order struct {
 func (Order) TableName() string {
 	return "orders"
 }
-
-// Card 卡密表
-type Card struct {
-	gorm.Model
-	Code      string `gorm:"type:varchar(100);uniqueIndex;not null" json:"code"`
-	Type      string `gorm:"type:varchar(50)" json:"type"`     // 卡密类型
-	Value     int    `gorm:"default:0" json:"value"`           // 面值（天数）
-	Status    int    `gorm:"default:0" json:"status"`          // 0:未使用 1:已使用 2:已过期
-	UsedBy    string `gorm:"type:varchar(100)" json:"used_by"` // 使用者邮箱
-	UsedAt    *int64 `json:"used_at"`                          // 使用时间
-	ExpiredAt *int64 `json:"expired_at"`                       // 过期时间
-}
-
-func (Card) TableName() string {
-	return "cards"
-}

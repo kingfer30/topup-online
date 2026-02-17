@@ -4,7 +4,9 @@ MySQL - 5.7.16-log : Database - guo_depot
 *********************************************************************
 */
 
-/*!40101 SET NAMES utf8 */;
+/*!40101 SET NAMES utf8mb4 */;
+/*!40101 SET CHARACTER_SET_CLIENT=utf8mb4 */;
+/*!40101 SET CHARACTER_SET_RESULTS=utf8mb4 */;
 
 /*!40101 SET SQL_MODE=''*/;
 
@@ -39,28 +41,12 @@ CREATE TABLE `admins` (
 insert  into `admins`(`id`,`username`,`password`,`email`,`status`,`created_at`,`updated_at`,`deleted_at`) values 
 (1,'admin','8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92','admin@aichat199.com',1,'2025-11-29 06:51:13.589','2025-11-29 06:51:13.589',NULL);
 
-/*Table structure for table `cards` */
-
-DROP TABLE IF EXISTS `cards`;
-
-CREATE TABLE `cards` (
-  `id` bigint(20) NOT NULL AUTO_INCREMENT,
-  `code` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `type` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `value` bigint(20) DEFAULT '0',
-  `status` bigint(20) DEFAULT '0',
-  `used_by` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `used_at` bigint(20) DEFAULT NULL,
-  `expired_at` bigint(20) DEFAULT NULL,
-  `created_at` datetime(3) DEFAULT NULL,
-  `updated_at` datetime(3) DEFAULT NULL,
-  `deleted_at` datetime(3) DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `idx_cards_code` (`code`),
-  KEY `idx_cards_deleted_at` (`deleted_at`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-/*Data for the table `cards` */
+/*
+  注意：卡密表不在此处创建
+  卡密表通过"菜单管理 -> 新增卡密菜单"功能动态创建
+  表名格式：cards_{category}，例如：cards_cursor、cards_chatgpt 等
+  表结构定义在 backend/model/menu.go 的 CreateCardTable 函数中
+*/
 
 /*Table structure for table `options` */
 
@@ -154,6 +140,74 @@ CREATE TABLE `users` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 /*Data for the table `users` */
+
+/*Table structure for table `menus` */
+
+DROP TABLE IF EXISTS `menus`;
+
+CREATE TABLE `menus` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `parent_id` bigint(20) DEFAULT '0' COMMENT '父菜单ID, 0为顶级菜单',
+  `title` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '菜单标题',
+  `key` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '菜单唯一key',
+  `path` varchar(200) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '路由路径',
+  `icon` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '菜单图标(emoji)',
+  `sort` bigint(20) DEFAULT '0' COMMENT '排序权重，数值越小越靠前',
+  `status` tinyint(1) DEFAULT '1' COMMENT '状态: 1启用 0禁用',
+  `is_delete` tinyint(1) DEFAULT '-1' COMMENT '是否删除: 1是 -1否',
+  `deleted_at` datetime(3) DEFAULT NULL,
+  `created_at` datetime(3) DEFAULT NULL,
+  `updated_at` datetime(3) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_menus_key` (`key`),
+  KEY `idx_menus_parent_id` (`parent_id`),
+  KEY `idx_menus_is_delete` (`is_delete`),
+  KEY `idx_menus_deleted_at` (`deleted_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+/*Data for the table `menus` - 初始化数据 */
+
+-- 使用变量方式处理父子关系，避免 MySQL 的 "You can't specify target table for update in FROM clause" 错误
+
+-- 插入顶级菜单：控制台
+INSERT INTO `menus`(`parent_id`,`title`,`key`,`path`,`icon`,`sort`,`status`,`is_delete`,`created_at`,`updated_at`) 
+VALUES (0,'控制台','dashboard','/admin/dashboard','📊',1,1,-1,NOW(),NOW());
+
+-- 插入顶级菜单：用户管理
+INSERT INTO `menus`(`parent_id`,`title`,`key`,`path`,`icon`,`sort`,`status`,`is_delete`,`created_at`,`updated_at`) 
+VALUES (0,'用户管理','user',NULL,'👥',2,1,-1,NOW(),NOW());
+SET @user_menu_id = LAST_INSERT_ID();
+-- 用户管理的子菜单
+INSERT INTO `menus`(`parent_id`,`title`,`key`,`path`,`icon`,`sort`,`status`,`is_delete`,`created_at`,`updated_at`) VALUES 
+(@user_menu_id,'用户列表','users','/admin/users',NULL,1,1,-1,NOW(),NOW()),
+(@user_menu_id,'角色管理','roles','/admin/roles',NULL,2,1,-1,NOW(),NOW());
+
+-- 插入顶级菜单：订单管理
+INSERT INTO `menus`(`parent_id`,`title`,`key`,`path`,`icon`,`sort`,`status`,`is_delete`,`created_at`,`updated_at`) 
+VALUES (0,'订单管理','order',NULL,'📦',3,1,-1,NOW(),NOW());
+SET @order_menu_id = LAST_INSERT_ID();
+-- 订单管理的子菜单
+INSERT INTO `menus`(`parent_id`,`title`,`key`,`path`,`icon`,`sort`,`status`,`is_delete`,`created_at`,`updated_at`) VALUES 
+(@order_menu_id,'订单列表','orders','/admin/orders',NULL,1,1,-1,NOW(),NOW()),
+(@order_menu_id,'退款管理','refunds','/admin/refunds',NULL,2,1,-1,NOW(),NOW());
+
+-- 插入顶级菜单：镜像管理
+INSERT INTO `menus`(`parent_id`,`title`,`key`,`path`,`icon`,`sort`,`status`,`is_delete`,`created_at`,`updated_at`) 
+VALUES (0,'镜像管理','mirror',NULL,'🔐',5,1,-1,NOW(),NOW());
+SET @mirror_menu_id = LAST_INSERT_ID();
+-- 镜像管理的子菜单
+INSERT INTO `menus`(`parent_id`,`title`,`key`,`path`,`icon`,`sort`,`status`,`is_delete`,`created_at`,`updated_at`) VALUES 
+(@mirror_menu_id,'卡密管理','mirror-cards','/admin/mirror-cards',NULL,1,1,-1,NOW(),NOW());
+
+-- 插入顶级菜单：系统设置
+INSERT INTO `menus`(`parent_id`,`title`,`key`,`path`,`icon`,`sort`,`status`,`is_delete`,`created_at`,`updated_at`) 
+VALUES (0,'系统设置','system',NULL,'⚙️',6,1,-1,NOW(),NOW());
+SET @system_menu_id = LAST_INSERT_ID();
+-- 系统设置的子菜单
+INSERT INTO `menus`(`parent_id`,`title`,`key`,`path`,`icon`,`sort`,`status`,`is_delete`,`created_at`,`updated_at`) VALUES 
+(@system_menu_id,'基础设置','settings','/admin/settings',NULL,1,1,-1,NOW(),NOW()),
+(@system_menu_id,'操作日志','logs','/admin/logs',NULL,2,1,-1,NOW(),NOW()),
+(@system_menu_id,'菜单管理','menu-management','/admin/menu-management',NULL,3,1,-1,NOW(),NOW());
 
 /*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
 /*!40014 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS */;

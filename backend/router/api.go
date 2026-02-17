@@ -41,6 +41,24 @@ func SetApiRouter(router *gin.Engine) {
 			adminGroup.PUT("/mirror-cards/:id", controller.UpdateMirrorCard)                 // 更新卡密
 			adminGroup.DELETE("/mirror-cards/:id", controller.DeleteMirrorCard)              // 删除卡密
 			adminGroup.POST("/mirror-cards/batch-import", controller.BatchImportMirrorCards) // 批量导入
+
+			// 菜单管理接口（管理员专用）
+			adminGroup.GET("/menus/tree", controller.GetMenuTree)            // 获取菜单树
+			adminGroup.GET("/menus", controller.GetAllMenus)                 // 获取所有菜单
+			adminGroup.GET("/menus/:id", controller.GetMenuById)             // 获取菜单详情
+			adminGroup.POST("/menus", controller.CreateMenu)                 // 创建菜单
+			adminGroup.PUT("/menus/:id", controller.UpdateMenu)              // 更新菜单
+			adminGroup.DELETE("/menus/:id", controller.DeleteMenu)           // 删除菜单
+			adminGroup.GET("/menus/children", controller.GetMenusByParentId) // 获取子菜单
+			adminGroup.POST("/menus/card-menu", controller.CreateCardMenu)   // 创建卡密菜单
+
+			// 卡密管理接口（管理员专用）
+			adminGroup.GET("/cards", controller.GetCardList)                 // 获取卡密列表
+			adminGroup.GET("/cards/:id", controller.GetCardById)             // 获取卡密详情
+			adminGroup.POST("/cards", controller.CreateCard)                 // 创建卡密
+			adminGroup.PUT("/cards/:id", controller.UpdateCard)              // 更新卡密
+			adminGroup.DELETE("/cards/:id", controller.DeleteCard)           // 删除卡密
+			adminGroup.POST("/cards/batch-import", controller.BatchImportCards) // 批量导入卡密
 		}
 
 		// 用户认证相关（无需认证）
@@ -48,8 +66,25 @@ func SetApiRouter(router *gin.Engine) {
 		apiRouter.POST("/user/login", controller.Login)
 
 		// 用户相关（需要认证）
-		apiRouter.GET("/user/info", controller.GetUserInfo)
-		apiRouter.POST("/user/logout", controller.UserLogout)
+		userGroup := apiRouter.Group("/user")
+		userGroup.Use(middleware.UserAuth())
+		{
+			userGroup.GET("/info", controller.GetUserInfo)
+			userGroup.POST("/logout", controller.UserLogout)
+
+			// 房间列表接口
+			userGroup.GET("/rooms", controller.RoomList)      // 获取房间列表
+			userGroup.POST("/room/join", controller.JoinRoom) // 加入房间
+		}
+
+		// 房间反向代理（需要认证）
+		// 处理 /rooms/:id 及其所有子路径
+		roomGroup := apiRouter.Group("/rooms")
+		roomGroup.Use(middleware.UserAuth())
+		{
+			roomGroup.Any("/:id", controller.RoomProxy)
+			roomGroup.Any("/:id/*proxyPath", controller.RoomProxy)
+		}
 
 		// 卡密相关
 		apiRouter.GET("/cdk/:number", controller.GetCardDetail)

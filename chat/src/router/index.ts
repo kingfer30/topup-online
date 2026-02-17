@@ -19,6 +19,11 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/Login.vue'),
     meta: { requiresGuest: true } // 只允许未登录用户访问
   },
+  {
+    path: '/rooms',
+    name: 'Rooms',
+    component: () => import('@/views/Rooms.vue'),
+  },
 ]
 
 const router = createRouter({

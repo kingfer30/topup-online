@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@types/crypto-js": "^4.2.2",
+    "@vicons/ionicons5": "^0.12.0",
     "axios": "^1.6.8",
     "crypto-js": "^4.2.0",
     "naive-ui": "^2.38.1",

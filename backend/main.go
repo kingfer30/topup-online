@@ -47,6 +47,12 @@ func main() {
 		tokenScheduler := scheduler.NewMirrorCardTokenScheduler(30)
 		tokenScheduler.Start()
 		logger.SysLog("MirrorCard Token Scheduler started successfully")
+
+		// 启动镜像卡密用户信息同步任务（每 10 分钟执行一次）
+		logger.SysLog("Starting MirrorCard Sync Scheduler...")
+		syncScheduler := scheduler.NewMirrorCardSyncScheduler(10)
+		syncScheduler.Start()
+		logger.SysLog("MirrorCard Sync Scheduler started successfully")
 	} else {
 		logger.SysLog("System not initialized yet, waiting for initialization...")
 	}

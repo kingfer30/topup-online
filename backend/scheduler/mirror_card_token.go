@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/kingfer30/topup-online/model"
@@ -16,14 +17,19 @@ type MirrorCardTokenScheduler struct {
 	interval time.Duration // 轮询间隔
 	running  bool          // 是否正在运行
 	stopChan chan bool     // 停止信号
+	mu       sync.Mutex    // 互斥锁，防止同时执行
 }
+
+var globalScheduler *MirrorCardTokenScheduler
 
 // NewMirrorCardTokenScheduler 创建镜像卡密 Token 定时获取器
 func NewMirrorCardTokenScheduler(intervalMinutes int) *MirrorCardTokenScheduler {
-	return &MirrorCardTokenScheduler{
+	scheduler := &MirrorCardTokenScheduler{
 		interval: time.Duration(intervalMinutes) * time.Minute,
 		stopChan: make(chan bool),
 	}
+	globalScheduler = scheduler
+	return scheduler
 }
 
 // Start 启动定时任务
@@ -66,6 +72,10 @@ func (s *MirrorCardTokenScheduler) Stop() {
 
 // fetchTokens 获取卡密的 Token
 func (s *MirrorCardTokenScheduler) fetchTokens() {
+	// 使用互斥锁防止同时执行
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	logger.SysLog("开始获取镜像卡密 Token...")
 
 	// 查询状态正常且 token 为空的卡密（每次处理 10 条）
@@ -149,6 +159,83 @@ func (s *MirrorCardTokenScheduler) fetchTokens() {
 	}
 
 	logger.SysLog(fmt.Sprintf("镜像卡密 Token 获取完成，成功: %d, 失败: %d", successCount, failCount))
+}
+
+// FetchTokenForCard 为指定的卡密获取 Token（手动触发）
+func (s *MirrorCardTokenScheduler) FetchTokenForCard(cardID int) error {
+	// 使用互斥锁防止同时执行
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	logger.SysLog(fmt.Sprintf("手动触发获取卡密 [ID:%d] 的 Token...", cardID))
+
+	// 查询指定的卡密
+	card, err := model.GetMirrorCardById(cardID)
+	if err != nil {
+		return fmt.Errorf("查询镜像卡密失败: %v", err)
+	}
+
+	// 获取 ChatShare 节点 URL 列表
+	nodeURLs := getNodeURLs()
+	if len(nodeURLs) == 0 {
+		return fmt.Errorf("未配置 ChatShare 节点 URL")
+	}
+
+	// 尝试所有节点，直到成功
+	for _, nodeURL := range nodeURLs {
+		logger.SysLog(fmt.Sprintf("正在为卡密 [ID:%d, Username:%s] 从节点 %s 获取 Token...",
+			card.ID, card.Username, nodeURL))
+
+		// 调用 ChatShare 登录接口
+		resp, err := crypto.CallChatShareLogin(card.Username, card.Password, nodeURL)
+		if err != nil {
+			logger.SysError(fmt.Sprintf("卡密 [ID:%d, Username:%s] 从节点 %s 登录失败: %v",
+				card.ID, card.Username, nodeURL, err))
+			continue // 尝试下一个节点
+		}
+
+		// 检查登录是否成功
+		if !resp.IsSuccess {
+			logger.SysError(fmt.Sprintf("卡密 [ID:%d, Username:%s] 从节点 %s 登录失败: %s",
+				card.ID, card.Username, nodeURL, resp.Msg))
+			continue // 尝试下一个节点
+		}
+
+		// 解析 Token（RespData 可能是 JSON 字符串）
+		token := extractToken(resp.RespData)
+		if token == "" {
+			logger.SysError(fmt.Sprintf("卡密 [ID:%d, Username:%s] 从节点 %s 获取 Token 失败: 响应数据为空",
+				card.ID, card.Username, nodeURL))
+			continue // 尝试下一个节点
+		}
+
+		// 更新数据库
+		if err := model.UpdateMirrorCardToken(card.ID, token, nodeURL); err != nil {
+			logger.SysError(fmt.Sprintf("卡密 [ID:%d, Username:%s] 更新 Token 到数据库失败: %v",
+				card.ID, card.Username, err))
+			continue // 尝试下一个节点
+		}
+
+		logger.SysLog(fmt.Sprintf("卡密 [ID:%d, Username:%s] 从节点 %s 获取 Token 成功",
+			card.ID, card.Username, nodeURL))
+		return nil // 成功
+	}
+
+	return fmt.Errorf("从所有节点获取 Token 均失败")
+}
+
+// TriggerFetchForCard 全局方法：触发为指定卡密获取 Token
+func TriggerFetchForCard(cardID int) error {
+	if globalScheduler == nil {
+		return fmt.Errorf("scheduler 未初始化")
+	}
+	// 在后台异步执行，不阻塞当前请求
+	go func() {
+		if err := globalScheduler.FetchTokenForCard(cardID); err != nil {
+			logger.SysError(fmt.Sprintf("手动触发获取卡密 [ID:%d] Token 失败: %v", cardID, err))
+		}
+	}()
+	return nil
 }
 
 // extractToken 从响应数据中提取 Token

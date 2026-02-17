@@ -1,24 +1,13 @@
 <script setup lang="ts">
-import { ref, onMounted, nextTick, h, computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, onMounted, nextTick, computed } from 'vue'
 import { 
   NButton, 
-  NDropdown, 
   NCard, 
   NCollapseTransition, 
   NModal 
 } from 'naive-ui'
-import { useUserStore } from '@/stores/user'
-import { logout } from '@/api/user'
+import Header from '@/components/Layout/Header.vue'
 import '@/styles/custom.css'
-
-const router = useRouter()
-const userStore = useUserStore()
-
-// Use flag SVGs from public directory
-const cnFlag = '/flags/CN.svg'
-const usFlag = '/flags/US.svg'
-const ruFlag = '/flags/RU.svg'
 
 // Language management
 const currentLang = ref('zh')
@@ -51,20 +40,10 @@ const detectLang = () => {
   return 'en'
 }
 
-const switchLang = (lang: string) => {
-  currentLang.value = lang
-  localStorage.setItem('lang', lang)
-  document.title = langDict[lang].page_title
-}
-
 const toggleFaq = (index: number) => {
   faqOpenStates.value = faqOpenStates.value.map((state, i) => 
     i === index ? !state : false
   )
-}
-
-const scrollToTop = () => {
-  window.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
 const initParticles = () => {
@@ -107,70 +86,8 @@ const initParticles = () => {
   }
 }
 
-// Helper function to render flag icons
-const renderIcon = (flagSvg: string) => {
-  return () => h('img', { 
-    src: flagSvg, 
-    style: 'width: 20px; height: 15px; border-radius: 2px;',
-    alt: 'Flag'
-  })
-}
-
-// Language options for dropdown
-const langOptions = [
-  {
-    label: 'English',
-    key: 'en',
-    icon: renderIcon(usFlag)
-  },
-  {
-    label: '中文',
-    key: 'zh',
-    icon: renderIcon(cnFlag)
-  },
-  {
-    label: 'Русский',
-    key: 'ru',
-    icon: renderIcon(ruFlag)
-  }
-]
-
-// 用户菜单选项
-const userMenuOptions = computed(() => [
-  {
-    label: t.value.user_profile || '个人中心',
-    key: 'profile'
-  },
-  {
-    label: t.value.user_logout || '退出登录',
-    key: 'logout'
-  }
-])
-
-// 处理用户菜单点击
-const handleUserMenuSelect = async (key: string) => {
-  if (key === 'logout') {
-    try {
-      await logout()
-      userStore.clearUserInfo()
-      router.push('/login')
-    } catch (error) {
-      console.error('退出登录失败:', error)
-      // 即使退出失败也清除本地数据
-      userStore.clearUserInfo()
-      router.push('/login')
-    }
-  } else if (key === 'profile') {
-    // TODO: 跳转到个人中心页面
-    console.log('跳转到个人中心')
-  }
-}
-
 // Lifecycle
 onMounted(async () => {
-  // Initialize token
-  userStore.initToken()
-  
   // Initialize language
   const savedLang = localStorage.getItem('lang') || detectLang()
   currentLang.value = savedLang
@@ -195,8 +112,6 @@ onMounted(async () => {
 
 // Computed
 const t = computed(() => langDict[currentLang.value])
-const isLoggedIn = computed(() => !!userStore.token && !!userStore.userInfo)
-const displayName = computed(() => userStore.userInfo?.username || userStore.userInfo?.display_name || '用户')
 </script>
 
 <template>
@@ -207,78 +122,8 @@ const displayName = computed(() => userStore.userInfo?.username || userStore.use
     <!-- Main Content -->
     <div class="bg-gradient-to-br from-black via-gray-800 to-gray-100 text-gray-900 min-h-screen animate-[fadeIn_1s_ease-in-out]">
       
-      <!-- Header -->
-      <header class="bg-white p-4 sticky top-0 z-40 shadow-xl border-b border-black/20">
-        <div class="max-w-7xl mx-auto flex justify-between items-center flex-col sm:flex-row gap-3 sm:gap-0">
-          <div>
-            <n-button 
-              @click="scrollToTop" 
-              class="nav-link-active"
-              :bordered="false"
-            >
-              {{ t.nav_home }}
-            </n-button>
-          </div>
-          <nav class="flex gap-2 items-center justify-center">
-            <a href="#features" class="nav-link">
-              {{ t.nav_features }}
-            </a>
-            <a href="#steps" class="nav-link">
-              {{ t.nav_steps }}
-            </a>
-            <a href="#faq" class="nav-link">
-              {{ t.nav_faq }}
-            </a>
-            <n-dropdown 
-              :options="langOptions"
-              @select="switchLang"
-              trigger="click"
-            >
-              <n-button size="small" class="ml-2 lang-dropdown-btn" circle>
-                <img 
-                  v-if="currentLang === 'zh'" 
-                  :src="cnFlag" 
-                  alt="中文" 
-                  class="flag-icon"
-                />
-                <img 
-                  v-else-if="currentLang === 'ru'" 
-                  :src="ruFlag" 
-                  alt="Русский" 
-                  class="flag-icon"
-                />
-                <img 
-                  v-else 
-                  :src="usFlag" 
-                  alt="English" 
-                  class="flag-icon"
-                />
-              </n-button>
-            </n-dropdown>
-            
-            <!-- 用户登录状态 -->
-            <div v-if="isLoggedIn" class="ml-2">
-              <n-dropdown 
-                :options="userMenuOptions"
-                @select="handleUserMenuSelect"
-                trigger="click"
-              >
-                <n-button size="small" class="user-btn">
-                  <span class="flex items-center gap-1">
-                    <span class="user-icon">👤</span>
-                    {{ displayName }}
-                  </span>
-                </n-button>
-              </n-dropdown>
-            </div>
-            <router-link v-else to="/login" class="ml-2">
-              <n-button size="small" type="primary" class="login-btn">
-                登录/注册
-              </n-button>
-            </router-link>
-          </nav>
-        </div>
-      </header>
+      <!-- Header 组件 -->
+      <Header />
 
       <!-- Hero Section -->
       <section class="py-20 text-center px-4 relative z-10">
@@ -299,7 +144,7 @@ const displayName = computed(() => userStore.userInfo?.username || userStore.use
             size="large"
             class="bg-white text-black font-semibold px-8 py-3 rounded-full shadow-lg hover:shadow-2xl hover:scale-105 transition-all text-lg hover:bg-black hover:text-white"
             tag="a"
-            @click="$router.push('/login')"
+            @click="$router.push('/rooms')"
           >
             {{ t.hero_btn }}
           </n-button>

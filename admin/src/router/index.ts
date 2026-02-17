@@ -58,14 +58,8 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'cards',
         name: 'Cards',
-        component: () => import('@/views/Dashboard.vue'),
+        component: () => import('@/views/Cards.vue'),
         meta: { title: '卡密列表', requiresAuth: true },
-      },
-      {
-        path: 'card-generate',
-        name: 'CardGenerate',
-        component: () => import('@/views/Dashboard.vue'),
-        meta: { title: '生成卡密', requiresAuth: true },
       },
       {
         path: 'mirror-cards',
@@ -84,6 +78,12 @@ const routes: RouteRecordRaw[] = [
         name: 'Logs',
         component: () => import('@/views/Dashboard.vue'),
         meta: { title: '操作日志', requiresAuth: true },
+      },
+      {
+        path: 'menu-management',
+        name: 'MenuManagement',
+        component: () => import('@/views/MenuManagement.vue'),
+        meta: { title: '菜单管理', requiresAuth: true },
       },
     ],
   },

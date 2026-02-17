@@ -81,7 +81,14 @@ func AdminAuth() gin.HandlerFunc {
 // 验证token并将user_id存入context
 func UserAuth() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// 优先从 Authorization 头获取 token（用于 API 请求）
 		token := c.GetHeader("Authorization")
+
+		// 如果 Authorization 头为空，尝试从 Cookie 中获取（用于页面访问）
+		if token == "" {
+			token, _ = c.Cookie("access_token")
+		}
+
 		if token == "" {
 			c.JSON(http.StatusOK, gin.H{
 				"code":    401,

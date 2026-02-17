@@ -1,77 +1,183 @@
 <template>
-  <header class="bg-white shadow-md">
-    <div class="container-custom">
-      <div class="flex justify-between items-center h-16">
-        <!-- Logo -->
-        <div class="flex items-center">
-          <router-link to="/" class="text-2xl font-bold text-primary-600 hover:text-primary-700">
-            充值在线
-          </router-link>
-        </div>
-
-        <!-- 导航菜单 -->
-        <nav class="hidden md:flex items-center gap-6">
-          <router-link
-            v-for="item in navItems"
-            :key="item.path"
-            :to="item.path"
-            class="text-gray-700 hover:text-primary-600 px-3 py-2 rounded-md text-sm font-medium transition-colors"
-            active-class="text-primary-600 bg-primary-50"
-          >
-            {{ item.label }}
-          </router-link>
-        </nav>
-
-        <!-- 用户操作 -->
-        <div class="flex items-center gap-4">
-          <n-button type="primary" @click="handleAction">
-            开始充值
-          </n-button>
-        </div>
-
-        <!-- 移动端菜单按钮 -->
-        <div class="md:hidden">
-          <n-button text @click="showMobileMenu = true">
-            <template #icon>
-              <span class="text-2xl">☰</span>
-            </template>
-          </n-button>
-        </div>
+  <header class="bg-white p-4 sticky top-0 z-40 shadow-xl border-b border-black/20">
+    <div class="max-w-7xl mx-auto flex justify-between items-center flex-col sm:flex-row gap-3 sm:gap-0">
+      <div>
+        <n-button 
+          @click="$router.push('/')" 
+          class="nav-link-active"
+          :bordered="false"
+        >
+          {{ isHomePage ? t.nav_home : '首页' }}
+        </n-button>
       </div>
+      <nav class="flex gap-2 items-center justify-center">
+        <a href="/rooms" class="nav-link" @click.prevent="$router.push('/rooms')">
+          立即开始
+        </a>
+        <a :href="isHomePage ? '#features' : '/#features'" class="nav-link">
+          {{ t.nav_features }}
+        </a>
+        <a :href="isHomePage ? '#steps' : '/#steps'" class="nav-link">
+          {{ t.nav_steps }}
+        </a>
+        <a :href="isHomePage ? '#faq' : '/#faq'" class="nav-link">
+          {{ t.nav_faq }}
+        </a>
+        <n-dropdown 
+          :options="langOptions"
+          @select="switchLang"
+          trigger="click"
+        >
+          <n-button size="small" class="ml-2 lang-dropdown-btn" circle>
+            <img 
+              v-if="currentLang === 'zh'" 
+              :src="cnFlag" 
+              alt="中文" 
+              class="flag-icon"
+            />
+            <img 
+              v-else-if="currentLang === 'ru'" 
+              :src="ruFlag" 
+              alt="Русский" 
+              class="flag-icon"
+            />
+            <img 
+              v-else 
+              :src="usFlag" 
+              alt="English" 
+              class="flag-icon"
+            />
+          </n-button>
+        </n-dropdown>
+        
+        <!-- 黑暗模式切换 -->
+        <n-button size="small" circle class="ml-2 lang-dropdown-btn" @click="toggleDarkMode">
+          <template #icon>
+            <n-icon>
+              <SunnyOutline v-if="!isDarkMode" />
+              <MoonOutline v-else />
+            </n-icon>
+          </template>
+        </n-button>
+        
+        <!-- 用户登录状态 -->
+        <div v-if="isLoggedIn" class="ml-2">
+          <n-dropdown 
+            :options="userMenuOptions"
+            @select="handleUserMenuSelect"
+            trigger="click"
+          >
+            <n-button size="small" class="user-btn">
+              <span class="flex items-center gap-1">
+                <span class="user-icon">👤</span>
+                {{ displayName }}
+              </span>
+            </n-button>
+          </n-dropdown>
+        </div>
+        <router-link v-else to="/login" class="ml-2">
+          <n-button size="small" type="primary" class="login-btn">
+            登录/注册
+          </n-button>
+        </router-link>
+      </nav>
     </div>
-
-    <!-- 移动端菜单抽屉 -->
-    <n-drawer v-model:show="showMobileMenu" :width="250" placement="right">
-      <n-drawer-content title="菜单">
-        <n-menu :options="navItems" @update:value="handleMenuSelect" />
-      </n-drawer-content>
-    </n-drawer>
   </header>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
-import { useRouter } from 'vue-router'
-import { NButton, NDrawer, NDrawerContent, NMenu } from 'naive-ui'
+import { ref, computed, h, onMounted } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
+import { NButton, NDropdown, NIcon, useMessage } from 'naive-ui'
+import { SunnyOutline, MoonOutline } from '@vicons/ionicons5'
+import { useUserStore } from '@/stores/user'
+import { logout } from '@/api/user'
+
+// 导入语言文件
+import enLang from '@/lang/en'
+import zhLang from '@/lang/zh'
+import ruLang from '@/lang/ru'
 
 const router = useRouter()
-const showMobileMenu = ref(false)
+const route = useRoute()
+const message = useMessage()
+const userStore = useUserStore()
 
-const navItems = [
-  { label: '首页', key: 'home', path: '/' },
-  { label: '关于', key: 'about', path: '/about' },
+// 语言管理
+const currentLang = ref('zh')
+const cnFlag = '/flags/CN.svg'
+const usFlag = '/flags/US.svg'
+const ruFlag = '/flags/RU.svg'
+
+// 黑暗模式
+const isDarkMode = ref(false)
+
+// 语言字典
+const langDict: Record<string, any> = {
+  en: enLang,
+  zh: zhLang,
+  ru: ruLang
+}
+
+// 语言选项
+const langOptions = [
+  { label: '中文', key: 'zh', icon: () => h('img', { src: cnFlag, class: 'flag-icon-small' }) },
+  { label: 'English', key: 'en', icon: () => h('img', { src: usFlag, class: 'flag-icon-small' }) },
+  { label: 'Русский', key: 'ru', icon: () => h('img', { src: ruFlag, class: 'flag-icon-small' }) }
 ]
 
-const handleAction = () => {
-  console.log('开始充值')
-}
+// 用户菜单选项
+const userMenuOptions = [
+  { label: '个人中心', key: 'profile' },
+  { label: '退出登录', key: 'logout' }
+]
 
-const handleMenuSelect = (key: string) => {
-  const item = navItems.find(i => i.key === key)
-  if (item) {
-    router.push(item.path)
-    showMobileMenu.value = false
+// 计算属性
+const t = computed(() => langDict[currentLang.value])
+const isLoggedIn = computed(() => !!userStore.token && !!userStore.userInfo)
+const displayName = computed(() => userStore.userInfo?.username || userStore.userInfo?.display_name || '用户')
+const isHomePage = computed(() => route.path === '/')
+
+// 切换语言
+const switchLang = (lang: string) => {
+  currentLang.value = lang
+  localStorage.setItem('lang', lang)
+  if (isHomePage.value) {
+    document.title = langDict[lang].page_title
   }
 }
+
+// 切换黑暗模式
+const toggleDarkMode = () => {
+  isDarkMode.value = !isDarkMode.value
+  message.info(isDarkMode.value ? '已切换到黑暗模式' : '已切换到明亮模式')
+}
+
+// 处理用户菜单点击
+const handleUserMenuSelect = async (key: string) => {
+  if (key === 'logout') {
+    try {
+      await logout()
+      userStore.clearUserInfo()
+      router.push('/login')
+    } catch (error) {
+      console.error('退出登录失败:', error)
+      userStore.clearUserInfo()
+      router.push('/login')
+    }
+  } else if (key === 'profile') {
+    message.info('个人中心功能开发中...')
+  }
+}
+
+// 初始化
+onMounted(() => {
+  const savedLang = localStorage.getItem('lang') || 'zh'
+  currentLang.value = savedLang
+  userStore.initToken()
+})
 </script>
 
+<style scoped>
+/* Header 组件特定样式 - 全局导航样式在 custom.css 中定义 */
+</style>
