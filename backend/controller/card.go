@@ -446,3 +446,129 @@ func BatchImportCards(c *gin.Context) {
 		"message": "批量导入成功",
 	})
 }
+
+// GetUnsoldSubscriptionTypes 获取未售出的订阅类型列表
+func GetUnsoldSubscriptionTypes(c *gin.Context) {
+	category := c.Query("category")
+	if category == "" {
+		c.JSON(http.StatusOK, gin.H{
+			"code":    400,
+			"message": "缺少卡密类别参数",
+		})
+		return
+	}
+
+	// 获取表名
+	tableName := model.GetTableNameByCategory(category)
+
+	// 检查表是否存在
+	if !model.CheckTableExists(tableName) {
+		c.JSON(http.StatusOK, gin.H{
+			"code":    404,
+			"message": "该卡密类别不存在",
+		})
+		return
+	}
+
+	types, err := model.GetUnsoldSubscriptionTypes(tableName)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"code":    500,
+			"message": "获取订阅类型失败: " + err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    200,
+		"message": "获取成功",
+		"data":    types,
+	})
+}
+
+// PickupCard 取货
+func PickupCard(c *gin.Context) {
+	var req struct {
+		Category         string `json:"category" binding:"required"`
+		SubscriptionType string `json:"subscription_type" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"code":    400,
+			"message": "参数错误: " + err.Error(),
+		})
+		return
+	}
+
+	// 获取表名
+	tableName := model.GetTableNameByCategory(req.Category)
+
+	// 检查表是否存在
+	if !model.CheckTableExists(tableName) {
+		c.JSON(http.StatusOK, gin.H{
+			"code":    404,
+			"message": "该卡密类别不存在",
+		})
+		return
+	}
+
+	card, err := model.PickupCard(tableName, req.SubscriptionType)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"code":    500,
+			"message": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    200,
+		"message": "取货成功",
+		"data":    card,
+	})
+}
+
+// CompletePickup 完成取货
+func CompletePickup(c *gin.Context) {
+	var req struct {
+		Category  string   `json:"category" binding:"required"`
+		Id        int      `json:"id" binding:"required"`
+		SellPrice *float64 `json:"sell_price"`
+		SellTo    string   `json:"sell_to"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"code":    400,
+			"message": "参数错误: " + err.Error(),
+		})
+		return
+	}
+
+	// 获取表名
+	tableName := model.GetTableNameByCategory(req.Category)
+
+	// 检查表是否存在
+	if !model.CheckTableExists(tableName) {
+		c.JSON(http.StatusOK, gin.H{
+			"code":    404,
+			"message": "该卡密类别不存在",
+		})
+		return
+	}
+
+	err := model.CompletePickup(tableName, req.Id, req.SellPrice, req.SellTo)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"code":    500,
+			"message": "完成取货失败: " + err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    200,
+		"message": "完成取货成功",
+	})
+}

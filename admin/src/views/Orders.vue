@@ -103,7 +103,6 @@ const statusFilter = ref<string | null>(null)
 const dateRange = ref<[number, number] | null>(null)
 
 const statusOptions = [
-  { label: '全部', value: null },
   { label: '待支付', value: 'pending' },
   { label: '处理中', value: 'processing' },
   { label: '已完成', value: 'completed' },

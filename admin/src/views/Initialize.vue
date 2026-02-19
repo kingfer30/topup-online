@@ -169,8 +169,11 @@ import {
   NSpace,
   NResult,
   useMessage,
+  type FormRules,
+  type FormItemRule,
 } from 'naive-ui'
 import { http } from '@/utils/http'
+import CryptoJS from 'crypto-js'
 
 const router = useRouter()
 const message = useMessage()
@@ -221,7 +224,7 @@ const adminForm = ref({
   admin_email: '',
 })
 
-const adminRules = {
+const adminRules: FormRules = {
   admin_user: {
     required: true,
     message: '请输入管理员用户名',
@@ -246,7 +249,7 @@ const adminRules = {
       trigger: 'blur',
     },
     {
-      validator: (_rule: any, value: string) => {
+      validator: (_rule: FormItemRule, value: string) => {
         return value === adminForm.value.admin_pass
       },
       message: '两次输入的密码不一致',
@@ -260,7 +263,7 @@ const adminRules = {
       trigger: 'blur',
     },
     {
-      type: 'email',
+      type: 'email' as const,
       message: '请输入正确的邮箱格式',
       trigger: 'blur',
     },
@@ -321,18 +324,8 @@ const prevStep = () => {
 }
 
 // MD5加密函数
-const md5 = async (str: string) => {
-  const encoder = new TextEncoder()
-  const data = encoder.encode(str)
-  try {
-    const hashBuffer = await crypto.subtle.digest('SHA-256', data)
-    return Array.from(new Uint8Array(hashBuffer))
-      .map(b => b.toString(16).padStart(2, '0'))
-      .join('')
-  } catch {
-    // 简单的备用方案
-    return str
-  }
+const md5 = (str: string) => {
+  return CryptoJS.MD5(str).toString()
 }
 
 // 初始化系统
@@ -343,7 +336,7 @@ const initialize = () => {
       
       try {
         // 对管理员密码进行MD5加密
-        const hashedPassword = await md5(adminForm.value.admin_pass)
+        const hashedPassword = md5(adminForm.value.admin_pass)
         
         const initData = {
           ...dbForm.value,

@@ -1,0 +1,40 @@
+# Git 相关
+.git
+.gitignore
+
+# 编译输出
+topupOnline
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# 测试文件
+*_test.go
+
+# IDE 配置
+.idea
+.vscode
+*.swp
+*.swo
+*~
+
+# 临时文件
+*.log
+*.tmp
+.DS_Store
+
+# 环境配置（根据需要可以保留或忽略）
+.env
+.env.local
+
+# 初始化标记文件（如果存在，根据需要决定是否包含）
+.initialized
+
+# 其他
+node_modules
+README.md
+Dockerfile
+.dockerignore
+

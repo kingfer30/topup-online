@@ -52,13 +52,16 @@ func SetApiRouter(router *gin.Engine) {
 			adminGroup.GET("/menus/children", controller.GetMenusByParentId) // 获取子菜单
 			adminGroup.POST("/menus/card-menu", controller.CreateCardMenu)   // 创建卡密菜单
 
-			// 卡密管理接口（管理员专用）
-			adminGroup.GET("/cards", controller.GetCardList)                 // 获取卡密列表
-			adminGroup.GET("/cards/:id", controller.GetCardById)             // 获取卡密详情
-			adminGroup.POST("/cards", controller.CreateCard)                 // 创建卡密
-			adminGroup.PUT("/cards/:id", controller.UpdateCard)              // 更新卡密
-			adminGroup.DELETE("/cards/:id", controller.DeleteCard)           // 删除卡密
-			adminGroup.POST("/cards/batch-import", controller.BatchImportCards) // 批量导入卡密
+		// 卡密管理接口（管理员专用）
+		adminGroup.GET("/cards", controller.GetCardList)                 // 获取卡密列表
+		adminGroup.GET("/cards/:id", controller.GetCardById)             // 获取卡密详情
+		adminGroup.POST("/cards", controller.CreateCard)                 // 创建卡密
+		adminGroup.PUT("/cards/:id", controller.UpdateCard)              // 更新卡密
+		adminGroup.DELETE("/cards/:id", controller.DeleteCard)           // 删除卡密
+		adminGroup.POST("/cards/batch-import", controller.BatchImportCards) // 批量导入卡密
+		adminGroup.GET("/cards/unsold-subscription-types", controller.GetUnsoldSubscriptionTypes) // 获取未售订阅类型
+		adminGroup.POST("/cards/pickup", controller.PickupCard)          // 取货
+		adminGroup.POST("/cards/complete-pickup", controller.CompletePickup) // 完成取货
 		}
 
 		// 用户认证相关（无需认证）

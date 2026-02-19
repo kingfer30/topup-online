@@ -124,3 +124,34 @@ export const batchImportCards = (data: BatchImportRequest): Promise<ApiResponse>
   return http.post('/admin/cards/batch-import', data) as Promise<ApiResponse>
 }
 
+// 获取未售出的订阅类型列表
+export const getUnsoldSubscriptionTypes = (category: string): Promise<ApiResponse<string[]>> => {
+  return http.get('/admin/cards/unsold-subscription-types', {
+    params: { category },
+  }) as Promise<ApiResponse<string[]>>
+}
+
+// 取货请求
+export interface PickupRequest {
+  category: string
+  subscription_type: string
+}
+
+// 取货接口
+export const pickupCard = (data: PickupRequest): Promise<ApiResponse<Card>> => {
+  return http.post('/admin/cards/pickup', data) as Promise<ApiResponse<Card>>
+}
+
+// 完成取货请求
+export interface CompletePickupRequest {
+  category: string
+  id: number
+  sell_price?: number
+  sell_to?: string
+}
+
+// 完成取货接口
+export const completePickup = (data: CompletePickupRequest): Promise<ApiResponse> => {
+  return http.post('/admin/cards/complete-pickup', data) as Promise<ApiResponse>
+}
+

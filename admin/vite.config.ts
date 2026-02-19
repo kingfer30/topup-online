@@ -14,6 +14,7 @@ export default defineConfig(({ mode }) => {
       },
     },
     server: {
+      host: '0.0.0.0', // 允许通过 IP 地址访问
       port: Number(env.VITE_APP_PORT) || 3001,
       open: true,
       proxy: {

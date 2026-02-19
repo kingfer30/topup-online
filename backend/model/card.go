@@ -167,3 +167,70 @@ func CheckTableExists(tableName string) bool {
 	DB.Raw("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ?", tableName).Scan(&count)
 	return count > 0
 }
+
+// GetUnsoldSubscriptionTypes 获取未售出的订阅类型列表
+func GetUnsoldSubscriptionTypes(tableName string) ([]string, error) {
+	var types []string
+	err := DB.Table(tableName).
+		Where("sell_status = ?", 1).
+		Where("subscription_type != ?", "").
+		Distinct("subscription_type").
+		Pluck("subscription_type", &types).Error
+	return types, err
+}
+
+// PickupCard 取货：按订阅过期时间先进先出选出一条，更新为售出中
+func PickupCard(tableName string, subscriptionType string) (*AccountCard, error) {
+	var card AccountCard
+
+	// 开启事务
+	err := DB.Transaction(func(tx *gorm.DB) error {
+		// 查询一条未售出的卡密，按订阅过期时间升序（先进先出）
+		query := tx.Table(tableName).
+			Where("sell_status = ?", 1).
+			Where("subscription_type = ?", subscriptionType).
+			Order("subscription_expired_time ASC, id ASC")
+
+		if err := query.First(&card).Error; err != nil {
+			return errors.New("没有可用的卡密")
+		}
+
+		// 更新为售出中
+		if err := tx.Table(tableName).Where("id = ?", card.Id).Update("sell_status", 2).Error; err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &card, nil
+}
+
+// CompletePickup 完成取货：更新为已售出
+func CompletePickup(tableName string, id int, sellPrice *float64, sellTo string) error {
+	if id == 0 {
+		return errors.New("id 为空")
+	}
+
+	// 获取当前时间戳
+	now := time.Now().Unix()
+
+	updates := map[string]interface{}{
+		"sell_status": 3,
+		"sell_date":   now,
+	}
+
+	if sellPrice != nil {
+		updates["sell_price"] = sellPrice
+	}
+
+	if sellTo != "" {
+		updates["sell_to"] = sellTo
+	}
+
+	return DB.Table(tableName).Where("id = ?", id).Updates(updates).Error
+}

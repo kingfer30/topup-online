@@ -83,6 +83,7 @@ import {
   useMessage,
 } from 'naive-ui'
 import { adminLogin } from '@/api/admin'
+import CryptoJS from 'crypto-js'
 
 const router = useRouter()
 const message = useMessage()
@@ -360,24 +361,9 @@ const rules = {
   },
 }
 
-// MD5加密函数（简化版）
+// MD5加密函数
 const md5 = (str: string) => {
-  // 这里使用浏览器内置的crypto API进行简单加密
-  // 在生产环境中建议使用专门的MD5库如crypto-js
-  const encoder = new TextEncoder()
-  const data = encoder.encode(str)
-  return crypto.subtle.digest('MD5', data).then(hash => {
-    return Array.from(new Uint8Array(hash))
-      .map(b => b.toString(16).padStart(2, '0'))
-      .join('')
-  }).catch(() => {
-    // 如果不支持MD5，使用SHA-256作为替代
-    return crypto.subtle.digest('SHA-256', data).then(hash => {
-      return Array.from(new Uint8Array(hash))
-        .map(b => b.toString(16).padStart(2, '0'))
-        .join('')
-    })
-  })
+  return CryptoJS.MD5(str).toString()
 }
 
 const handleLogin = () => {
@@ -387,7 +373,7 @@ const handleLogin = () => {
       
       try {
         // 对密码进行MD5加密
-        const hashedPassword = await md5(formValue.value.password)
+        const hashedPassword = md5(formValue.value.password)
         
         // 发送登录请求到后端
         const res: any = await adminLogin({

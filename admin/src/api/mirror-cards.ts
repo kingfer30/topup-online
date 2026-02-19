@@ -1,4 +1,5 @@
 import { http } from '@/utils/http'
+import type { ApiResponse } from '@/types'
 
 export interface MirrorCard {
   id: number
@@ -26,11 +27,6 @@ export interface MirrorCardListData {
   page_size: number
 }
 
-export interface MirrorCardListResponse {
-  code: number
-  message: string
-  data: MirrorCardListData
-}
 
 export interface CreateMirrorCardParams {
   username: string
@@ -50,31 +46,31 @@ export interface BatchImportParams {
 
 // 获取镜像卡密列表
 export const getMirrorCardList = (params: MirrorCardListParams) => {
-  return http.get<MirrorCardListResponse>('/admin/mirror-cards', { params })
+  return http.get<ApiResponse<MirrorCardListData>>('/admin/mirror-cards', { params })
 }
 
 // 获取镜像卡密详情
 export const getMirrorCardDetail = (id: number) => {
-  return http.get<MirrorCard>(`/admin/mirror-cards/${id}`)
+  return http.get<ApiResponse<MirrorCard>>(`/admin/mirror-cards/${id}`)
 }
 
 // 创建镜像卡密
 export const createMirrorCard = (data: CreateMirrorCardParams) => {
-  return http.post<MirrorCard>('/admin/mirror-cards', data)
+  return http.post<ApiResponse<MirrorCard>>('/admin/mirror-cards', data)
 }
 
 // 更新镜像卡密
 export const updateMirrorCard = (id: number, data: UpdateMirrorCardParams) => {
-  return http.put<MirrorCard>(`/admin/mirror-cards/${id}`, data)
+  return http.put<ApiResponse<MirrorCard>>(`/admin/mirror-cards/${id}`, data)
 }
 
 // 删除镜像卡密
 export const deleteMirrorCard = (id: number) => {
-  return http.delete(`/admin/mirror-cards/${id}`)
+  return http.delete<ApiResponse<null>>(`/admin/mirror-cards/${id}`)
 }
 
 // 批量导入镜像卡密
 export const batchImportMirrorCards = (data: BatchImportParams) => {
-  return http.post('/admin/mirror-cards/batch-import', data)
+  return http.post<ApiResponse<any>>('/admin/mirror-cards/batch-import', data)
 }
 

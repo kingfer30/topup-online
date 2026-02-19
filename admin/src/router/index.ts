@@ -95,7 +95,7 @@ const router = createRouter({
 })
 
 // 路由守卫
-router.beforeEach(async (to, from, next) => {
+router.beforeEach(async (to, _from, next) => {
   // 检查系统是否已初始化
   if (to.path !== '/initialize' && !to.meta.noAuth) {
     try {

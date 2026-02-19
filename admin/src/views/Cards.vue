@@ -3,6 +3,12 @@
     <n-card :title="pageTitle">
       <template #header-extra>
         <n-space>
+          <n-button v-if="cardType === 'unsold'" type="success" @click="handlePickup">
+            <template #icon>
+              <span>📦</span>
+            </template>
+            我要取货
+          </n-button>
           <n-button type="primary" @click="handleAdd">
             <template #icon>
               <span>➕</span>
@@ -252,7 +258,14 @@
             </n-form-item-gi>
 
             <n-form-item-gi label="邮箱地址" :span="2">
-              <n-input v-model:value="batchConfig.mail_url" placeholder="邮箱地址" />
+              <n-select
+                v-model:value="batchConfig.mail_url"
+                :options="mailUrlOptions"
+                placeholder="选择或输入邮箱地址"
+                filterable
+                tag
+                clearable
+              />
             </n-form-item-gi>
           </n-grid>
         </n-card>
@@ -349,6 +362,94 @@
         />
       </n-space>
     </n-modal>
+
+    <!-- 取货对话框 -->
+    <n-modal
+      v-model:show="showPickupModal"
+      :title="pickupStep === 1 ? '我要取货 - 选择条件' : '我要取货 - 预览确认'"
+      preset="dialog"
+      :positive-text="pickupStep === 1 ? '下一步' : '完成取货'"
+      negative-text="取消"
+      @positive-click="handlePickupSubmit"
+      style="width: 700px"
+    >
+      <n-space vertical style="margin-top: 20px" :size="16">
+        <!-- 第一步：选择条件 -->
+        <div v-if="pickupStep === 1">
+          <n-form
+            :model="pickupForm"
+            label-placement="left"
+            label-width="100px"
+          >
+            <n-form-item label="订阅类型" path="subscription_type">
+              <n-select
+                v-model:value="pickupForm.subscription_type"
+                :options="unsoldSubscriptionTypes"
+                placeholder="请选择订阅类型"
+              />
+            </n-form-item>
+
+            <n-form-item label="取货格式" path="format">
+              <n-radio-group v-model:value="pickupForm.format">
+                <n-space>
+                  <n-radio value="digiseller">Digiseller订阅</n-radio>
+                  <n-radio value="domestic">国内订阅</n-radio>
+                </n-space>
+              </n-radio-group>
+            </n-form-item>
+          </n-form>
+        </div>
+
+        <!-- 第二步：预览确认 -->
+        <div v-if="pickupStep === 2">
+          <n-alert type="success" style="margin-bottom: 16px">
+            已为您选出一条卡密，请确认信息后完成取货
+          </n-alert>
+
+          <!-- 卡密信息预览 -->
+          <n-card title="卡密信息" size="small" style="margin-bottom: 16px">
+            <div style="position: relative">
+              <n-button
+                size="small"
+                style="position: absolute; top: -40px; right: 0"
+                @click="handleCopyPickupInfo"
+              >
+                复制
+              </n-button>
+              <pre 
+                ref="pickupCardInfoRef"
+                class="card-info-display"
+                @click="handleSelectCardInfo"
+              >{{ pickupCardInfo }}</pre>
+            </div>
+          </n-card>
+
+          <!-- 售出信息 -->
+          <n-form
+            :model="completeForm"
+            label-placement="left"
+            label-width="100px"
+          >
+            <n-form-item label="售出价格">
+              <n-input-number
+                v-model:value="completeForm.sell_price"
+                :min="0"
+                :precision="2"
+                placeholder="非必填"
+                style="width: 100%"
+              />
+            </n-form-item>
+
+            <n-form-item label="售出对方">
+              <n-input
+                v-model:value="completeForm.sell_to"
+                placeholder="非必填"
+              />
+            </n-form-item>
+          </n-form>
+        </div>
+      </n-space>
+    </n-modal>
   </div>
 </template>
 
@@ -361,6 +462,7 @@ import {
   NDataTable,
   NModal,
   NForm,
+  NFormItem,
   NFormItemGi,
   NInput,
   NInputNumber,
@@ -370,6 +472,8 @@ import {
   NGrid,
   NAlert,
   NDatePicker,
+  NRadio,
+  NRadioGroup,
   useMessage,
   type DataTableColumns,
   type FormInst,
@@ -382,6 +486,9 @@ import {
   updateCard,
   deleteCard,
   batchImportCards,
+  getUnsoldSubscriptionTypes,
+  pickupCard,
+  completePickup,
   type Card,
   type CardRequest,
 } from '@/api/card'
@@ -413,6 +520,25 @@ const pageTitle = computed(() => {
   return title
 })
 
+// 取货卡密信息格式化
+const pickupCardInfo = computed(() => {
+  if (!pickedCard.value) return ''
+  
+  const card = pickedCard.value
+  if (pickupForm.value.format === 'digiseller') {
+    // digiseller订阅格式
+    return `account: ${card.account}
+pass: ${card.password || ''}
+mail-pass: ${card.mail_password || ''}
+
+mail-login: ${card.mail_url || ''}`
+  } else {
+    // 国内订阅格式
+    return `账号----密码----邮箱密码|
+${card.account}----${card.password || ''}----${card.mail_password || ''}`
+  }
+})
+
 // 状态
 const loading = ref(false)
 const showModal = ref(false)
@@ -423,15 +549,34 @@ const formRef = ref<FormInst | null>(null)
 const searchKeyword = ref('')
 const batchImportText = ref('')
 
+// 取货相关状态
+const showPickupModal = ref(false)
+const pickupStep = ref(1) // 1: 选择条件, 2: 预览确认
+const unsoldSubscriptionTypes = ref<{ label: string; value: string }[]>([])
+const pickedCard = ref<Card | null>(null)
+const pickupCardInfoRef = ref<HTMLPreElement | null>(null)
+
+// 取货表单
+const pickupForm = ref({
+  subscription_type: '',
+  format: 'digiseller' as 'digiseller' | 'domestic',
+})
+
+// 完成取货表单
+const completeForm = ref({
+  sell_price: 20 as number | undefined,
+  sell_to: 'Digiseller',
+})
+
 // 批量导入配置
 const batchConfig = ref({
-  subscription_type: '',
+  subscription_type: 'pro',
   subscription_remaining_days: 30 as number | undefined,
   purchase_price: undefined as number | undefined,
-  purchase_from: '',
+  purchase_from: '微信',
   purchase_order_no: '',
   purchase_date: undefined as number | undefined,
-  mail_url: '',
+  mail_url: 'https://login.live.com',
   field_mapping: {
     account: 1,
     password: 2,
@@ -518,6 +663,14 @@ const purchasePlatformOptions = [
   { label: 'Telegram', value: 'Telegram' },
   { label: '闲鱼', value: '闲鱼' },
   { label: '淘宝', value: '淘宝' },
+]
+
+// 邮箱地址选项（支持手动输入）
+const mailUrlOptions = [
+  { label: 'https://login.live.com', value: 'https://login.live.com' },
+  { label: 'https://mail.com', value: 'https://mail.com' },
+  { label: 'https://gmx.us', value: 'https://gmx.us' },
+  { label: 'https://gmail.com', value: 'https://gmail.com' },
 ]
 
 // 表格列定义
@@ -803,13 +956,13 @@ const handleBatchImport = () => {
   // 重置批量导入配置（保留字段映射）
   const currentMapping = { ...batchConfig.value.field_mapping }
   batchConfig.value = {
-    subscription_type: '',
+    subscription_type: 'pro',
     subscription_remaining_days: 30,
     purchase_price: undefined,
-    purchase_from: '',
+    purchase_from: '微信',
     purchase_order_no: '',
     purchase_date: undefined,
-    mail_url: '',
+    mail_url: 'https://login.live.com',
     field_mapping: currentMapping,
   }
   showBatchModal.value = true
@@ -940,6 +1093,157 @@ const handleBatchSubmit = async () => {
   }
 }
 
+// 打开取货对话框
+const handlePickup = async () => {
+  pickupStep.value = 1
+  pickedCard.value = null
+  pickupForm.value = {
+    subscription_type: '',
+    format: 'digiseller',
+  }
+  completeForm.value = {
+    sell_price: 20,
+    sell_to: 'Digiseller',
+  }
+  
+  // 加载未售订阅类型
+  try {
+    const response = await getUnsoldSubscriptionTypes(category.value)
+    if (response.code === 200) {
+      unsoldSubscriptionTypes.value = (response.data || []).map((type) => ({
+        label: type,
+        value: type,
+      }))
+      if (unsoldSubscriptionTypes.value.length === 0) {
+        message.warning('暂无未售卡密')
+        return
+      }
+      // 默认选中第一个订阅类型
+      if (unsoldSubscriptionTypes.value.length > 0) {
+        pickupForm.value.subscription_type = unsoldSubscriptionTypes.value[0].value
+      }
+    } else {
+      message.error(response.message || '获取订阅类型失败')
+      return
+    }
+  } catch (error: any) {
+    console.error('获取订阅类型失败', error)
+    message.error('获取订阅类型失败')
+    return
+  }
+  
+  showPickupModal.value = true
+}
+
+// 提交取货（根据步骤处理）
+const handlePickupSubmit = async () => {
+  if (pickupStep.value === 1) {
+    // 第一步：验证并执行取货
+    if (!pickupForm.value.subscription_type) {
+      message.error('请选择订阅类型')
+      return false
+    }
+    
+    try {
+      const response = await pickupCard({
+        category: category.value,
+        subscription_type: pickupForm.value.subscription_type,
+      })
+      
+      if (response.code === 200) {
+        pickedCard.value = response.data
+        pickupStep.value = 2
+        
+        // 自动复制卡密信息到剪贴板
+        try {
+          await navigator.clipboard.writeText(pickupCardInfo.value)
+          message.success('取货成功，已自动复制到剪贴板')
+        } catch (error) {
+          console.error('自动复制失败', error)
+          message.success('取货成功')
+        }
+        
+        return false // 阻止关闭对话框
+      } else {
+        message.error(response.message || '取货失败')
+        return false
+      }
+    } catch (error: any) {
+      console.error('取货失败', error)
+      message.error(error.response?.data?.message || '取货失败')
+      return false
+    }
+  } else {
+    // 第二步：完成取货
+    if (!pickedCard.value) {
+      message.error('未找到已取货的卡密')
+      return false
+    }
+    
+    try {
+      const response = await completePickup({
+        category: category.value,
+        id: pickedCard.value.id,
+        sell_price: completeForm.value.sell_price,
+        sell_to: completeForm.value.sell_to || undefined,
+      })
+      
+      if (response.code === 200) {
+        // 复制默认文本到剪贴板
+        const defaultText = `Ваш заказ выполнен !
+
+Скорость нашей доставки быстра, как Молния Маккуин; сервис точен, как периодическая таблица Менделеева; — если вы согласны с этим, пожалуйста, оставьте положительный отзыв в заказе, и вы сразу же получите подарочную карту на сумму, равную 5% от общей суммы заказа.💰️
+
+Подписывайтесь на наш канал, чтобы получать больше выгодных предложений: https://t.me/AI_GUO_GUO
+
+хорошего дня )`
+        
+        try {
+          await navigator.clipboard.writeText(defaultText)
+          message.success('取货完成，已复制默认消息到剪贴板')
+        } catch (error) {
+          console.error('复制失败', error)
+          message.success('取货完成')
+        }
+        
+        showPickupModal.value = false
+        await loadCards() // 刷新列表
+      } else {
+        message.error(response.message || '完成取货失败')
+        return false
+      }
+    } catch (error: any) {
+      console.error('完成取货失败', error)
+      message.error(error.response?.data?.message || '完成取货失败')
+      return false
+    }
+  }
+}
+
+// 复制取货信息
+const handleCopyPickupInfo = async () => {
+  try {
+    await navigator.clipboard.writeText(pickupCardInfo.value)
+    message.success('已复制到剪贴板')
+  } catch (error) {
+    console.error('复制失败', error)
+    message.error('复制失败')
+  }
+}
+
+// 点击卡密信息区域自动选中所有文本
+const handleSelectCardInfo = () => {
+  if (pickupCardInfoRef.value) {
+    const range = document.createRange()
+    range.selectNodeContents(pickupCardInfoRef.value)
+    const selection = window.getSelection()
+    if (selection) {
+      selection.removeAllRanges()
+      selection.addRange(range)
+    }
+  }
+}
+
 // 监听路由参数变化，当切换不同类型的列表时重新加载数据
 watch(
   () => [route.query.category, route.query.type],
@@ -969,6 +1273,36 @@ onMounted(() => {
 <style scoped>
 .cards-management {
   padding: 0;
+}
+
+.card-info-display {
+  margin: 0;
+  padding: 16px;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #ffffff;
+  border-radius: 8px;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 14px;
+  line-height: 1.8;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+  user-select: text;
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+}
+
+.card-info-display:hover {
+  background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+  box-shadow: 0 4px 16px rgba(102, 126, 234, 0.5);
+  transform: translateY(-2px);
+}
+
+.card-info-display:active {
+  transform: translateY(0);
 }
 </style>
 

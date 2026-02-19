@@ -418,21 +418,6 @@ const getMenuLevel = (menuId: number, menus: Menu[], level = 0): number => {
   return level
 }
 
-// 扁平化菜单（用于表格显示）
-const flattenMenus = (menus: Menu[]): Menu[] => {
-  const result: Menu[] = []
-  const flatten = (items: Menu[]) => {
-    items.forEach((item) => {
-      result.push(item)
-      if (item.children && item.children.length > 0) {
-        flatten(item.children)
-      }
-    })
-  }
-  flatten(menus)
-  return result
-}
-
 // 加载菜单列表
 const loadMenus = async () => {
   loading.value = true
