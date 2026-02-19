@@ -3,7 +3,8 @@ docker build -t topup-backend .
 docker pull kingfer/common:guo-depot-backend && \
 docker stop guo-depot-backend && docker rm guo-depot-backend && \
 docker run -dit --restart always --name guo-depot-backend -p 172.17.0.1:3333:3333 \
---env-file .backend.env kingfer/common:guo-depot-backend 
+-v /mnt/data/guo_depot/backend:/app/data \
+--env-file /mnt/data/guo_depot/backend/.env kingfer/common:guo-depot-backend 
 
 docker pull kingfer/common:guo-depot-admin && \
 docker stop guo-depot-admin && docker rm guo-depot-admin && \

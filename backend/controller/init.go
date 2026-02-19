@@ -5,11 +5,13 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 
+	"github.com/kingfer30/topup-online/constants"
 	"github.com/kingfer30/topup-online/model"
 )
 
@@ -27,7 +29,8 @@ type InitRequest struct {
 
 // CheckInitStatus 检查系统是否已初始化
 func CheckInitStatus(c *gin.Context) {
-	configPath := filepath.Join(".", ".initialized")
+	dataDir := constants.GetDataDir()
+	configPath := filepath.Join(dataDir, ".initialized")
 
 	// 检查是否存在初始化标记文件
 	if _, err := os.Stat(configPath); err == nil {
@@ -131,7 +134,8 @@ func InitializeSystem(c *gin.Context) {
 	}
 
 	// 检查是否已初始化
-	configPath := filepath.Join(".", ".initialized")
+	dataDir := constants.GetDataDir()
+	configPath := filepath.Join(dataDir, ".initialized")
 	if _, err := os.Stat(configPath); err == nil {
 		c.JSON(http.StatusOK, gin.H{
 			"code":    400,
@@ -173,6 +177,7 @@ func InitializeSystem(c *gin.Context) {
 		&model.User{},
 		&model.Order{},
 		&model.MirrorCard{},
+		&model.Menu{},
 	)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
@@ -218,6 +223,15 @@ func InitializeSystem(c *gin.Context) {
 		}
 	}
 
+	// 初始化默认菜单数据
+	if err := seedDefaultMenus(db); err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"code":    500,
+			"message": "初始化菜单数据失败: " + err.Error(),
+		})
+		return
+	}
+
 	// 创建环境配置文件
 	sqlDSN := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local&timeout=10s&readTimeout=30s&writeTimeout=30s",
 		req.DBUser,
@@ -242,7 +256,8 @@ SQL_MAX_OPEN_CONNS=1000
 SQL_MAX_LIFETIME=60
 `, sqlDSN)
 
-	if err := os.WriteFile(".env", []byte(envContent), 0644); err != nil {
+	envPath := filepath.Join(dataDir, ".env")
+	if err := os.WriteFile(envPath, []byte(envContent), 0644); err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"code":    500,
 			"message": "创建配置文件失败: " + err.Error(),
@@ -274,4 +289,86 @@ SQL_MAX_LIFETIME=60
 			"success": true,
 		},
 	})
+}
+
+// seedDefaultMenus 初始化默认菜单数据
+func seedDefaultMenus(db *gorm.DB) error {
+	now := time.Now()
+
+	// 辅助函数：创建菜单并返回插入后的 ID
+	createMenu := func(menu *model.Menu) error {
+		menu.Status = 1
+		menu.IsDelete = -1
+		menu.CreatedAt = now
+		menu.UpdatedAt = now
+		return db.Create(menu).Error
+	}
+
+	// 1. 控制台
+	dashboard := &model.Menu{ParentId: 0, Title: "控制台", Key: "dashboard", Path: "/admin/dashboard", Icon: "📊", Sort: 1}
+	if err := createMenu(dashboard); err != nil {
+		return fmt.Errorf("创建控制台菜单失败: %w", err)
+	}
+
+	// 2. 用户管理
+	userMenu := &model.Menu{ParentId: 0, Title: "用户管理", Key: "user", Icon: "👥", Sort: 2}
+	if err := createMenu(userMenu); err != nil {
+		return fmt.Errorf("创建用户管理菜单失败: %w", err)
+	}
+	// 用户管理 - 子菜单
+	userChildren := []*model.Menu{
+		{ParentId: userMenu.Id, Title: "用户列表", Key: "users", Path: "/admin/users", Sort: 1},
+		{ParentId: userMenu.Id, Title: "角色管理", Key: "roles", Path: "/admin/roles", Sort: 2},
+	}
+	for _, child := range userChildren {
+		if err := createMenu(child); err != nil {
+			return fmt.Errorf("创建用户管理子菜单失败: %w", err)
+		}
+	}
+
+	// 3. 订单管理
+	orderMenu := &model.Menu{ParentId: 0, Title: "订单管理", Key: "order", Icon: "📦", Sort: 3}
+	if err := createMenu(orderMenu); err != nil {
+		return fmt.Errorf("创建订单管理菜单失败: %w", err)
+	}
+	// 订单管理 - 子菜单
+	orderChildren := []*model.Menu{
+		{ParentId: orderMenu.Id, Title: "订单列表", Key: "orders", Path: "/admin/orders", Sort: 1},
+		{ParentId: orderMenu.Id, Title: "退款管理", Key: "refunds", Path: "/admin/refunds", Sort: 2},
+	}
+	for _, child := range orderChildren {
+		if err := createMenu(child); err != nil {
+			return fmt.Errorf("创建订单管理子菜单失败: %w", err)
+		}
+	}
+
+	// 4. 镜像管理
+	mirrorMenu := &model.Menu{ParentId: 0, Title: "镜像管理", Key: "mirror", Icon: "🔐", Sort: 5}
+	if err := createMenu(mirrorMenu); err != nil {
+		return fmt.Errorf("创建镜像管理菜单失败: %w", err)
+	}
+	// 镜像管理 - 子菜单
+	mirrorChild := &model.Menu{ParentId: mirrorMenu.Id, Title: "卡密管理", Key: "mirror-cards", Path: "/admin/mirror-cards", Sort: 1}
+	if err := createMenu(mirrorChild); err != nil {
+		return fmt.Errorf("创建镜像管理子菜单失败: %w", err)
+	}
+
+	// 5. 系统设置
+	systemMenu := &model.Menu{ParentId: 0, Title: "系统设置", Key: "system", Icon: "⚙️", Sort: 6}
+	if err := createMenu(systemMenu); err != nil {
+		return fmt.Errorf("创建系统设置菜单失败: %w", err)
+	}
+	// 系统设置 - 子菜单
+	systemChildren := []*model.Menu{
+		{ParentId: systemMenu.Id, Title: "基础设置", Key: "settings", Path: "/admin/settings", Sort: 1},
+		{ParentId: systemMenu.Id, Title: "操作日志", Key: "logs", Path: "/admin/logs", Sort: 2},
+		{ParentId: systemMenu.Id, Title: "菜单管理", Key: "menu-management", Path: "/admin/menu-management", Sort: 3},
+	}
+	for _, child := range systemChildren {
+		if err := createMenu(child); err != nil {
+			return fmt.Errorf("创建系统设置子菜单失败: %w", err)
+		}
+	}
+
+	return nil
 }

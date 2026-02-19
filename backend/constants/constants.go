@@ -30,6 +30,12 @@ func GetCacheFrequency() int {
 	return env.Int("CACHE_FREQUENCY", 300)
 }
 
+// GetDataDir 获取数据目录路径，用于存放 .initialized、.env 等持久化文件
+// Docker 部署时设置 DATA_DIR=/app/data 并挂载该目录即可持久化
+func GetDataDir() string {
+	return env.String("DATA_DIR", ".")
+}
+
 // common
 const (
 	LoggerDEBUG    = "DEBUG"

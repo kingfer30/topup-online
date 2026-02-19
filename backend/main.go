@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"path/filepath"
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
@@ -19,16 +20,26 @@ import (
 // init 函数在包初始化时执行，先于 main 函数
 // 必须在这里加载 .env 文件，确保后续读取环境变量时能获取到正确的值
 func init() {
+	// 根据 DATA_DIR 环境变量确定 .env 文件路径
+	// Docker 部署时设置 DATA_DIR=/app/data，本地开发默认为当前目录
+	dataDir := os.Getenv("DATA_DIR")
+	if dataDir == "" {
+		dataDir = "."
+	}
+	envPath := filepath.Join(dataDir, ".env")
+
 	// 加载.env文件（如果存在），使用Overload强制覆盖已存在的环境变量
 	// 这样可以确保.env文件中的配置优先级最高
-	_ = godotenv.Overload()
+	_ = godotenv.Overload(envPath)
 }
 
 func main() {
 	logger.SetupLogger()
 
 	// 检查是否已初始化，如果已初始化则连接数据库
-	if _, err := os.Stat(".initialized"); err == nil {
+	dataDir := constants.GetDataDir()
+	initializedPath := filepath.Join(dataDir, ".initialized")
+	if _, err := os.Stat(initializedPath); err == nil {
 		logger.SysLog("System is initialized, connecting to database...")
 		model.InitDB()
 		// 传递数据库连接给controller

@@ -17,7 +17,7 @@ RUN go mod download
 COPY . .
 
 # 构建 Go 应用（禁用 CGO 以生成静态二进制文件）
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o topupOnline .
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o guo-depot .
 
 # 阶段2: 运行阶段
 FROM alpine:latest
@@ -28,32 +28,25 @@ RUN apk --no-cache add ca-certificates tzdata
 # 设置时区为上海
 ENV TZ=Asia/Shanghai
 
-# 创建非 root 用户
-RUN addgroup -g 1000 appuser && \
-    adduser -D -u 1000 -G appuser appuser
-
 # 设置工作目录
 WORKDIR /app
 
 # 从构建阶段复制二进制文件
-COPY --from=builder /app/topupOnline .
+COPY --from=builder /app/guo-depot .
 
 # 复制必要的配置文件（如果存在）
 COPY --from=builder /app/db.sql ./db.sql
 
-# 更改所有权
-RUN chown -R appuser:appuser /app
+# 创建数据目录，用于存放 .initialized、.env 等持久化文件
+# Docker 部署时将此目录映射到宿主机即可保持初始化状态
+RUN mkdir -p /app/data
 
-# 切换到非 root 用户
-USER appuser
+# 设置数据目录环境变量
+ENV DATA_DIR=/app/data
 
 # 暴露端口（默认 8080）
 EXPOSE 8080
 
-# 健康检查
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:8080/api/health || exit 1
-
 # 启动应用
-CMD ["./topupOnline"]
+CMD ["./guo-depot"]
 

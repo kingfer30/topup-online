@@ -76,10 +76,9 @@ services:
     networks:
       - topup-network
     volumes:
-      # 挂载 .env 文件（如果存在）
-      - ./backend/.env:/app/.env:ro
-      # 挂载初始化标记文件目录
-      - backend-data:/app
+      # 挂载数据目录，持久化 .initialized 和 .env 等文件
+      # 容器删除后重建不会丢失初始化状态
+      - backend-data:/app/data
 
   # 管理后台
   admin:
