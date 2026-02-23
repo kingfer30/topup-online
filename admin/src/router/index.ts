@@ -85,6 +85,12 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/MenuManagement.vue'),
         meta: { title: '菜单管理', requiresAuth: true },
       },
+      {
+        path: 'sales-talks',
+        name: 'SalesTalks',
+        component: () => import('@/views/SalesTalks.vue'),
+        meta: { title: '话术管理', requiresAuth: true },
+      },
     ],
   },
 ]

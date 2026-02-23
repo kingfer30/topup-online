@@ -33,12 +33,21 @@
             clearable
             style="width: 300px"
           />
+          <n-select
+            v-if="cardType === 'unsold' || cardType === 'sold'"
+            v-model:value="searchSubscriptionType"
+            :options="[{ label: '全部类型', value: '' }, ...subscriptionTypeOptions]"
+            placeholder="订阅类型"
+            clearable
+            style="width: 150px"
+          />
           <n-button type="primary" @click="handleSearch">搜索</n-button>
           <n-button @click="handleReset">重置</n-button>
         </n-space>
 
         <!-- 卡密表格 -->
         <n-data-table
+          remote
           :columns="columns"
           :data="cardList"
           :pagination="pagination"
@@ -47,6 +56,7 @@
           :single-line="false"
           :row-key="(row: Card) => row.id"
           @update:page="handlePageChange"
+          @update:page-size="handlePageSizeChange"
         />
       </n-space>
     </n-card>
@@ -371,6 +381,7 @@
       :positive-text="pickupStep === 1 ? '下一步' : '完成取货'"
       negative-text="取消"
       @positive-click="handlePickupSubmit"
+      @negative-click="handlePickupCancel"
       style="width: 700px"
     >
       <n-space vertical style="margin-top: 20px" :size="16">
@@ -394,6 +405,7 @@
                 <n-space>
                   <n-radio value="digiseller">Digiseller订阅</n-radio>
                   <n-radio value="domestic">国内订阅</n-radio>
+                  <n-radio value="reverse">逆向格式</n-radio>
                 </n-space>
               </n-radio-group>
             </n-form-item>
@@ -450,6 +462,44 @@
         </div>
       </n-space>
     </n-modal>
+
+    <!-- 已发货确认弹窗 -->
+    <n-modal
+      v-model:show="showShippedModal"
+      title="确认已发货"
+      preset="dialog"
+      positive-text="确认发货"
+      negative-text="取消"
+      @positive-click="handleShippedSubmit"
+      style="width: 420px"
+    >
+      <n-space vertical style="margin-top: 20px" :size="16">
+        <n-alert type="info">
+          确认后将把该卡密状态标记为已出售
+        </n-alert>
+        <n-form
+          :model="shippedForm"
+          label-placement="left"
+          label-width="100px"
+        >
+          <n-form-item label="售出价格">
+            <n-input-number
+              v-model:value="shippedForm.sell_price"
+              :min="0"
+              :precision="2"
+              placeholder="非必填"
+              style="width: 100%"
+            />
+          </n-form-item>
+          <n-form-item label="售出对方">
+            <n-input
+              v-model:value="shippedForm.sell_to"
+              placeholder="非必填"
+            />
+          </n-form-item>
+        </n-form>
+      </n-space>
+    </n-modal>
   </div>
 </template>
 
@@ -475,6 +525,7 @@ import {
   NRadio,
   NRadioGroup,
   useMessage,
+  useDialog,
   type DataTableColumns,
   type FormInst,
   type FormRules,
@@ -489,12 +540,15 @@ import {
   getUnsoldSubscriptionTypes,
   pickupCard,
   completePickup,
+  rollbackPickup,
+  rollbackSoldCard,
   type Card,
   type CardRequest,
 } from '@/api/card'
 
 const route = useRoute()
 const message = useMessage()
+const dialog = useDialog()
 
 // 从路由参数获取卡密类别和类型
 const category = computed(() => {
@@ -532,6 +586,9 @@ pass: ${card.password || ''}
 mail-pass: ${card.mail_password || ''}
 
 mail-login: ${card.mail_url || ''}`
+  } else if (pickupForm.value.format === 'reverse') {
+    // 逆向格式
+    return `${card.account}----${card.token || ''}`
   } else {
     // 国内订阅格式
     return `账号----密码----邮箱密码|
@@ -547,6 +604,7 @@ const isEdit = ref(false)
 const cardList = ref<Card[]>([])
 const formRef = ref<FormInst | null>(null)
 const searchKeyword = ref('')
+const searchSubscriptionType = ref('')
 const batchImportText = ref('')
 
 // 取货相关状态
@@ -559,11 +617,19 @@ const pickupCardInfoRef = ref<HTMLPreElement | null>(null)
 // 取货表单
 const pickupForm = ref({
   subscription_type: '',
-  format: 'digiseller' as 'digiseller' | 'domestic',
+  format: 'digiseller' as 'digiseller' | 'domestic' | 'reverse',
 })
 
 // 完成取货表单
 const completeForm = ref({
+  sell_price: 20 as number | undefined,
+  sell_to: 'Digiseller',
+})
+
+// 已发货弹窗
+const showShippedModal = ref(false)
+const shippedCard = ref<Card | null>(null)
+const shippedForm = ref({
   sell_price: 20 as number | undefined,
   sell_to: 'Digiseller',
 })
@@ -673,8 +739,27 @@ const mailUrlOptions = [
   { label: 'https://gmail.com', value: 'https://gmail.com' },
 ]
 
-// 表格列定义
-const columns: DataTableColumns<Card> = [
+// 格式化 Unix 时间戳为可读时间
+const formatTimestamp = (ts?: number | null): string => {
+  if (!ts) return '—'
+  const d = new Date(ts * 1000)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+}
+
+// 计算剩余天数：未售列表用当前时间，已售列表用出售时间，均与购买时间相差取 30 - 已用天数
+const calcRemainingDays = (row: Card, isSold: boolean): number | null => {
+  if (!row.purchase_date) return null
+  const refTime = isSold && row.sell_date ? row.sell_date : Math.floor(Date.now() / 1000)
+  const usedDays = Math.floor((refTime - row.purchase_date) / 86400)
+  return 30 - usedDays
+}
+
+// 表格列定义（computed，根据列表类型展示不同列）
+const columns = computed<DataTableColumns<Card>>(() => {
+  const isSold = cardType.value === 'sold'
+
+  const baseColumns: DataTableColumns<Card> = [
   {
     title: 'ID',
     key: 'id',
@@ -690,21 +775,24 @@ const columns: DataTableColumns<Card> = [
     key: 'subscription_type',
     width: 100,
   },
-  {
-    title: '订阅状态',
-    key: 'subscription_status',
-    width: 100,
-    render: (row) => {
-      return h(
-        NTag,
-        {
-          type: row.subscription_status === 1 ? 'success' : 'warning',
-          size: 'small',
-        },
-        { default: () => (row.subscription_status === 1 ? '已订阅' : '未订阅') }
-      )
+  // 订阅状态、出售状态、状态 仅在非已售列表显示
+  ...(!isSold ? [
+    {
+      title: '订阅状态',
+      key: 'subscription_status',
+      width: 100,
+      render: (row: Card) => {
+        return h(
+          NTag,
+          {
+            type: row.subscription_status === 1 ? 'success' : 'warning',
+            size: 'small',
+          },
+          { default: () => (row.subscription_status === 1 ? '已订阅' : '未订阅') }
+        )
+      },
     },
-  },
+  ] as DataTableColumns<Card> : []),
   {
     title: '购买价格',
     key: 'purchase_price',
@@ -716,69 +804,145 @@ const columns: DataTableColumns<Card> = [
     width: 100,
   },
   {
-    title: '出售状态',
-    key: 'sell_status',
-    width: 100,
-    render: (row) => {
-      const typeMap: Record<number, { text: string; type: 'default' | 'info' | 'success' }> = {
-        1: { text: '未出售', type: 'default' },
-        2: { text: '发货中', type: 'info' },
-        3: { text: '已出售', type: 'success' },
-      }
-      const config = typeMap[row.sell_status] || { text: '未知', type: 'default' }
-      return h(NTag, { type: config.type, size: 'small' }, { default: () => config.text })
-    },
+    title: '购买时间',
+    key: 'purchase_date',
+    width: 170,
+    render: (row: Card) => formatTimestamp(row.purchase_date),
   },
   {
-    title: '状态',
-    key: 'status',
-    width: 80,
-    render: (row) => {
-      return h(
-        NTag,
-        {
-          type: row.status === 1 ? 'success' : 'error',
-          size: 'small',
-        },
-        { default: () => (row.status === 1 ? '正常' : '禁用') }
-      )
+    title: '剩余天数',
+    key: 'remaining_days',
+    width: 90,
+    render: (row: Card) => {
+      const days = calcRemainingDays(row, isSold)
+      if (days === null) return '—'
+      const type = days > 7 ? 'success' : days > 0 ? 'warning' : 'error'
+      return h(NTag, { type, size: 'small' }, { default: () => `${days}天` })
     },
   },
-  {
+  ...(!isSold ? [
+    {
+      title: '出售状态',
+      key: 'sell_status',
+      width: 100,
+      render: (row: Card) => {
+        const typeMap: Record<number, { text: string; type: 'default' | 'info' | 'success' }> = {
+          1: { text: '未出售', type: 'default' },
+          2: { text: '发货中', type: 'info' },
+          3: { text: '已出售', type: 'success' },
+        }
+        const config = typeMap[row.sell_status] || { text: '未知', type: 'default' }
+        return h(NTag, { type: config.type, size: 'small' }, { default: () => config.text })
+      },
+    },
+  ] as DataTableColumns<Card> : []),
+  // 已售列表显示售出对方和出售时间
+  ...(isSold ? [
+    {
+      title: '售出对方',
+      key: 'sell_to',
+      width: 120,
+      render: (row: Card) => row.sell_to || '—',
+    },
+    {
+      title: '出售时间',
+      key: 'sell_date',
+      width: 170,
+      render: (row: Card) => formatTimestamp(row.sell_date),
+    },
+  ] as DataTableColumns<Card> : []),
+  ...(!isSold ? [
+    {
+      title: '状态',
+      key: 'status',
+      width: 80,
+      render: (row: Card) => {
+        return h(
+          NTag,
+          {
+            type: row.status === 1 ? 'success' : 'error',
+            size: 'small',
+          },
+          { default: () => (row.status === 1 ? '正常' : '禁用') }
+        )
+      },
+    },
+  ] as DataTableColumns<Card> : []),
+  ]
+
+  // 操作列始终放最后
+  baseColumns.push({
     title: '操作',
     key: 'actions',
-    width: 160,
+    width: 200,
     fixed: 'right',
     render: (row) => {
-      return h(
-        NSpace,
-        {},
-        {
-          default: () => [
-            h(
-              NButton,
-              {
-                size: 'small',
-                type: 'primary',
-                onClick: () => handleEdit(row),
-              },
-              { default: () => '编辑' }
-            ),
-            h(
-              NButton,
-              {
-                size: 'small',
-                type: 'error',
-                onClick: () => handleDelete(row),
-              },
-              { default: () => '删除' }
-            ),
-          ],
-        }
-      )
+      const buttons = [
+        h(
+          NButton,
+          {
+            size: 'small',
+            type: 'primary',
+            onClick: () => handleEdit(row),
+          },
+          { default: () => '编辑' }
+        ),
+        h(
+          NButton,
+          {
+            size: 'small',
+            type: 'error',
+            onClick: () => handleDelete(row),
+          },
+          { default: () => '删除' }
+        ),
+      ]
+
+      // 已售列表中，显示回滚按钮（已出售→未出售）
+      if (cardType.value === 'sold') {
+        buttons.splice(1, 0,
+          h(
+            NButton,
+            {
+              size: 'small',
+              type: 'warning',
+              onClick: () => handleRollbackSold(row),
+            },
+            { default: () => '回滚' }
+          )
+        )
+      }
+
+      // 未售列表中，发货中(sell_status=2)的卡密显示"已发货"和"回滚"按钮
+      if (cardType.value === 'unsold' && row.sell_status === 2) {
+        buttons.splice(1, 0,
+          h(
+            NButton,
+            {
+              size: 'small',
+              type: 'success',
+              onClick: () => handleShipped(row),
+            },
+            { default: () => '已发货' }
+          ),
+          h(
+            NButton,
+            {
+              size: 'small',
+              type: 'warning',
+              onClick: () => handleRollback(row),
+            },
+            { default: () => '回滚' }
+          )
+        )
+      }
+
+      return h(NSpace, {}, { default: () => buttons })
     },
-  },
-]
+  })
+
+  return baseColumns
+})
 
 // 加载卡密列表
 const loadCards = async () => {
@@ -800,6 +964,7 @@ const loadCards = async () => {
       page: pagination.value.page,
       page_size: pagination.value.pageSize,
       keyword: searchKeyword.value,
+      ...(searchSubscriptionType.value ? { subscription_type: searchSubscriptionType.value } : {}),
     }
     console.log('  📤 请求参数:', params)
     
@@ -830,6 +995,7 @@ const handleSearch = () => {
 // 重置
 const handleReset = () => {
   searchKeyword.value = ''
+  searchSubscriptionType.value = ''
   pagination.value.page = 1
   loadCards()
 }
@@ -837,6 +1003,13 @@ const handleReset = () => {
 // 分页变化
 const handlePageChange = (page: number) => {
   pagination.value.page = page
+  loadCards()
+}
+
+// 每页条数变化
+const handlePageSizeChange = (pageSize: number) => {
+  pagination.value.pageSize = pageSize
+  pagination.value.page = 1
   loadCards()
 }
 
@@ -890,28 +1063,120 @@ const handleEdit = (card: Card) => {
 }
 
 // 删除卡密
-const handleDelete = async (card: Card) => {
-  const confirmed = await new Promise((resolve) => {
-    const dialog = window.confirm(`确定要删除卡密"${card.account}"吗？`)
-    resolve(dialog)
+const handleDelete = (card: Card) => {
+  dialog.error({
+    title: '确认删除',
+    content: `确定要删除卡密"${card.account}"吗？删除后不可恢复。`,
+    positiveText: '确认删除',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      try {
+        const response = await deleteCard(category.value, card.id)
+        if (response.code === 200) {
+          message.success('删除成功')
+          await loadCards()
+        } else {
+          message.error(response.message || '删除失败')
+        }
+      } catch (error: any) {
+        console.error('删除卡密失败', error)
+        message.error(error.response?.data?.message || '删除失败')
+      }
+    },
   })
+}
 
-  if (!confirmed) {
-    return
+// 取消取货弹窗：若第一步已完成（卡密已被标记为发货中），刷新列表
+const handlePickupCancel = async () => {
+  if (pickedCard.value) {
+    // 第一步已取货，刷新列表以显示最新状态
+    await loadCards()
   }
+  showPickupModal.value = false
+}
+
+// 回滚已售（已出售 -> 未出售）
+const handleRollbackSold = (card: Card) => {
+  dialog.error({
+    title: '确认回滚',
+    content: `确定要将卡密"${card.account}"从已出售回滚为未出售吗？售出记录将被清空。`,
+    positiveText: '确认回滚',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      try {
+        const response = await rollbackSoldCard({ category: category.value, id: card.id })
+        if (response.code === 200) {
+          message.success('回滚成功')
+          await loadCards()
+        } else {
+          message.error(response.message || '回滚失败')
+        }
+      } catch (error: any) {
+        console.error('回滚失败', error)
+        message.error(error.response?.data?.message || '回滚失败')
+      }
+    },
+  })
+}
+
+// 打开已发货弹窗
+const handleShipped = (card: Card) => {
+  shippedCard.value = card
+  shippedForm.value = {
+    sell_price: 20,
+    sell_to: 'Digiseller',
+  }
+  showShippedModal.value = true
+}
+
+// 提交已发货
+const handleShippedSubmit = async () => {
+  if (!shippedCard.value) return
 
   try {
-    const response = await deleteCard(category.value, card.id)
+    const response = await completePickup({
+      category: category.value,
+      id: shippedCard.value.id,
+      sell_price: shippedForm.value.sell_price,
+      sell_to: shippedForm.value.sell_to || undefined,
+    })
     if (response.code === 200) {
-      message.success('删除成功')
+      message.success('已标记为已出售')
+      showShippedModal.value = false
       await loadCards()
     } else {
-      message.error(response.message || '删除失败')
+      message.error(response.message || '操作失败')
+      return false
     }
   } catch (error: any) {
-    console.error('删除卡密失败', error)
-    message.error(error.response?.data?.message || '删除失败')
+    console.error('已发货操作失败', error)
+    message.error(error.response?.data?.message || '操作失败')
+    return false
   }
+}
+
+// 回滚取货（发货中 -> 未出售）
+const handleRollback = (card: Card) => {
+  dialog.error({
+    title: '确认回滚',
+    content: `确定要将卡密"${card.account}"的状态回滚为未出售吗？`,
+    positiveText: '确认回滚',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      try {
+        const response = await rollbackPickup({ category: category.value, id: card.id })
+        if (response.code === 200) {
+          message.success('回滚成功')
+          await loadCards()
+        } else {
+          message.error(response.message || '回滚失败')
+        }
+      } catch (error: any) {
+        console.error('回滚失败', error)
+        message.error(error.response?.data?.message || '回滚失败')
+      }
+    },
+  })
 }
 
 // 提交表单
@@ -1099,7 +1364,7 @@ const handlePickup = async () => {
   pickedCard.value = null
   pickupForm.value = {
     subscription_type: '',
-    format: 'digiseller',
+    format: 'digiseller' as 'digiseller' | 'domestic' | 'reverse',
   }
   completeForm.value = {
     sell_price: 20,
@@ -1148,11 +1413,15 @@ const handlePickupSubmit = async () => {
       const response = await pickupCard({
         category: category.value,
         subscription_type: pickupForm.value.subscription_type,
+        format: pickupForm.value.format,
       })
       
       if (response.code === 200) {
         pickedCard.value = response.data
         pickupStep.value = 2
+
+        // 刷新列表，使 sell_status=2(发货中) 状态即时生效
+        await loadCards()
         
         // 自动复制卡密信息到剪贴板
         try {
@@ -1244,6 +1513,14 @@ const handleSelectCardInfo = () => {
   }
 }
 
+// 监听取货格式变化，同步更新售出对方默认值
+watch(
+  () => pickupForm.value.format,
+  (format) => {
+    completeForm.value.sell_to = format === 'reverse' ? '自用逆向' : 'Digiseller'
+  }
+)
+
 // 监听路由参数变化，当切换不同类型的列表时重新加载数据
 watch(
   () => [route.query.category, route.query.type],
@@ -1257,6 +1534,7 @@ watch(
       // 重置分页和搜索条件
       pagination.value.page = 1
       searchKeyword.value = ''
+      searchSubscriptionType.value = ''
       
       // 重新加载数据
       loadCards()
@@ -1275,20 +1553,31 @@ onMounted(() => {
   padding: 0;
 }
 
+:deep(.n-card) {
+  border-radius: 16px !important;
+  border: 1px solid rgba(0, 0, 0, 0.04) !important;
+}
+
+:deep(.n-card-header__main) {
+  font-size: 17px;
+  font-weight: 600;
+  color: #1d1d1f;
+}
+
 .card-info-display {
   margin: 0;
   padding: 16px;
   white-space: pre-wrap;
   word-wrap: break-word;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #007AFF 0%, #5856D6 100%);
   color: #ffffff;
-  border-radius: 8px;
-  font-family: 'Courier New', Courier, monospace;
+  border-radius: 12px;
+  font-family: 'SF Mono', 'Menlo', 'Monaco', 'Courier New', monospace;
   font-size: 14px;
   line-height: 1.8;
   cursor: pointer;
-  transition: all 0.3s ease;
-  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+  transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  box-shadow: 0 4px 16px rgba(0, 122, 255, 0.2);
   user-select: text;
   -webkit-user-select: text;
   -moz-user-select: text;
@@ -1296,8 +1585,8 @@ onMounted(() => {
 }
 
 .card-info-display:hover {
-  background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
-  box-shadow: 0 4px 16px rgba(102, 126, 234, 0.5);
+  background: linear-gradient(135deg, #5856D6 0%, #007AFF 100%);
+  box-shadow: 0 8px 24px rgba(0, 122, 255, 0.3);
   transform: translateY(-2px);
 }
 

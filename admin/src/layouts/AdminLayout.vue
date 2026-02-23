@@ -1,55 +1,77 @@
 <template>
   <n-layout has-sider class="h-screen">
-    <!-- 左侧菜单栏 -->
-    <n-layout-sider bordered collapse-mode="width" :collapsed-width="64" :width="240" :collapsed="collapsed"
-      show-trigger @collapse="collapsed = true" @expand="collapsed = false" :native-scrollbar="false">
-      <div class="p-4 flex items-center justify-center border-b border-gray-200">
-        <h1 v-if="!collapsed" class="text-xl font-bold text-primary-600">
-          后台管理系统
-        </h1>
-        <h1 v-else class="text-xl font-bold text-primary-600">
-          管理
-        </h1>
+    <!-- macOS 风格侧边栏 -->
+    <n-layout-sider
+      collapse-mode="width"
+      :collapsed-width="64"
+      :width="240"
+      :collapsed="collapsed"
+      show-trigger
+      @collapse="collapsed = true"
+      @expand="collapsed = false"
+      :native-scrollbar="false"
+      class="macos-sidebar"
+    >
+      <!-- Logo 区域 -->
+      <div class="sidebar-header">
+        <div v-if="!collapsed" class="flex items-center gap-3 px-5 py-5">
+          <div class="w-8 h-8 rounded-[10px] bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-sm">
+            <span class="text-white text-sm font-bold">T</span>
+          </div>
+          <span class="text-[15px] font-semibold text-gray-800 tracking-tight">后台管理系统</span>
+        </div>
+        <div v-else class="flex items-center justify-center py-5">
+          <div class="w-8 h-8 rounded-[10px] bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-sm">
+            <span class="text-white text-sm font-bold">T</span>
+          </div>
+        </div>
       </div>
 
-      <n-menu v-model:value="activeKey" v-model:expanded-keys="expandedKeys" :collapsed="collapsed" :collapsed-width="64" :collapsed-icon-size="22"
-        :options="menuOptions" @update:value="handleMenuSelect" />
+      <n-menu
+        v-model:value="activeKey"
+        v-model:expanded-keys="expandedKeys"
+        :collapsed="collapsed"
+        :collapsed-width="64"
+        :collapsed-icon-size="22"
+        :options="menuOptions"
+        @update:value="handleMenuSelect"
+      />
     </n-layout-sider>
 
     <!-- 右侧内容区域 -->
-    <n-layout>
-      <!-- 顶部导航栏 -->
-      <n-layout-header bordered class="h-16 flex items-center justify-between px-6">
-        <n-breadcrumb>
+    <n-layout class="main-content-area">
+      <!-- macOS 风格顶部栏 -->
+      <n-layout-header class="macos-header">
+        <n-breadcrumb class="header-breadcrumb">
           <n-breadcrumb-item v-for="item in breadcrumbs" :key="item.name">
             {{ item.label }}
           </n-breadcrumb-item>
         </n-breadcrumb>
 
-        <n-space>
+        <div class="flex items-center gap-3">
           <!-- 主题切换 -->
-          <n-button circle @click="toggleTheme">
+          <n-button quaternary circle size="small" @click="toggleTheme" class="header-icon-btn">
             <template #icon>
-              <n-icon v-if="isDark">☀️</n-icon>
-              <n-icon v-else>🌙</n-icon>
+              <span class="text-base">{{ isDark ? '☀️' : '🌙' }}</span>
             </template>
           </n-button>
 
           <!-- 用户信息 -->
           <n-dropdown :options="userOptions" @select="handleUserAction">
-            <n-button>
-              <template #icon>
-                <n-avatar size="small">
-                  {{ adminInfo?.username || '管理员' }}
-                </n-avatar>
-              </template>
-            </n-button>
+            <div class="user-avatar-btn">
+              <n-avatar :size="32" round class="user-avatar">
+                {{ (adminInfo?.username || '管理员').charAt(0).toUpperCase() }}
+              </n-avatar>
+              <span v-if="adminInfo" class="text-[13px] font-medium text-gray-700">
+                {{ adminInfo.username }}
+              </span>
+            </div>
           </n-dropdown>
-        </n-space>
+        </div>
       </n-layout-header>
 
       <!-- 主内容区域 -->
-      <n-layout-content content-style="padding: 24px;" :native-scrollbar="false">
+      <n-layout-content content-style="padding: 24px;" :native-scrollbar="false" class="content-area">
         <router-view />
       </n-layout-content>
     </n-layout>
@@ -67,9 +89,7 @@ import {
   NMenu,
   NBreadcrumb,
   NBreadcrumbItem,
-  NSpace,
   NButton,
-  NIcon,
   NAvatar,
   NDropdown,
   useMessage,
@@ -308,11 +328,122 @@ const handleUserAction = async (key: string) => {
 </script>
 
 <style scoped>
-:deep(.n-layout-sider) {
-  background: #fff;
+/* macOS 风格侧边栏 */
+.macos-sidebar {
+  background: rgba(255, 255, 255, 0.85) !important;
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  border-right: 1px solid rgba(0, 0, 0, 0.06) !important;
 }
 
+:deep(.n-layout-sider-scroll-container) {
+  background: transparent !important;
+}
+
+.sidebar-header {
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+/* macOS 菜单样式 */
 :deep(.n-menu) {
-  background: transparent;
+  background: transparent !important;
+  padding: 8px 12px;
+}
+
+:deep(.n-menu-item) {
+  margin: 2px 0 !important;
+  border-radius: 8px !important;
+}
+
+:deep(.n-menu-item-content) {
+  border-radius: 8px !important;
+  padding: 0 12px !important;
+  height: 34px !important;
+  font-size: 14px !important;
+  font-weight: 450;
+}
+
+:deep(.n-menu-item-content--selected) {
+  font-weight: 550 !important;
+}
+
+:deep(.n-submenu-children .n-menu-item-content) {
+  padding-left: 24px !important;
+  font-size: 13px !important;
+}
+
+:deep(.n-menu .n-menu-item-content::before) {
+  border-radius: 8px !important;
+  left: 0 !important;
+  right: 0 !important;
+}
+
+/* 折叠触发器 */
+:deep(.n-layout-toggle-button) {
+  background: #ffffff !important;
+  border: 1px solid rgba(0, 0, 0, 0.08) !important;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06) !important;
+  border-radius: 50% !important;
+  width: 24px !important;
+  height: 24px !important;
+  top: 28px !important;
+}
+
+/* macOS 风格顶部栏 */
+.macos-header {
+  height: 52px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  padding: 0 24px !important;
+  background: rgba(255, 255, 255, 0.72) !important;
+  backdrop-filter: saturate(180%) blur(20px) !important;
+  -webkit-backdrop-filter: saturate(180%) blur(20px) !important;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06) !important;
+}
+
+.header-breadcrumb {
+  font-size: 13px;
+}
+
+.header-icon-btn {
+  width: 32px !important;
+  height: 32px !important;
+  border-radius: 8px !important;
+  transition: all 0.2s ease !important;
+}
+
+.header-icon-btn:hover {
+  background: rgba(0, 0, 0, 0.05) !important;
+}
+
+.user-avatar-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px 4px 4px;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.user-avatar-btn:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.user-avatar {
+  background: linear-gradient(135deg, #007AFF, #5856D6) !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  color: white !important;
+}
+
+/* 内容区域背景 */
+.main-content-area {
+  background: #f5f5f7 !important;
+}
+
+.content-area {
+  background: #f5f5f7 !important;
 }
 </style>

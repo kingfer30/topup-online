@@ -62,6 +62,12 @@ func migrateDB() error {
 	if err = DB.AutoMigrate(&Menu{}); err != nil {
 		return err
 	}
+	if err = DB.AutoMigrate(&SalesTalk{}); err != nil {
+		return err
+	}
+	if err = DB.AutoMigrate(&DigisellerOrder{}); err != nil {
+		return err
+	}
 	return nil
 }
 

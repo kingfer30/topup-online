@@ -51,6 +51,7 @@ func GetCardList(c *gin.Context) {
 	pageStr := c.DefaultQuery("page", "1")
 	pageSizeStr := c.DefaultQuery("page_size", "20")
 	keyword := c.Query("keyword")
+	subscriptionType := c.Query("subscription_type")
 
 	page, _ := strconv.Atoi(pageStr)
 	pageSize, _ := strconv.Atoi(pageSizeStr)
@@ -75,7 +76,7 @@ func GetCardList(c *gin.Context) {
 	}
 
 	// 查询卡密列表
-	cards, total, err := model.GetCardList(tableName, cardType, page, pageSize, keyword)
+	cards, total, err := model.GetCardList(tableName, cardType, page, pageSize, keyword, subscriptionType)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"code":    500,
@@ -491,6 +492,7 @@ func PickupCard(c *gin.Context) {
 	var req struct {
 		Category         string `json:"category" binding:"required"`
 		SubscriptionType string `json:"subscription_type" binding:"required"`
+		Format           string `json:"format"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -513,7 +515,7 @@ func PickupCard(c *gin.Context) {
 		return
 	}
 
-	card, err := model.PickupCard(tableName, req.SubscriptionType)
+	card, err := model.PickupCard(tableName, req.SubscriptionType, req.Format)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"code":    500,
@@ -570,5 +572,108 @@ func CompletePickup(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"code":    200,
 		"message": "完成取货成功",
+	})
+}
+
+// RollbackSoldCard 回滚已售：将已出售状态重置为未出售
+func RollbackSoldCard(c *gin.Context) {
+	var req struct {
+		Category string `json:"category" binding:"required"`
+		Id       int    `json:"id" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"code":    400,
+			"message": "参数错误: " + err.Error(),
+		})
+		return
+	}
+
+	tableName := model.GetTableNameByCategory(req.Category)
+
+	if !model.CheckTableExists(tableName) {
+		c.JSON(http.StatusOK, gin.H{
+			"code":    404,
+			"message": "该卡密类别不存在",
+		})
+		return
+	}
+
+	err := model.RollbackSoldCard(tableName, req.Id)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"code":    500,
+			"message": "回滚失败: " + err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    200,
+		"message": "回滚成功",
+	})
+}
+
+// GetDashboardStats 获取控制台统计数据（按卡密类型统计销售，支持按日期查询）
+func GetDashboardStats(c *gin.Context) {
+	// date 参数格式 YYYY-MM-DD，不传则默认今天
+	dateStr := c.Query("date")
+
+	stats, err := model.GetDashboardStats(dateStr)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"code":    400,
+			"message": "获取统计数据失败: " + err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    200,
+		"message": "获取成功",
+		"data":    stats,
+	})
+}
+
+// RollbackPickup 回滚取货：将发货中状态重置为未出售
+func RollbackPickup(c *gin.Context) {
+	var req struct {
+		Category string `json:"category" binding:"required"`
+		Id       int    `json:"id" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"code":    400,
+			"message": "参数错误: " + err.Error(),
+		})
+		return
+	}
+
+	// 获取表名
+	tableName := model.GetTableNameByCategory(req.Category)
+
+	// 检查表是否存在
+	if !model.CheckTableExists(tableName) {
+		c.JSON(http.StatusOK, gin.H{
+			"code":    404,
+			"message": "该卡密类别不存在",
+		})
+		return
+	}
+
+	err := model.RollbackPickup(tableName, req.Id)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"code":    500,
+			"message": "回滚失败: " + err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    200,
+		"message": "回滚成功",
 	})
 }

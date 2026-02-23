@@ -1,157 +1,169 @@
 <template>
-  <div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-500 to-purple-600 p-4">
-    <n-card class="w-full max-w-3xl shadow-2xl">
-      <div class="text-center mb-8">
-        <h1 class="text-3xl font-bold text-gray-800 mb-2">系统初始化</h1>
-        <p class="text-gray-500">首次使用请完成系统初始化配置</p>
-      </div>
+  <div class="init-container">
+    <!-- 渐变背景 -->
+    <div class="init-bg"></div>
 
-      <n-steps :current="currentStep" :status="currentStatus">
-        <n-step title="数据库配置" description="配置数据库连接信息" />
-        <n-step title="管理员设置" description="创建管理员账号" />
-        <n-step title="完成" description="初始化完成" />
-      </n-steps>
-
-      <div class="mt-8">
-        <!-- 步骤1：数据库配置 -->
-        <div v-if="currentStep === 1">
-          <n-form
-            ref="dbFormRef"
-            :model="dbForm"
-            :rules="dbRules"
-            label-placement="left"
-            label-width="120px"
-          >
-            <n-form-item label="数据库地址" path="db_host">
-              <n-input
-                v-model:value="dbForm.db_host"
-                placeholder="localhost"
-              />
-            </n-form-item>
-
-            <n-form-item label="数据库端口" path="db_port">
-              <n-input
-                v-model:value="dbForm.db_port"
-                placeholder="3306"
-              />
-            </n-form-item>
-
-            <n-form-item label="数据库名称" path="db_name">
-              <n-input
-                v-model:value="dbForm.db_name"
-                placeholder="topup_online"
-              />
-            </n-form-item>
-
-            <n-form-item label="数据库用户名" path="db_user">
-              <n-input
-                v-model:value="dbForm.db_user"
-                placeholder="root"
-              />
-            </n-form-item>
-
-            <n-form-item label="数据库密码" path="db_password">
-              <n-input
-                v-model:value="dbForm.db_password"
-                type="password"
-                show-password-on="click"
-                placeholder="请输入数据库密码"
-              />
-            </n-form-item>
-
-            <n-form-item>
-              <n-space>
-                <n-button
-                  type="info"
-                  :loading="testing"
-                  @click="testConnection"
-                >
-                  测试连接
-                </n-button>
-                <n-button
-                  type="primary"
-                  :disabled="!dbConnected"
-                  @click="nextStep"
-                >
-                  下一步
-                </n-button>
-              </n-space>
-            </n-form-item>
-          </n-form>
+    <div class="init-card-wrapper">
+      <n-card class="init-card" :bordered="false">
+        <div class="text-center mb-8">
+          <!-- Apple 风格 Logo -->
+          <div class="mx-auto w-16 h-16 rounded-[20px] bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center mb-5 shadow-lg">
+            <span class="text-white text-3xl">⚙️</span>
+          </div>
+          <h1 class="text-[28px] font-bold text-gray-800 tracking-tight mb-1">系统初始化</h1>
+          <p class="text-[15px] text-gray-400 font-normal">首次使用请完成系统初始化配置</p>
         </div>
 
-        <!-- 步骤2：管理员设置 -->
-        <div v-if="currentStep === 2">
-          <n-form
-            ref="adminFormRef"
-            :model="adminForm"
-            :rules="adminRules"
-            label-placement="left"
-            label-width="120px"
-          >
-            <n-form-item label="管理员用户名" path="admin_user">
-              <n-input
-                v-model:value="adminForm.admin_user"
-                placeholder="admin"
-              />
-            </n-form-item>
+        <n-steps :current="currentStep" :status="currentStatus" class="init-steps">
+          <n-step title="数据库配置" description="配置数据库连接信息" />
+          <n-step title="管理员设置" description="创建管理员账号" />
+          <n-step title="完成" description="初始化完成" />
+        </n-steps>
 
-            <n-form-item label="管理员密码" path="admin_pass">
-              <n-input
-                v-model:value="adminForm.admin_pass"
-                type="password"
-                show-password-on="click"
-                placeholder="请输入管理员密码"
-              />
-            </n-form-item>
+        <div class="mt-8">
+          <!-- 步骤1：数据库配置 -->
+          <div v-if="currentStep === 1">
+            <n-form
+              ref="dbFormRef"
+              :model="dbForm"
+              :rules="dbRules"
+              label-placement="left"
+              label-width="120px"
+            >
+              <n-form-item label="数据库地址" path="db_host">
+                <n-input
+                  v-model:value="dbForm.db_host"
+                  placeholder="localhost"
+                />
+              </n-form-item>
 
-            <n-form-item label="确认密码" path="admin_pass_confirm">
-              <n-input
-                v-model:value="adminForm.admin_pass_confirm"
-                type="password"
-                show-password-on="click"
-                placeholder="请再次输入密码"
-              />
-            </n-form-item>
+              <n-form-item label="数据库端口" path="db_port">
+                <n-input
+                  v-model:value="dbForm.db_port"
+                  placeholder="3306"
+                />
+              </n-form-item>
 
-            <n-form-item label="管理员邮箱" path="admin_email">
-              <n-input
-                v-model:value="adminForm.admin_email"
-                placeholder="admin@example.com"
-              />
-            </n-form-item>
+              <n-form-item label="数据库名称" path="db_name">
+                <n-input
+                  v-model:value="dbForm.db_name"
+                  placeholder="topup_online"
+                />
+              </n-form-item>
 
-            <n-form-item>
-              <n-space>
-                <n-button @click="prevStep">上一步</n-button>
-                <n-button
-                  type="primary"
-                  :loading="initializing"
-                  @click="initialize"
-                >
-                  开始初始化
+              <n-form-item label="数据库用户名" path="db_user">
+                <n-input
+                  v-model:value="dbForm.db_user"
+                  placeholder="root"
+                />
+              </n-form-item>
+
+              <n-form-item label="数据库密码" path="db_password">
+                <n-input
+                  v-model:value="dbForm.db_password"
+                  type="password"
+                  show-password-on="click"
+                  placeholder="请输入数据库密码"
+                />
+              </n-form-item>
+
+              <n-form-item>
+                <n-space>
+                  <n-button
+                    type="info"
+                    :loading="testing"
+                    @click="testConnection"
+                    class="apple-btn"
+                  >
+                    测试连接
+                  </n-button>
+                  <n-button
+                    type="primary"
+                    :disabled="!dbConnected"
+                    @click="nextStep"
+                    class="apple-btn"
+                  >
+                    下一步
+                  </n-button>
+                </n-space>
+              </n-form-item>
+            </n-form>
+          </div>
+
+          <!-- 步骤2：管理员设置 -->
+          <div v-if="currentStep === 2">
+            <n-form
+              ref="adminFormRef"
+              :model="adminForm"
+              :rules="adminRules"
+              label-placement="left"
+              label-width="120px"
+            >
+              <n-form-item label="管理员用户名" path="admin_user">
+                <n-input
+                  v-model:value="adminForm.admin_user"
+                  placeholder="admin"
+                />
+              </n-form-item>
+
+              <n-form-item label="管理员密码" path="admin_pass">
+                <n-input
+                  v-model:value="adminForm.admin_pass"
+                  type="password"
+                  show-password-on="click"
+                  placeholder="请输入管理员密码"
+                />
+              </n-form-item>
+
+              <n-form-item label="确认密码" path="admin_pass_confirm">
+                <n-input
+                  v-model:value="adminForm.admin_pass_confirm"
+                  type="password"
+                  show-password-on="click"
+                  placeholder="请再次输入密码"
+                />
+              </n-form-item>
+
+              <n-form-item label="管理员邮箱" path="admin_email">
+                <n-input
+                  v-model:value="adminForm.admin_email"
+                  placeholder="admin@example.com"
+                />
+              </n-form-item>
+
+              <n-form-item>
+                <n-space>
+                  <n-button @click="prevStep" class="apple-btn">上一步</n-button>
+                  <n-button
+                    type="primary"
+                    :loading="initializing"
+                    @click="initialize"
+                    class="apple-btn"
+                  >
+                    开始初始化
+                  </n-button>
+                </n-space>
+              </n-form-item>
+            </n-form>
+          </div>
+
+          <!-- 步骤3：完成 -->
+          <div v-if="currentStep === 3" class="text-center py-8">
+            <n-result
+              status="success"
+              title="初始化完成！"
+              description="系统已成功初始化，您现在可以登录后台管理系统"
+            >
+              <template #footer>
+                <n-button type="primary" @click="goToLogin" class="apple-btn">
+                  前往登录
                 </n-button>
-              </n-space>
-            </n-form-item>
-          </n-form>
+              </template>
+            </n-result>
+          </div>
         </div>
-
-        <!-- 步骤3：完成 -->
-        <div v-if="currentStep === 3" class="text-center py-8">
-          <n-result
-            status="success"
-            title="初始化完成！"
-            description="系统已成功初始化，您现在可以登录后台管理系统"
-          >
-            <template #footer>
-              <n-button type="primary" @click="goToLogin">
-                前往登录
-              </n-button>
-            </template>
-          </n-result>
-        </div>
-      </div>
-    </n-card>
+      </n-card>
+    </div>
   </div>
 </template>
 
@@ -372,12 +384,61 @@ const goToLogin = () => {
 </script>
 
 <style scoped>
-:deep(.n-card) {
-  border-radius: 16px;
+/* Apple 风格初始化容器 */
+.init-container {
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 24px;
 }
 
-:deep(.n-steps) {
+/* 渐变背景 - Apple 风格 */
+.init-bg {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+  z-index: 0;
+}
+
+.init-bg::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: 
+    radial-gradient(ellipse at 20% 50%, rgba(255, 255, 255, 0.15) 0%, transparent 60%),
+    radial-gradient(ellipse at 80% 20%, rgba(255, 255, 255, 0.1) 0%, transparent 50%);
+}
+
+.init-card-wrapper {
+  position: relative;
+  z-index: 10;
+  width: 100%;
+  max-width: 720px;
+}
+
+/* Apple 毛玻璃卡片 */
+.init-card {
+  background: rgba(255, 255, 255, 0.88) !important;
+  backdrop-filter: saturate(180%) blur(20px) !important;
+  -webkit-backdrop-filter: saturate(180%) blur(20px) !important;
+  border-radius: 20px !important;
+  box-shadow: 
+    0 20px 60px rgba(0, 0, 0, 0.15),
+    0 0 0 1px rgba(255, 255, 255, 0.4) inset !important;
+  padding: 16px !important;
+}
+
+/* Steps 样式 */
+.init-steps {
   margin-bottom: 32px;
 }
-</style>
 
+/* Apple 按钮样式 */
+.apple-btn {
+  border-radius: 10px !important;
+  font-weight: 500 !important;
+}
+</style>

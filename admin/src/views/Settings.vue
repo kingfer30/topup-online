@@ -3,8 +3,8 @@
     <n-space vertical :size="16">
       <!-- 页面标题 -->
       <div>
-        <h1 class="text-2xl font-bold mb-2">系统设置</h1>
-        <p class="text-gray-500">配置系统基本参数</p>
+        <h1 class="apple-page-title">系统设置</h1>
+        <p class="apple-page-subtitle">配置系统基本参数</p>
       </div>
 
       <!-- 设置表单 -->
@@ -222,4 +222,15 @@ const handleTestEmail = () => {
   }, 1000)
 }
 </script>
+
+<style scoped>
+:deep(.n-card) {
+  border-radius: 16px !important;
+  border: 1px solid rgba(0, 0, 0, 0.04) !important;
+}
+
+:deep(.n-tabs .n-tab-pane) {
+  padding-top: 24px;
+}
+</style>
 

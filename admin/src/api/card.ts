@@ -38,6 +38,7 @@ export interface CardListParams {
   page?: number
   page_size?: number
   keyword?: string
+  subscription_type?: string
 }
 
 // 卡密列表响应
@@ -135,6 +136,7 @@ export const getUnsoldSubscriptionTypes = (category: string): Promise<ApiRespons
 export interface PickupRequest {
   category: string
   subscription_type: string
+  format?: string
 }
 
 // 取货接口
@@ -153,5 +155,42 @@ export interface CompletePickupRequest {
 // 完成取货接口
 export const completePickup = (data: CompletePickupRequest): Promise<ApiResponse> => {
   return http.post('/admin/cards/complete-pickup', data) as Promise<ApiResponse>
+}
+
+// 回滚取货请求
+export interface RollbackPickupRequest {
+  category: string
+  id: number
+}
+
+// 回滚取货接口（将发货中重置为未出售）
+export const rollbackPickup = (data: RollbackPickupRequest): Promise<ApiResponse> => {
+  return http.post('/admin/cards/rollback-pickup', data) as Promise<ApiResponse>
+}
+
+// 回滚已售接口（将已出售重置为未出售）
+export const rollbackSoldCard = (data: RollbackPickupRequest): Promise<ApiResponse> => {
+  return http.post('/admin/cards/rollback-sold', data) as Promise<ApiResponse>
+}
+
+// 按订阅类型细分的库存
+export interface SubscriptionTypeStat {
+  subscription_type: string
+  count: number
+}
+
+// 控制台统计 - 按卡密类型
+export interface CardTypeStat {
+  category: string                       // 卡密类型名称
+  sold_count: number                     // 今日售出数量
+  stock_count: number                    // 剩余未售库存合计
+  stock_by_type: SubscriptionTypeStat[]  // 按订阅类型细分库存
+  revenue_usd: number                    // 今日收入（美元）
+  revenue_cny: number                    // 今日收入（人民币，汇率7）
+}
+
+// 获取控制台统计数据，date 格式 YYYY-MM-DD，不传则默认今天
+export const getDashboardStats = (date?: string): Promise<ApiResponse<CardTypeStat[]>> => {
+  return http.get('/admin/dashboard/stats', { params: date ? { date } : {} }) as Promise<ApiResponse<CardTypeStat[]>>
 }
 

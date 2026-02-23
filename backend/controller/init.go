@@ -178,6 +178,7 @@ func InitializeSystem(c *gin.Context) {
 		&model.Order{},
 		&model.MirrorCard{},
 		&model.Menu{},
+		&model.SalesTalk{},
 	)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
@@ -342,7 +343,13 @@ func seedDefaultMenus(db *gorm.DB) error {
 		}
 	}
 
-	// 4. 镜像管理
+	// 4. 话术管理
+	salesTalkMenu := &model.Menu{ParentId: 0, Title: "话术管理", Key: "sales-talk", Path: "/admin/sales-talks", Icon: "💬", Sort: 4}
+	if err := createMenu(salesTalkMenu); err != nil {
+		return fmt.Errorf("创建话术管理菜单失败: %w", err)
+	}
+
+	// 5. 镜像管理
 	mirrorMenu := &model.Menu{ParentId: 0, Title: "镜像管理", Key: "mirror", Icon: "🔐", Sort: 5}
 	if err := createMenu(mirrorMenu); err != nil {
 		return fmt.Errorf("创建镜像管理菜单失败: %w", err)
@@ -353,7 +360,7 @@ func seedDefaultMenus(db *gorm.DB) error {
 		return fmt.Errorf("创建镜像管理子菜单失败: %w", err)
 	}
 
-	// 5. 系统设置
+	// 6. 系统设置
 	systemMenu := &model.Menu{ParentId: 0, Title: "系统设置", Key: "system", Icon: "⚙️", Sort: 6}
 	if err := createMenu(systemMenu); err != nil {
 		return fmt.Errorf("创建系统设置菜单失败: %w", err)

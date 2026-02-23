@@ -584,5 +584,16 @@ onMounted(() => {
 .menu-management {
   padding: 0;
 }
+
+:deep(.n-card) {
+  border-radius: 16px !important;
+  border: 1px solid rgba(0, 0, 0, 0.04) !important;
+}
+
+:deep(.n-card-header__main) {
+  font-size: 17px;
+  font-weight: 600;
+  color: #1d1d1f;
+}
 </style>
 

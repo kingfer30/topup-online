@@ -4,8 +4,8 @@
       <!-- 页面标题和操作 -->
       <div class="flex justify-between items-center">
         <div>
-          <h1 class="text-2xl font-bold mb-2">镜像卡密管理</h1>
-          <p class="text-gray-500">管理镜像账号的卡密信息</p>
+          <h1 class="apple-page-title">镜像卡密管理</h1>
+          <p class="apple-page-subtitle">管理镜像账号的卡密信息</p>
         </div>
         <n-space>
           <n-button type="primary" @click="handleAdd">
@@ -633,10 +633,16 @@ onMounted(() => {
 }
 
 code {
-  background-color: #f5f5f5;
-  padding: 2px 6px;
-  border-radius: 3px;
-  font-family: monospace;
+  background-color: rgba(0, 0, 0, 0.04);
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-family: 'SF Mono', 'Menlo', 'Monaco', 'Courier New', monospace;
+  font-size: 13px;
+}
+
+:deep(.n-card) {
+  border-radius: 16px !important;
+  border: 1px solid rgba(0, 0, 0, 0.04) !important;
 }
 </style>
 

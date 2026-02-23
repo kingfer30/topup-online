@@ -4,8 +4,8 @@
       <!-- 页面标题和操作 -->
       <div class="flex justify-between items-center">
         <div>
-          <h1 class="text-2xl font-bold mb-2">用户列表</h1>
-          <p class="text-gray-500">管理系统所有用户</p>
+          <h1 class="apple-page-title">用户列表</h1>
+          <p class="apple-page-subtitle">管理系统所有用户</p>
         </div>
         <n-button type="primary" @click="handleAdd">
           <template #icon>
@@ -552,7 +552,16 @@ onMounted(() => {
 </script>
 
 <style scoped>
+:deep(.n-card) {
+  border-radius: 16px !important;
+  border: 1px solid rgba(0, 0, 0, 0.04) !important;
+}
+
 :deep(.n-data-table-td) {
-  padding: 12px 16px;
+  padding: 14px 16px;
+}
+
+:deep(.n-modal .n-card) {
+  border-radius: 16px !important;
 }
 </style>
