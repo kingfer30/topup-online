@@ -67,6 +67,10 @@ func SetApiRouter(router *gin.Engine) {
 			adminGroup.POST("/cards/complete-pickup", controller.CompletePickup)                      // 完成取货
 			adminGroup.POST("/cards/rollback-pickup", controller.RollbackPickup)                      // 回滚取货（发货中→未出售）
 			adminGroup.POST("/cards/rollback-sold", controller.RollbackSoldCard)                      // 回滚已售（已出售→未出售）
+			adminGroup.POST("/cards/batch-upgrade", controller.BatchUpgradeToProduct)                 // 批量升级为成品
+			adminGroup.POST("/cards/batch-pickup", controller.BatchPickup)                            // 批量取货
+			adminGroup.GET("/cards/export", controller.ExportCards)                                    // 导出卡密
+			adminGroup.POST("/cards/batch-check", controller.BatchCheckCards)                          // 批量检查订阅状态
 
 			// 话术管理接口（管理员专用）
 			adminGroup.GET("/sales-talks", controller.GetSalesTalkList)                   // 获取话术列表

@@ -186,6 +186,7 @@ import { http } from '@/utils/http'
 const TAG_OPTIONS = [
   { label: '通用', value: '通用' },
   { label: 'API', value: 'API' },
+  { label: 'Cursor', value: 'Cursor' },
   { label: 'GPT', value: 'GPT' },
   { label: 'Suno', value: 'Suno' },
   { label: 'DeepSeek', value: 'DeepSeek' },
@@ -195,6 +196,7 @@ const TAG_OPTIONS = [
 const TAG_TYPE_MAP: Record<string, 'default' | "primary" |  'info' | 'success' | 'warning' | 'error'> = {
   通用: 'default',
   API: 'info',
+  Cursor: 'warning',
   GPT: 'success',
   Suno: 'primary',
   DeepSeek: 'warning',

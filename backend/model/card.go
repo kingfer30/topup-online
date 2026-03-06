@@ -15,14 +15,17 @@ type AccountCard struct {
 	Account                 string         `json:"account" gorm:"type:varchar(100);not null;uniqueIndex:idx_account"`
 	Password                string         `json:"password" gorm:"type:varchar(50)"`
 	MailPassword            string         `json:"mail_password" gorm:"type:varchar(50)"`
-	SubscriptionStatus      int            `json:"subscription_status" gorm:"type:tinyint(2);default:1;comment:订阅状态 1已订阅 2未订阅"`
+	SubscriptionStatus      int            `json:"subscription_status" gorm:"type:tinyint(2);default:1;comment:订阅状态 1已订阅 2未订阅 -1掉订阅"`
 	SubscriptionType        string         `json:"subscription_type" gorm:"type:varchar(30);comment:订阅类型;index:idx_subscription_type"`
 	SubscriptionTime        *int64         `json:"subscription_time" gorm:"type:bigint(20);comment:订阅时间;index:idx_subscription_time"`
 	SubscriptionExpiredTime *int64         `json:"subscription_expired_time" gorm:"type:bigint(20);comment:订阅过期时间"`
+	SubscriptionCredits     *float64       `json:"subscription_credits" gorm:"type:decimal(10,2);comment:订阅额度"`
+	IsCheck                 int            `json:"is_check" gorm:"type:tinyint(2);default:-1;comment:检查状态 -1未检查 1检查成功 2检查失败"`
+	CheckTime               *int64         `json:"check_time" gorm:"type:bigint(20);comment:检查时间"`
 	PurchaseDate            *int64         `json:"purchase_date" gorm:"type:bigint(20);comment:购买时间"`
 	PurchasePrice           *float64       `json:"purchase_price" gorm:"type:decimal(10,2);comment:购买价格(成本)"`
 	PurchaseFrom            string         `json:"purchase_from" gorm:"type:varchar(50);comment:购买平台"`
-	PurchaseOrderNo         string         `json:"purchase_order_no" gorm:"type:varchar(100);comment:购买订单号"`
+	PurchaseBy              string         `json:"purchase_by" gorm:"type:varchar(100);comment:卖家名称"`
 	SellPrice               *float64       `json:"sell_price" gorm:"type:decimal(10,2);comment:出售价格"`
 	SellDate                *int64         `json:"sell_date" gorm:"type:bigint(20);comment:出售时间"`
 	SellTo                  string         `json:"sell_to" gorm:"type:varchar(50);comment:出售对方"`
@@ -40,8 +43,52 @@ type AccountCard struct {
 	DeletedAt               gorm.DeletedAt `json:"deleted_at" gorm:"index"`
 }
 
+// GetAllCardsForExport 获取符合条件的全部卡密（不分页，用于导出）
+func GetAllCardsForExport(tableName string, cardType string, keyword string, subscriptionType string, subscriptionStatus int, purchaseDate int64) ([]AccountCard, error) {
+	var cards []AccountCard
+
+	query := DB.Table(tableName)
+
+	switch cardType {
+	case "all":
+		query = query.Where("account_type = ?", 1)
+	case "unsold":
+		query = query.Where("sell_status IN ?", []int{1, 2}).Where("subscription_status = ?", 1)
+	case "sold":
+		query = query.Where("sell_status = ?", 3)
+	}
+
+	if subscriptionType != "" && (cardType == "unsold" || cardType == "sold") {
+		query = query.Where("subscription_type = ?", subscriptionType)
+	}
+
+	// 订阅状态筛选（仅已售列表使用）
+	if subscriptionStatus != 0 && cardType == "sold" {
+		query = query.Where("subscription_status = ?", subscriptionStatus)
+	}
+
+	// 购买时间精确匹配（未售/已售列表均支持，0 表示不过滤）
+	if purchaseDate > 0 && (cardType == "sold" || cardType == "unsold") {
+		query = query.Where("purchase_date = ?", purchaseDate)
+	}
+
+	if keyword != "" {
+		query = query.Where("account LIKE ? OR mail_url LIKE ?", "%"+keyword+"%", "%"+keyword+"%")
+	}
+
+	orderClause := "id DESC"
+	if cardType == "unsold" {
+		orderClause = "sell_status DESC, purchase_date ASC, id ASC"
+	} else if cardType == "sold" {
+		orderClause = "sell_date DESC, id DESC"
+	}
+
+	err := query.Order(orderClause).Find(&cards).Error
+	return cards, err
+}
+
 // GetCardList 获取卡密列表
-func GetCardList(tableName string, cardType string, page, pageSize int, keyword string, subscriptionType string) ([]AccountCard, int64, error) {
+func GetCardList(tableName string, cardType string, page, pageSize int, keyword string, subscriptionType string, subscriptionStatus int, purchaseDate int64) ([]AccountCard, int64, error) {
 	var cards []AccountCard
 	var total int64
 
@@ -53,7 +100,7 @@ func GetCardList(tableName string, cardType string, page, pageSize int, keyword 
 	case "all":
 		query = query.Where("account_type = ?", 1) // 普号列表：只显示普号
 	case "unsold":
-		query = query.Where("sell_status IN ?", []int{1, 2}) // 未售列表：未出售 + 发货中
+		query = query.Where("sell_status IN ?", []int{1, 2}).Where("subscription_status = ?", 1) // 未售列表：未出售 + 发货中，且仅已订阅
 	case "sold":
 		query = query.Where("sell_status = ?", 3) // 已售列表：已出售
 	}
@@ -61,6 +108,16 @@ func GetCardList(tableName string, cardType string, page, pageSize int, keyword 
 	// 订阅类型筛选（仅未售/已售列表）
 	if subscriptionType != "" && (cardType == "unsold" || cardType == "sold") {
 		query = query.Where("subscription_type = ?", subscriptionType)
+	}
+
+	// 订阅状态筛选（仅已售列表使用，0 表示不过滤）
+	if subscriptionStatus != 0 && cardType == "sold" {
+		query = query.Where("subscription_status = ?", subscriptionStatus)
+	}
+
+	// 购买时间精确匹配（未售/已售列表均支持，0 表示不过滤）
+	if purchaseDate > 0 && (cardType == "sold" || cardType == "unsold") {
+		query = query.Where("purchase_date = ?", purchaseDate)
 	}
 
 	// 关键词搜索
@@ -86,6 +143,18 @@ func GetCardList(tableName string, cardType string, page, pageSize int, keyword 
 	}
 
 	return cards, total, nil
+}
+
+// GetCardsByIds 根据 ID 列表批量获取卡密（仅返回 token 不为空的）
+func GetCardsByIds(tableName string, ids []int) ([]*AccountCard, error) {
+	if len(ids) == 0 {
+		return nil, errors.New("id 列表为空")
+	}
+	var cards []*AccountCard
+	err := DB.Table(tableName).
+		Where("id IN ? AND token IS NOT NULL AND token != ''", ids).
+		Find(&cards).Error
+	return cards, err
 }
 
 // GetCardById 根据ID获取卡密
@@ -228,6 +297,30 @@ func PickupCard(tableName string, subscriptionType string, format string) (*Acco
 	return &card, nil
 }
 
+// BatchPickup 批量取货：将指定 ID 的未售卡密直接标记为已出售(3)，并记录售出信息
+func BatchPickup(tableName string, ids []int, sellPrice *float64, sellTo string) (int64, error) {
+	if len(ids) == 0 {
+		return 0, errors.New("未选择任何记录")
+	}
+
+	now := time.Now().Unix()
+	updates := map[string]interface{}{
+		"sell_status": 3,
+		"sell_date":   now,
+	}
+	if sellPrice != nil {
+		updates["sell_price"] = sellPrice
+	}
+	if sellTo != "" {
+		updates["sell_to"] = sellTo
+	}
+
+	result := DB.Table(tableName).
+		Where("id IN ? AND sell_status IN ?", ids, []int{1, 2}).
+		Updates(updates)
+	return result.RowsAffected, result.Error
+}
+
 // RollbackSoldCard 回滚已售：将已出售(3)重置为未出售(1)，并清空售出相关字段
 func RollbackSoldCard(tableName string, id int) error {
 	if id == 0 {
@@ -362,6 +455,54 @@ func GetDashboardStats(dateStr string) ([]CardTypeStat, error) {
 	return stats, nil
 }
 
+// BatchUpgradeRequest 批量升级为成品请求
+type BatchUpgradeRequest struct {
+	IDs              []int
+	SubscriptionType string
+	SubscriptionTime *int64
+	PurchasePrice    *float64 // 追加到现有购买价格
+	PurchaseFrom     string
+	PurchaseDate     *int64
+}
+
+// BatchUpgradeToProduct 批量将普号升级为成品
+// 购买价格为累加逻辑：新值 = COALESCE(原值, 0) + 追加值
+func BatchUpgradeToProduct(tableName string, req BatchUpgradeRequest) (int64, error) {
+	if len(req.IDs) == 0 {
+		return 0, errors.New("未选择任何记录")
+	}
+
+	// 购买价格累加（单独执行，使用 SQL 表达式）
+	if req.PurchasePrice != nil {
+		err := DB.Table(tableName).Where("id IN ?", req.IDs).
+			UpdateColumn("purchase_price", gorm.Expr("COALESCE(purchase_price, 0) + ?", *req.PurchasePrice)).Error
+		if err != nil {
+			return 0, fmt.Errorf("更新购买价格失败: %v", err)
+		}
+	}
+
+	// 其余字段批量更新
+	updates := map[string]interface{}{
+		"subscription_status": 1,
+		"account_type":        2,
+	}
+	if req.SubscriptionType != "" {
+		updates["subscription_type"] = req.SubscriptionType
+	}
+	if req.SubscriptionTime != nil {
+		updates["subscription_time"] = req.SubscriptionTime
+	}
+	if req.PurchaseFrom != "" {
+		updates["purchase_from"] = req.PurchaseFrom
+	}
+	if req.PurchaseDate != nil {
+		updates["purchase_date"] = req.PurchaseDate
+	}
+
+	result := DB.Table(tableName).Where("id IN ?", req.IDs).Updates(updates)
+	return result.RowsAffected, result.Error
+}
+
 // CompletePickup 完成取货：更新为已售出
 func CompletePickup(tableName string, id int, sellPrice *float64, sellTo string) error {
 	if id == 0 {
@@ -385,4 +526,73 @@ func CompletePickup(tableName string, id int, sellPrice *float64, sellTo string)
 	}
 
 	return DB.Table(tableName).Where("id = ?", id).Updates(updates).Error
+}
+
+// GetAllCardTableNames 获取所有 cards_* 表名
+func GetAllCardTableNames() ([]string, error) {
+	var tableNames []string
+	err := DB.Raw("SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name LIKE 'cards_%'").
+		Pluck("table_name", &tableNames).Error
+	return tableNames, err
+}
+
+// GetUnsoldCardsWithToken 获取指定表中 sell_status=1 且 token 不为空，且今天未检查过的卡密
+func GetUnsoldCardsWithToken(tableName string, limit int) ([]*AccountCard, error) {
+	var cards []*AccountCard
+	// 今天零点的 Unix 时间戳
+	now := time.Now()
+	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).Unix()
+	err := DB.Table(tableName).
+		Where("sell_status = ? AND token IS NOT NULL AND token != ''", 1).
+		Where("check_time IS NULL OR check_time < ?", todayStart).
+		Limit(limit).
+		Find(&cards).Error
+	if err != nil {
+		return nil, err
+	}
+	return cards, nil
+}
+
+// UpdateCardCheckResult 更新卡密检查结果
+func UpdateCardCheckResult(tableName string, id int, updates map[string]interface{}) error {
+	if id == 0 {
+		return errors.New("id 为空")
+	}
+	return DB.Table(tableName).Where("id = ?", id).Updates(updates).Error
+}
+
+// MigrateCardTableColumns 对所有 cards_* 表执行新增列迁移（幂等，列已存在则跳过）
+func MigrateCardTableColumns() error {
+	tableNames, err := GetAllCardTableNames()
+	if err != nil {
+		return fmt.Errorf("获取 cards_* 表名失败: %w", err)
+	}
+
+	newColumns := []struct {
+		name       string
+		definition string
+	}{
+		{"subscription_credits", "decimal(10,2) NULL COMMENT '订阅额度'"},
+		{"is_check", "tinyint(2) NOT NULL DEFAULT -1 COMMENT '检查状态 -1未检查 1检查成功 2检查失败'"},
+		{"check_time", "bigint(20) NULL COMMENT '检查时间'"},
+	}
+
+	for _, tableName := range tableNames {
+		for _, col := range newColumns {
+			// 查询列是否已存在
+			var count int64
+			DB.Raw(
+				"SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?",
+				tableName, col.name,
+			).Scan(&count)
+
+			if count == 0 {
+				sql := fmt.Sprintf("ALTER TABLE `%s` ADD COLUMN `%s` %s", tableName, col.name, col.definition)
+				if err := DB.Exec(sql).Error; err != nil {
+					return fmt.Errorf("迁移表 %s 列 %s 失败: %w", tableName, col.name, err)
+				}
+			}
+		}
+	}
+	return nil
 }

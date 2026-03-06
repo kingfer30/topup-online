@@ -277,7 +277,7 @@ CREATE TABLE IF NOT EXISTS ` + "`" + tableName + "`" + ` (
   ` + "`purchase_date`" + ` bigint(20) DEFAULT NULL COMMENT '购买时间',
   ` + "`purchase_price`" + ` decimal(10,2) DEFAULT NULL COMMENT '购买价格(成本)',
   ` + "`purchase_from`" + ` varchar(50) DEFAULT NULL COMMENT '购买平台',
-  ` + "`purchase_order_no`" + ` varchar(100) DEFAULT NULL COMMENT '购买订单号',
+  ` + "`purchase_by`" + ` varchar(100) DEFAULT NULL COMMENT '卖家名称',
   ` + "`sell_price`" + ` decimal(10,2) DEFAULT NULL COMMENT '出售价格',
   ` + "`sell_date`" + ` bigint(20) DEFAULT NULL COMMENT '出售时间',
   ` + "`sell_to`" + ` varchar(50) DEFAULT NULL COMMENT '出售对方',

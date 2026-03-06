@@ -11,10 +11,13 @@ export interface Card {
   subscription_type?: string
   subscription_time?: number
   subscription_expired_time?: number
+  subscription_credits?: number
+  is_check?: number
+  check_time?: number
   purchase_date?: number
   purchase_price?: number
   purchase_from?: string
-  purchase_order_no?: string
+  purchase_by?: string
   sell_price?: number
   sell_date?: number
   sell_to?: string
@@ -39,6 +42,8 @@ export interface CardListParams {
   page_size?: number
   keyword?: string
   subscription_type?: string
+  subscription_status?: number // 已售列表订阅状态过滤
+  purchase_date?: string       // 购买时间精确查询，格式 "2006-01-02 15:04:05"
 }
 
 // 卡密列表响应
@@ -61,7 +66,7 @@ export interface CardRequest {
   purchase_date?: number
   purchase_price?: number
   purchase_from?: string
-  purchase_order_no?: string
+  purchase_by?: string
   sell_price?: number
   sell_date?: number
   sell_to?: string
@@ -192,5 +197,50 @@ export interface CardTypeStat {
 // 获取控制台统计数据，date 格式 YYYY-MM-DD，不传则默认今天
 export const getDashboardStats = (date?: string): Promise<ApiResponse<CardTypeStat[]>> => {
   return http.get('/admin/dashboard/stats', { params: date ? { date } : {} }) as Promise<ApiResponse<CardTypeStat[]>>
+}
+
+// 批量升级为成品请求
+export interface BatchUpgradeRequest {
+  category: string
+  ids: number[]
+  subscription_type?: string
+  subscription_time?: number   // Unix 秒
+  purchase_price?: number      // 追加金额
+  purchase_from?: string
+  purchase_date?: number       // Unix 秒
+}
+
+// 批量升级为成品接口
+export const batchUpgradeToProduct = (data: BatchUpgradeRequest): Promise<ApiResponse<number>> => {
+  return http.post('/admin/cards/batch-upgrade', data) as Promise<ApiResponse<number>>
+}
+
+// 导出卡密（返回全部符合条件的数据）
+export const exportCards = (params: CardListParams): Promise<ApiResponse<Card[]>> => {
+  return http.get('/admin/cards/export', { params }) as Promise<ApiResponse<Card[]>>
+}
+
+// 批量取货请求
+export interface BatchPickupRequest {
+  category: string
+  ids: number[]
+  sell_price?: number
+  sell_to?: string
+}
+
+// 批量取货接口
+export const batchPickup = (data: BatchPickupRequest): Promise<ApiResponse<number>> => {
+  return http.post('/admin/cards/batch-pickup', data) as Promise<ApiResponse<number>>
+}
+
+// 批量检查订阅状态请求
+export interface BatchCheckRequest {
+  category: string
+  ids: number[]
+}
+
+// 批量检查订阅状态接口
+export const batchCheckCards = (data: BatchCheckRequest): Promise<ApiResponse<number>> => {
+  return http.post('/admin/cards/batch-check', data) as Promise<ApiResponse<number>>
 }
 
