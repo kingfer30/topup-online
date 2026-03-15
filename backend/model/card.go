@@ -44,7 +44,7 @@ type AccountCard struct {
 }
 
 // GetAllCardsForExport 获取符合条件的全部卡密（不分页，用于导出）
-func GetAllCardsForExport(tableName string, cardType string, keyword string, subscriptionType string, subscriptionStatus int, purchaseDate int64) ([]AccountCard, error) {
+func GetAllCardsForExport(tableName string, cardType string, keyword string, subscriptionType string, subscriptionStatus int, isCheck int, purchaseDate int64) ([]AccountCard, error) {
 	var cards []AccountCard
 
 	query := DB.Table(tableName)
@@ -65,6 +65,11 @@ func GetAllCardsForExport(tableName string, cardType string, keyword string, sub
 	// 订阅状态筛选（仅已售列表使用）
 	if subscriptionStatus != 0 && cardType == "sold" {
 		query = query.Where("subscription_status = ?", subscriptionStatus)
+	}
+
+	// 检查状态筛选（未售/已售列表均支持，0 表示不过滤）
+	if isCheck != 0 && (cardType == "sold" || cardType == "unsold") {
+		query = query.Where("is_check = ?", isCheck)
 	}
 
 	// 购买时间精确匹配（未售/已售列表均支持，0 表示不过滤）
@@ -88,7 +93,7 @@ func GetAllCardsForExport(tableName string, cardType string, keyword string, sub
 }
 
 // GetCardList 获取卡密列表
-func GetCardList(tableName string, cardType string, page, pageSize int, keyword string, subscriptionType string, subscriptionStatus int, purchaseDate int64) ([]AccountCard, int64, error) {
+func GetCardList(tableName string, cardType string, page, pageSize int, keyword string, subscriptionType string, subscriptionStatus int, isCheck int, purchaseDate int64) ([]AccountCard, int64, error) {
 	var cards []AccountCard
 	var total int64
 
@@ -113,6 +118,11 @@ func GetCardList(tableName string, cardType string, page, pageSize int, keyword 
 	// 订阅状态筛选（仅已售列表使用，0 表示不过滤）
 	if subscriptionStatus != 0 && cardType == "sold" {
 		query = query.Where("subscription_status = ?", subscriptionStatus)
+	}
+
+	// 检查状态筛选（未售/已售列表均支持，0 表示不过滤）
+	if isCheck != 0 && (cardType == "sold" || cardType == "unsold") {
+		query = query.Where("is_check = ?", isCheck)
 	}
 
 	// 购买时间精确匹配（未售/已售列表均支持，0 表示不过滤）

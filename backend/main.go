@@ -66,10 +66,12 @@ func main() {
 		logger.SysLog("MirrorCard Sync Scheduler started successfully")
 
 		// 启动卡密订阅检查任务（每 1440 分钟即 24 小时执行一次）
-		logger.SysLog("Starting Card Check Scheduler...")
-		cardCheckScheduler := scheduler.NewCardCheckScheduler(1440)
-		cardCheckScheduler.Start()
-		logger.SysLog("Card Check Scheduler started successfully")
+		if os.Getenv("CARD_CHECK_DISABLE") != "true" {
+			logger.SysLog("Starting Card Check Scheduler...")
+			cardCheckScheduler := scheduler.NewCardCheckScheduler(1440)
+			cardCheckScheduler.Start()
+			logger.SysLog("Card Check Scheduler started successfully")
+		}
 	} else {
 		logger.SysLog("System not initialized yet, waiting for initialization...")
 	}

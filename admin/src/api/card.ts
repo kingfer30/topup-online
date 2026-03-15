@@ -43,7 +43,8 @@ export interface CardListParams {
   keyword?: string
   subscription_type?: string
   subscription_status?: number // 已售列表订阅状态过滤
-  purchase_date?: string       // 购买时间精确查询，格式 "2006-01-02 15:04:05"
+  is_check?: number            // 检查状态过滤 -1未检查 1检查成功 2检查失败
+  subscription_time?: string   // 订阅时间精确查询，格式 "2006-01-02 15:04:05"
 }
 
 // 卡密列表响应
@@ -242,5 +243,10 @@ export interface BatchCheckRequest {
 // 批量检查订阅状态接口
 export const batchCheckCards = (data: BatchCheckRequest): Promise<ApiResponse<number>> => {
   return http.post('/admin/cards/batch-check', data) as Promise<ApiResponse<number>>
+}
+
+// 开启按需付费接口
+export const enableOnDemandSpend = (category: string, id: number): Promise<ApiResponse> => {
+  return http.post('/admin/cards/enable-on-demand', { category, id }) as Promise<ApiResponse>
 }
 

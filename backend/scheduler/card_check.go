@@ -26,7 +26,7 @@ type CardCheckScheduler struct {
 // UsageSummaryResponse cursor.com/api/usage-summary 响应结构
 type UsageSummaryResponse struct {
 	MembershipType  string          `json:"membershipType"`
-	StartDate       string          `json:"startDate"`
+	BillingCycleStart string          `json:"billingCycleStart"`
 	IndividualUsage IndividualUsage `json:"individualUsage"`
 }
 
@@ -191,16 +191,16 @@ func (s *CardCheckScheduler) checkCards() {
 					updates["subscription_credits"] = remainingUSD
 				}
 
-				// 解析订阅开始时间（格式如 "2024-01-15T00:00:00Z"）
-				if usageData.StartDate != "" {
-					if t, err := time.Parse(time.RFC3339, usageData.StartDate); err == nil {
-						ts := t.Unix()
-						updates["subscription_time"] = ts
-					} else if t, err := time.Parse("2006-01-02", usageData.StartDate); err == nil {
-						ts := t.Unix()
-						updates["subscription_time"] = ts
-					}
+			// 解析订阅开始时间（格式如 "2024-01-15T00:00:00Z"）
+			if usageData.BillingCycleStart != "" {
+				if t, err := time.Parse(time.RFC3339, usageData.BillingCycleStart); err == nil {
+					ts := t.Unix()
+					updates["subscription_time"] = ts
+				} else if t, err := time.Parse("2006-01-02", usageData.BillingCycleStart); err == nil {
+					ts := t.Unix()
+					updates["subscription_time"] = ts
 				}
+			}
 
 				updateErr := model.UpdateCardCheckResult(tableName, card.Id, updates)
 				if updateErr != nil {
@@ -220,6 +220,11 @@ func (s *CardCheckScheduler) checkCards() {
 
 	logger.SysLog(fmt.Sprintf("卡密订阅检查完成，成功: %d, 掉订阅/失败: %d, 跳过: %d",
 		totalSuccess, totalFail, totalSkip))
+}
+
+// ExtractWorkosID 从 Cursor token 中提取 workos_id（导出供外部调用）
+func ExtractWorkosID(token string) (string, error) {
+	return extractWorkosID(token)
 }
 
 // extractWorkosID 从 Cursor token 中提取 workos_id
@@ -353,12 +358,55 @@ func CheckSingleCard(tableName string, card *model.AccountCard) error {
 		remainingUSD := float64(*usageData.IndividualUsage.Plan.Remaining) / 100.0
 		updates["subscription_credits"] = remainingUSD
 	}
-	if usageData.StartDate != "" {
-		if t, err := time.Parse(time.RFC3339, usageData.StartDate); err == nil {
+	if usageData.BillingCycleStart != "" {
+		if t, err := time.Parse(time.RFC3339, usageData.BillingCycleStart); err == nil {
 			updates["subscription_time"] = t.Unix()
-		} else if t, err := time.Parse("2006-01-02", usageData.StartDate); err == nil {
+		} else if t, err := time.Parse("2006-01-02", usageData.BillingCycleStart); err == nil {
 			updates["subscription_time"] = t.Unix()
 		}
 	}
 	return model.UpdateCardCheckResult(tableName, card.Id, updates)
+}
+
+// EnableOnDemandSpend 为指定卡密开启按需付费（hardLimit=200）
+func EnableOnDemandSpend(workosID, token string) error {
+	// cookie 中始终使用解码后的 token
+	decodedToken, err := url.QueryUnescape(token)
+	if err != nil {
+		decodedToken = token
+	}
+	cookie := fmt.Sprintf("workos_id=%s; WorkosCursorSessionToken=%s; ", workosID, decodedToken)
+
+	apiURL := "https://cursor.com/api/dashboard/enable-on-demand-spend"
+	body := strings.NewReader(`{"hardLimit":200}`)
+	req, err := http.NewRequest("POST", apiURL, body)
+	if err != nil {
+		return fmt.Errorf("创建请求失败: %v", err)
+	}
+
+	req.Header.Set("accept", "*/*")
+	req.Header.Set("accept-language", "en-US,en;q=0.9")
+	req.Header.Set("content-type", "application/json")
+	req.Header.Set("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36")
+	req.Header.Set("origin", "https://cursor.com")
+	req.Header.Set("referer", "https://cursor.com/dashboard?tab=billing")
+	req.Header.Set("sec-ch-ua", `"Not(A:Brand";v="8", "Chromium";v="144", "Google Chrome";v="144"`)
+	req.Header.Set("sec-ch-ua-mobile", "?0")
+	req.Header.Set("sec-ch-ua-platform", `"Windows"`)
+	req.Header.Set("sec-fetch-dest", "empty")
+	req.Header.Set("sec-fetch-mode", "cors")
+	req.Header.Set("sec-fetch-site", "same-origin")
+	req.Header.Set("cookie", cookie)
+
+	resp, err := client.HTTPClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("请求失败: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("接口返回非 200 状态码: %d, 响应: %s", resp.StatusCode, safePrefix(string(respBody), 200))
+	}
+	return nil
 }

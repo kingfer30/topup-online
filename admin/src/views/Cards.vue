@@ -35,7 +35,7 @@
             <template #icon><span>🔍</span></template>
             批量检查 {{ checkedRowKeys.length > 0 ? `(${checkedRowKeys.length})` : '' }}
           </n-button>
-          <n-button v-if="cardType === 'unsold'" type="error" @click="handleOpenRecharge">
+          <n-button v-if="cardType === 'sold'" type="error" @click="handleOpenRecharge">
             <template #icon><span>💳</span></template>
             新增代充
           </n-button>
@@ -80,6 +80,18 @@
             v-model:value="searchSubscriptionStatus"
             :options="[{ label: '全部订阅状态', value: 0 }, ...subscriptionStatusOptions]"
             placeholder="订阅状态"
+            style="width: 150px"
+          />
+          <n-select
+            v-if="cardType === 'sold' || cardType === 'unsold'"
+            v-model:value="searchIsCheck"
+            :options="[
+              { label: '全部检查状态', value: 0 },
+              { label: '未检查', value: -1 },
+              { label: '检查成功', value: 1 },
+              { label: '检查失败', value: 2 },
+            ]"
+            placeholder="检查状态"
             style="width: 150px"
           />
           <n-input
@@ -137,7 +149,6 @@
           <n-form-item-gi label="密码" path="password">
             <n-input
               v-model:value="formData.password"
-              type="password"
               placeholder="请输入密码"
             />
           </n-form-item-gi>
@@ -145,7 +156,6 @@
           <n-form-item-gi label="邮箱密码" path="mail_password">
             <n-input
               v-model:value="formData.mail_password"
-              type="password"
               placeholder="请输入邮箱密码"
             />
           </n-form-item-gi>
@@ -193,6 +203,10 @@
             />
           </n-form-item-gi>
 
+          <n-form-item-gi label="卖家名称" path="purchase_by">
+            <n-input v-model:value="formData.purchase_by" placeholder="请输入卖家名称" />
+          </n-form-item-gi>
+
           <n-form-item-gi label="出售价格" path="sell_price">
             <n-input-number
               v-model:value="formData.sell_price"
@@ -205,6 +219,10 @@
 
           <n-form-item-gi label="出售状态" path="sell_status">
             <n-select v-model:value="formData.sell_status" :options="sellStatusOptions" />
+          </n-form-item-gi>
+
+          <n-form-item-gi label="出售对方" path="sell_to">
+            <n-input v-model:value="formData.sell_to" placeholder="请输入出售对方" />
           </n-form-item-gi>
 
           <n-form-item-gi label="账号类型" path="account_type">
@@ -491,6 +509,10 @@
                 :options="accountTypeOptions"
               />
             </n-form-item-gi>
+
+            <n-form-item-gi label="备注">
+              <n-input v-model:value="batchConfig.remark" placeholder="批量备注（选填）" />
+            </n-form-item-gi>
           </n-grid>
         </n-card>
 
@@ -557,15 +579,6 @@
             <n-form-item-gi label="2FA">
               <n-input-number
                 v-model:value="batchConfig.field_mapping['2fa']"
-                :min="0"
-                placeholder="0=不导入"
-                style="width: 100%"
-              />
-            </n-form-item-gi>
-
-            <n-form-item-gi label="备注">
-              <n-input-number
-                v-model:value="batchConfig.field_mapping.remark"
                 :min="0"
                 placeholder="0=不导入"
                 style="width: 100%"
@@ -869,6 +882,7 @@ import {
   completePickup,
   rollbackPickup,
   rollbackSoldCard,
+  enableOnDemandSpend,
   type Card,
   type CardRequest,
 } from '@/api/card'
@@ -907,7 +921,20 @@ const pickupCardInfo = computed(() => {
   
   const card = pickedCard.value
   if (pickupForm.value.format === 'digiseller') {
-    // digiseller订阅格式
+    // 密码和邮箱密码均为空时，使用邮箱验证码登录格式
+    if (!card.password && !card.mail_password) {
+      return `Пожалуйста, войдите в систему, используя код подтверждения, отправленный на электронную почту:
+
+${card.account}
+
+mail-login: ${card.mail_url || ''}
+
+Пожалуйста, выполните следующие шаги заново:
+1. Введите аккаунт: ${card.account}
+2. Нажмите «Далее»
+3. Нажмите кнопку: «Email sign-in code»`
+    }
+    // 常规 digiseller 订阅格式
     return `account: ${card.account}
 pass: ${card.password || ''}
 mail-pass: ${card.mail_password || ''}
@@ -933,6 +960,7 @@ const formRef = ref<FormInst | null>(null)
 const searchKeyword = ref('')
 const searchSubscriptionType = ref('')
 const searchSubscriptionStatus = ref(0)
+const searchIsCheck = ref(0)
 // 购买时间精确查询，格式 "2026-03-06 22:25:36"
 const searchPurchaseDate = ref('')
 const batchCheckLoading = ref(false)
@@ -1091,6 +1119,7 @@ const batchConfig = ref({
   sell_status: 1,
   subscription_status: 1,
   account_type: 2,
+  remark: '',
   field_mapping: {
     account: 1,
     password: 2,
@@ -1099,7 +1128,6 @@ const batchConfig = ref({
     token: 0,
     api_key: 0,
     '2fa': 0,
-    remark: 0,
   },
 })
 
@@ -1124,6 +1152,9 @@ const formData = ref<CardRequest>({
   status: 1,
   purchase_price: 0,
   sell_price: 0,
+  purchase_from: '',
+  purchase_by: '',
+  sell_to: '',
   api_key: '',
   '2fa': '',
   token: '',
@@ -1262,21 +1293,21 @@ const columns = computed<DataTableColumns<Card>>(() => {
     },
   ] as DataTableColumns<Card> : []),
   ...(isSold ? [{
-    title: '卖家名称',
+    title: '卖家',
     key: 'purchase_by',
-    width: 120,
+    width: 80,
     render: (row: Card) => row.purchase_by || '—',
   }] as DataTableColumns<Card> : []),
   {
-    title: '购买价格',
+    title: '价格',
     key: 'purchase_price',
-    width: 100,
+    width: 80,
   },
   {
-    title: '购买时间',
-    key: 'purchase_date',
+    title: '订阅时间',
+    key: 'subscription_time',
     width: 170,
-    render: (row: Card) => formatTimestamp(row.purchase_date),
+    render: (row: Card) => formatTimestamp(row.subscription_time ?? row.purchase_date),
   },
   ...(!isSold ? [{
     title: '剩余天数',
@@ -1291,9 +1322,9 @@ const columns = computed<DataTableColumns<Card>>(() => {
   }] as DataTableColumns<Card> : []),
   // 未售/已售列表显示订阅额度
   ...(!isAll ? [{
-    title: '订阅额度',
+    title: '额度',
     key: 'subscription_credits',
-    width: 100,
+    width: 80,
     render: (row: Card) => row.subscription_credits != null ? `$${row.subscription_credits.toFixed(2)}` : '—',
   }] as DataTableColumns<Card> : []),
   // 未售/已售列表显示检查状态
@@ -1315,35 +1346,13 @@ const columns = computed<DataTableColumns<Card>>(() => {
   // 已售列表显示售出对方和出售时间
   ...(isSold ? [
     {
-      title: '售出对方',
-      key: 'sell_to',
-      width: 120,
-      render: (row: Card) => row.sell_to || '—',
-    },
-    {
       title: '出售时间',
       key: 'sell_date',
       width: 170,
       render: (row: Card) => formatTimestamp(row.sell_date),
     },
   ] as DataTableColumns<Card> : []),
-  ...(!isSold ? [
-    {
-      title: '状态',
-      key: 'status',
-      width: 80,
-      render: (row: Card) => {
-        return h(
-          NTag,
-          {
-            type: row.status === 1 ? 'success' : 'error',
-            size: 'small',
-          },
-          { default: () => (row.status === 1 ? '正常' : '禁用') }
-        )
-      },
-    },
-  ] as DataTableColumns<Card> : []),
+ 
   ]
 
   // 复制格式选项
@@ -1357,7 +1366,7 @@ const columns = computed<DataTableColumns<Card>>(() => {
   baseColumns.push({
     title: '操作',
     key: 'actions',
-    width: 260,
+    width: 350,
     fixed: 'right',
     render: (row) => {
       const buttons = [
@@ -1435,6 +1444,19 @@ const columns = computed<DataTableColumns<Card>>(() => {
         )
       }
 
+      // 未售/已售列表中，均显示"开启按需付费"按钮
+      buttons.push(
+        h(
+          NButton,
+          {
+            size: 'small',
+            type: 'info',
+            onClick: () => handleEnableOnDemand(row),
+          },
+          { default: () => '后付费' }
+        )
+      )
+
       return h(NSpace, {}, { default: () => buttons })
     },
   })
@@ -1464,6 +1486,7 @@ const loadCards = async () => {
       keyword: searchKeyword.value,
       ...(searchSubscriptionType.value ? { subscription_type: searchSubscriptionType.value } : {}),
       ...(searchSubscriptionStatus.value !== 0 ? { subscription_status: searchSubscriptionStatus.value } : {}),
+      ...(searchIsCheck.value !== 0 ? { is_check: searchIsCheck.value } : {}),
       ...(searchPurchaseDate.value ? { purchase_date: searchPurchaseDate.value } : {}),
     }
     console.log('  📤 请求参数:', params)
@@ -1503,6 +1526,9 @@ const handleBatchCheck = async () => {
     })
     if (response.code === 200) {
       message.success(response.message || '检查任务已提交，正在后台执行')
+      checkedRowKeys.value = []
+      selectedCardsMap.value.clear()
+      await loadCards()
     } else {
       message.error(response.message || '提交失败')
     }
@@ -1513,11 +1539,25 @@ const handleBatchCheck = async () => {
   }
 }
 
+const handleEnableOnDemand = async (row: Card) => {
+  try {
+    const response = await enableOnDemandSpend(category.value, row.id)
+    if (response.code === 200) {
+      message.success(response.message || '按需付费已开启')
+    } else {
+      message.error(response.message || '开启失败')
+    }
+  } catch (error: any) {
+    message.error(error.response?.data?.message || '开启失败')
+  }
+}
+
 // 重置
 const handleReset = () => {
   searchKeyword.value = ''
   searchSubscriptionType.value = ''
   searchSubscriptionStatus.value = 0
+  searchIsCheck.value = 0
   searchPurchaseDate.value = ''
   pagination.value.page = 1
   loadCards()
@@ -1551,6 +1591,9 @@ const handleAdd = () => {
     status: 1,
     purchase_price: 0,
     sell_price: 0,
+    purchase_from: '',
+    purchase_by: '',
+    sell_to: '',
     api_key: '',
     '2fa': '',
     token: '',
@@ -1576,6 +1619,8 @@ const handleEdit = (card: Card) => {
     purchase_price: card.purchase_price || 0,
     sell_price: card.sell_price || 0,
     purchase_from: card.purchase_from || '',
+    purchase_by: card.purchase_by || '',
+    sell_to: card.sell_to || '',
     api_key: card.api_key || '',
     '2fa': card['2fa'] || '',
     token: card.token || '',
@@ -1904,6 +1949,7 @@ const handleBatchImport = () => {
     sell_status: 1,
     subscription_status: 1,
     account_type: 2,
+    remark: '',
     field_mapping: currentMapping,
   }
   showBatchModal.value = true
@@ -1975,9 +2021,6 @@ const handleBatchSubmit = async () => {
       // 2FA：从数据中读取（如果配置了位置）
       const twoFA = mapping['2fa'] > 0 && parts[mapping['2fa'] - 1] ? parts[mapping['2fa'] - 1] : ''
 
-      // 备注：从数据中读取（如果配置了位置）
-      const remark = mapping.remark > 0 && parts[mapping.remark - 1] ? parts[mapping.remark - 1] : ''
-
       const cardData: CardRequest = {
         account,
         password: password || undefined,
@@ -1997,7 +2040,7 @@ const handleBatchSubmit = async () => {
         api_key: apiKey || undefined,
         '2fa': twoFA || undefined,
         mail_url: batchConfig.value.mail_url || undefined,
-        remark: remark || undefined,
+        remark: batchConfig.value.remark || undefined,
       }
 
       cards.push(cardData)

@@ -71,6 +71,7 @@ func SetApiRouter(router *gin.Engine) {
 			adminGroup.POST("/cards/batch-pickup", controller.BatchPickup)                            // 批量取货
 			adminGroup.GET("/cards/export", controller.ExportCards)                                    // 导出卡密
 			adminGroup.POST("/cards/batch-check", controller.BatchCheckCards)                          // 批量检查订阅状态
+			adminGroup.POST("/cards/enable-on-demand", controller.EnableOnDemandSpendHandler)           // 开启按需付费
 
 			// 话术管理接口（管理员专用）
 			adminGroup.GET("/sales-talks", controller.GetSalesTalkList)                   // 获取话术列表

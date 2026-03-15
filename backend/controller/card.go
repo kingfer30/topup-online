@@ -57,11 +57,13 @@ func GetCardList(c *gin.Context) {
 	keyword := c.Query("keyword")
 	subscriptionType := c.Query("subscription_type")
 	subscriptionStatusStr := c.DefaultQuery("subscription_status", "0")
+	isCheckStr := c.DefaultQuery("is_check", "0")
 	purchaseDateStr := c.Query("purchase_date")
 
 	page, _ := strconv.Atoi(pageStr)
 	pageSize, _ := strconv.Atoi(pageSizeStr)
 	subscriptionStatus, _ := strconv.Atoi(subscriptionStatusStr)
+	isCheck, _ := strconv.Atoi(isCheckStr)
 
 	// 将购买时间输入转换为 Unix 时间戳：
 	// - 纯数字（如 "1772678419"）：直接当时间戳使用
@@ -95,7 +97,7 @@ func GetCardList(c *gin.Context) {
 	}
 
 	// 查询卡密列表
-	cards, total, err := model.GetCardList(tableName, cardType, page, pageSize, keyword, subscriptionType, subscriptionStatus, purchaseDate)
+	cards, total, err := model.GetCardList(tableName, cardType, page, pageSize, keyword, subscriptionType, subscriptionStatus, isCheck, purchaseDate)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"code":    500,
@@ -755,7 +757,7 @@ func ExportCards(c *gin.Context) {
 		return
 	}
 
-	cards, err := model.GetAllCardsForExport(tableName, cardType, keyword, subscriptionType, 0, 0)
+	cards, err := model.GetAllCardsForExport(tableName, cardType, keyword, subscriptionType, 0, 0, 0)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{"code": 500, "message": "导出失败: " + err.Error()})
 		return
@@ -860,5 +862,50 @@ func RollbackPickup(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"code":    200,
 		"message": "回滚成功",
+	})
+}
+
+// EnableOnDemandSpendHandler 为指定卡密开启按需付费
+func EnableOnDemandSpendHandler(c *gin.Context) {
+	var req struct {
+		Category string `json:"category" binding:"required"`
+		Id       int    `json:"id" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusOK, gin.H{"code": 400, "message": "参数错误: " + err.Error()})
+		return
+	}
+
+	tableName := model.GetTableNameByCategory(req.Category)
+	if !model.CheckTableExists(tableName) {
+		c.JSON(http.StatusOK, gin.H{"code": 404, "message": "该卡密类别不存在"})
+		return
+	}
+
+	card, err := model.GetCardById(tableName, req.Id)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"code": 404, "message": "卡密不存在"})
+		return
+	}
+
+	if card.Token == "" {
+		c.JSON(http.StatusOK, gin.H{"code": 400, "message": "该卡密没有 Token，无法开启按需付费"})
+		return
+	}
+
+	workosID, err := scheduler.ExtractWorkosID(card.Token)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"code": 400, "message": "提取 workos_id 失败: " + err.Error()})
+		return
+	}
+
+	if err := scheduler.EnableOnDemandSpend(workosID, card.Token); err != nil {
+		c.JSON(http.StatusOK, gin.H{"code": 500, "message": "开启按需付费失败: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    200,
+		"message": "按需付费已成功开启",
 	})
 }
