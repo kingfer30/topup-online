@@ -3,37 +3,39 @@
     <n-card :title="pageTitle">
       <template #header-extra>
         <n-space>
-          <n-button
-            v-if="cardType === 'all'"
-            type="warning"
-            :disabled="checkedRowKeys.length === 0"
-            @click="showUpgradeModal = true"
-          >
+          <n-button v-if="cardType === 'all'" type="warning" :disabled="checkedRowKeys.length === 0"
+            @click="showUpgradeModal = true">
             <template #icon><span>⬆️</span></template>
             更新为成品 {{ checkedRowKeys.length > 0 ? `(${checkedRowKeys.length})` : '' }}
+          </n-button>
+          <n-button v-if="cardType === 'all'" type="error" :disabled="checkedRowKeys.length === 0"
+            @click="handleOpenFreezeModal(1)">
+            <template #icon><span>🔒</span></template>
+            批量冻结 {{ checkedRowKeys.length > 0 ? `(${checkedRowKeys.length})` : '' }}
+          </n-button>
+          <n-button v-if="cardType === 'all'" type="default" :disabled="checkedRowKeys.length === 0"
+            @click="handleOpenFreezeModal(-1)">
+            <template #icon><span>🔓</span></template>
+            批量解冻 {{ checkedRowKeys.length > 0 ? `(${checkedRowKeys.length})` : '' }}
           </n-button>
           <n-button v-if="cardType === 'unsold'" type="success" @click="handlePickup">
             <template #icon><span>📦</span></template>
             我要取货
           </n-button>
-          <n-button
-            v-if="cardType === 'unsold'"
-            type="warning"
-            :disabled="checkedRowKeys.length === 0"
-            @click="showBatchPickupModal = true"
-          >
+          <n-button v-if="cardType === 'unsold'" type="warning" :disabled="checkedRowKeys.length === 0"
+            @click="handleOpenBatchPickup">
             <template #icon><span>🚚</span></template>
             批量取货 {{ checkedRowKeys.length > 0 ? `(${checkedRowKeys.length})` : '' }}
           </n-button>
-          <n-button
-            v-if="cardType === 'unsold' || cardType === 'sold'"
-            type="info"
-            :disabled="checkedRowKeys.length === 0"
-            :loading="batchCheckLoading"
-            @click="handleBatchCheck"
-          >
+          <n-button v-if="cardType === 'unsold' || cardType === 'sold'" type="info"
+            :disabled="checkedRowKeys.length === 0" :loading="batchCheckLoading" @click="handleBatchCheck">
             <template #icon><span>🔍</span></template>
             批量检查 {{ checkedRowKeys.length > 0 ? `(${checkedRowKeys.length})` : '' }}
+          </n-button>
+          <n-button v-if="cardType === 'unsold' || cardType === 'sold'" type="warning"
+            :disabled="checkedRowKeys.length === 0" :loading="batchOnDemandLoading" @click="handleBatchEnableOnDemand">
+            <template #icon><span>💸</span></template>
+            批量后付费 {{ checkedRowKeys.length > 0 ? `(${checkedRowKeys.length})` : '' }}
           </n-button>
           <n-button v-if="cardType === 'sold'" type="error" @click="handleOpenRecharge">
             <template #icon><span>💳</span></template>
@@ -61,103 +63,54 @@
       <!-- 搜索栏 -->
       <n-space vertical :size="16">
         <n-space>
-          <n-input
-            v-model:value="searchKeyword"
-            placeholder="搜索账号/邮箱"
-            clearable
-            style="width: 300px"
-          />
-          <n-select
-            v-if="cardType === 'unsold' || cardType === 'sold'"
-            v-model:value="searchSubscriptionType"
-            :options="[{ label: '全部类型', value: '' }, ...subscriptionTypeOptions]"
-            placeholder="订阅类型"
-            clearable
-            style="width: 150px"
-          />
-          <n-select
-            v-if="cardType === 'sold'"
-            v-model:value="searchSubscriptionStatus"
-            :options="[{ label: '全部订阅状态', value: 0 }, ...subscriptionStatusOptions]"
-            placeholder="订阅状态"
-            style="width: 150px"
-          />
-          <n-select
-            v-if="cardType === 'sold' || cardType === 'unsold'"
-            v-model:value="searchIsCheck"
-            :options="[
-              { label: '全部检查状态', value: 0 },
-              { label: '未检查', value: -1 },
-              { label: '检查成功', value: 1 },
-              { label: '检查失败', value: 2 },
-            ]"
-            placeholder="检查状态"
-            style="width: 150px"
-          />
-          <n-input
-            v-if="cardType === 'sold' || cardType === 'unsold'"
-            v-model:value="searchPurchaseDate"
-            placeholder="购买时间 如: 2026-03-06 22:25:36"
-            clearable
-            style="width: 220px"
-          />
+          <n-input v-model:value="searchKeyword" placeholder="搜索账号/邮箱" clearable style="width: 300px" />
+          <n-select v-if="cardType === 'unsold' || cardType === 'sold'" v-model:value="searchSubscriptionType"
+            :options="[{ label: '全部类型', value: '' }, ...subscriptionTypeOptions]" placeholder="订阅类型" clearable
+            style="width: 150px" />
+          <n-select v-if="cardType === 'sold'" v-model:value="searchSubscriptionStatus"
+            :options="[{ label: '全部订阅状态', value: 0 }, ...subscriptionStatusOptions]" placeholder="订阅状态"
+            style="width: 150px" />
+          <n-select v-if="cardType === 'sold' || cardType === 'unsold'" v-model:value="searchIsCheck" :options="[
+            { label: '全部检查状态', value: 0 },
+            { label: '未检查', value: -1 },
+            { label: '检查成功', value: 1 },
+            { label: '检查失败', value: 2 },
+          ]" placeholder="检查状态" style="width: 150px" />
+          <n-select v-if="cardType === 'all'" v-model:value="searchFreezeStatus" :options="[
+            { label: '全部冻结状态', value: 0 },
+            { label: '未冻结', value: -1 },
+            { label: '已冻结', value: 1 },
+          ]" placeholder="冻结状态" style="width: 150px" />
+          <n-input v-if="cardType === 'sold' || cardType === 'unsold'" v-model:value="searchPurchaseDate"
+            placeholder="购买时间 如: 2026-03-06 22:25:36" clearable style="width: 220px" />
           <n-button type="primary" @click="handleSearch">搜索</n-button>
           <n-button @click="handleReset">重置</n-button>
         </n-space>
 
         <!-- 卡密表格 -->
-        <n-data-table
-          remote
-          :columns="columns"
-          :data="cardList"
-          :pagination="pagination"
-          :loading="loading"
-          :bordered="false"
-          :single-line="false"
-          :row-key="(row: Card) => row.id"
-          v-model:checked-row-keys="checkedRowKeys"
-          @update:page="handlePageChange"
-          @update:page-size="handlePageSizeChange"
-        />
+        <n-data-table remote :columns="columns" :data="cardList" :pagination="pagination" :loading="loading"
+          :bordered="false" :single-line="false" :row-key="(row: Card) => row.id"
+          v-model:checked-row-keys="checkedRowKeys" @update:page="handlePageChange"
+          @update:page-size="handlePageSizeChange" />
       </n-space>
     </n-card>
 
     <!-- 新增/编辑对话框 -->
-    <n-modal
-      v-model:show="showModal"
-      :title="isEdit ? '编辑卡密' : '新增卡密'"
-      preset="dialog"
-      :positive-text="isEdit ? '保存' : '创建'"
-      negative-text="取消"
-      @positive-click="handleSubmit"
-      style="width: 800px"
-    >
-      <n-form
-        ref="formRef"
-        :model="formData"
-        :rules="rules"
-        label-placement="left"
-        label-width="140px"
-        require-mark-placement="left"
-        style="margin-top: 20px"
-      >
+    <n-modal v-model:show="showModal" :title="isEdit ? '编辑卡密' : '新增卡密'" preset="dialog"
+      :positive-text="isEdit ? '保存' : '创建'" negative-text="取消" @positive-click="handleSubmit" style="width: 800px">
+      <n-form ref="formRef" :model="formData" :rules="rules" label-placement="left" label-width="140px"
+        require-mark-placement="left" style="margin-top: 20px">
         <n-grid :cols="2" :x-gap="24">
           <n-form-item-gi label="账号" path="account">
             <n-input v-model:value="formData.account" placeholder="请输入账号" />
           </n-form-item-gi>
 
           <n-form-item-gi label="密码" path="password">
-            <n-input
-              v-model:value="formData.password"
-              placeholder="请输入密码"
-            />
+            <n-input v-model:value="formData.password" placeholder="请输入密码" />
           </n-form-item-gi>
 
           <n-form-item-gi label="邮箱密码" path="mail_password">
-            <n-input
-              v-model:value="formData.mail_password"
-              placeholder="请输入邮箱密码"
-            />
+            <n-input v-model:value="formData.mail_password" placeholder="请输入邮箱密码" />
           </n-form-item-gi>
 
           <n-form-item-gi label="邮箱地址" path="mail_url">
@@ -165,42 +118,22 @@
           </n-form-item-gi>
 
           <n-form-item-gi label="订阅类型" path="subscription_type">
-            <n-select
-              v-model:value="formData.subscription_type"
-              :options="subscriptionTypeOptions"
-              placeholder="选择或输入订阅类型"
-              filterable
-              tag
-              clearable
-            />
+            <n-select v-model:value="formData.subscription_type" :options="subscriptionTypeOptions"
+              placeholder="选择或输入订阅类型" filterable tag clearable />
           </n-form-item-gi>
 
           <n-form-item-gi label="订阅状态" path="subscription_status">
-            <n-select
-              v-model:value="formData.subscription_status"
-              :options="subscriptionStatusOptions"
-            />
+            <n-select v-model:value="formData.subscription_status" :options="subscriptionStatusOptions" />
           </n-form-item-gi>
 
           <n-form-item-gi label="购买价格" path="purchase_price">
-            <n-input-number
-              v-model:value="formData.purchase_price"
-              :min="0"
-              :precision="2"
-              placeholder="购买价格"
-              style="width: 100%"
-            />
+            <n-input-number v-model:value="formData.purchase_price" :min="0" :precision="2" placeholder="购买价格"
+              style="width: 100%" />
           </n-form-item-gi>
 
           <n-form-item-gi label="购买平台" path="purchase_from">
-            <n-select
-              v-model:value="formData.purchase_from"
-              :options="purchasePlatformOptions"
-              placeholder="选择或输入购买平台"
-              filterable
-              tag
-              clearable
-            />
+            <n-select v-model:value="formData.purchase_from" :options="purchasePlatformOptions" placeholder="选择或输入购买平台"
+              filterable tag clearable />
           </n-form-item-gi>
 
           <n-form-item-gi label="卖家名称" path="purchase_by">
@@ -208,13 +141,8 @@
           </n-form-item-gi>
 
           <n-form-item-gi label="出售价格" path="sell_price">
-            <n-input-number
-              v-model:value="formData.sell_price"
-              :min="0"
-              :precision="2"
-              placeholder="出售价格"
-              style="width: 100%"
-            />
+            <n-input-number v-model:value="formData.sell_price" :min="0" :precision="2" placeholder="出售价格"
+              style="width: 100%" />
           </n-form-item-gi>
 
           <n-form-item-gi label="出售状态" path="sell_status">
@@ -226,10 +154,7 @@
           </n-form-item-gi>
 
           <n-form-item-gi label="账号类型" path="account_type">
-            <n-select
-              v-model:value="formData.account_type"
-              :options="accountTypeOptions"
-            />
+            <n-select v-model:value="formData.account_type" :options="accountTypeOptions" />
           </n-form-item-gi>
 
           <n-form-item-gi label="状态" path="status">
@@ -245,88 +170,49 @@
           </n-form-item-gi>
 
           <n-form-item-gi :span="2" label="Token" path="token">
-            <n-input
-              v-model:value="formData.token"
-              type="textarea"
-              placeholder="请输入Token"
-              :rows="3"
-            />
+            <n-input v-model:value="formData.token" type="textarea" placeholder="请输入Token" :rows="3" />
+          </n-form-item-gi>
+
+          <n-form-item-gi :span="2" label="接码链接" path="code_link">
+            <n-select v-model:value="formData.code_link" :options="codeLinkOptions" placeholder="选择或输入接码链接"
+              filterable tag clearable />
           </n-form-item-gi>
 
           <n-form-item-gi :span="2" label="备注" path="remark">
-            <n-input
-              v-model:value="formData.remark"
-              type="textarea"
-              placeholder="请输入备注"
-              :rows="2"
-            />
+            <n-input v-model:value="formData.remark" type="textarea" placeholder="请输入备注" :rows="2" />
           </n-form-item-gi>
         </n-grid>
       </n-form>
     </n-modal>
 
     <!-- 批量升级为成品对话框 -->
-    <n-modal
-      v-model:show="showUpgradeModal"
-      title="批量更新为成品"
-      preset="dialog"
-      positive-text="确认更新"
-      negative-text="取消"
-      @positive-click="handleBatchUpgrade"
-      style="width: 600px"
-    >
+    <n-modal v-model:show="showUpgradeModal" title="批量更新为成品" preset="dialog" positive-text="确认更新" negative-text="取消"
+      @positive-click="handleBatchUpgrade" style="width: 600px">
       <n-form label-placement="left" label-width="120px" style="margin-top: 20px">
         <n-grid :cols="2" :x-gap="24" :y-gap="12">
           <n-form-item-gi label="订阅类型">
-            <n-select
-              v-model:value="upgradeForm.subscription_type"
-              :options="subscriptionTypeOptions"
-              placeholder="选择或输入订阅类型"
-              filterable
-              tag
-              clearable
-            />
+            <n-select v-model:value="upgradeForm.subscription_type" :options="subscriptionTypeOptions"
+              placeholder="选择或输入订阅类型" filterable tag clearable />
           </n-form-item-gi>
 
           <n-form-item-gi label="订阅时间">
-            <n-date-picker
-              v-model:value="upgradeForm.subscription_time"
-              type="datetime"
-              placeholder="默认为当前时间"
-              style="width: 100%"
-              clearable
-            />
+            <n-date-picker v-model:value="upgradeForm.subscription_time" type="datetime" placeholder="默认为当前时间"
+              style="width: 100%" clearable />
           </n-form-item-gi>
 
           <n-form-item-gi label="购买价格(追加)">
-            <n-input-number
-              v-model:value="upgradeForm.purchase_price"
-              :min="0"
-              :precision="2"
-              placeholder="追加到已有价格"
-              style="width: 100%"
-            />
+            <n-input-number v-model:value="upgradeForm.purchase_price" :min="0" :precision="2" placeholder="追加到已有价格"
+              style="width: 100%" />
           </n-form-item-gi>
 
           <n-form-item-gi label="购买平台">
-            <n-select
-              v-model:value="upgradeForm.purchase_from"
-              :options="purchasePlatformOptions"
-              placeholder="选择或输入购买平台"
-              filterable
-              tag
-              clearable
-            />
+            <n-select v-model:value="upgradeForm.purchase_from" :options="purchasePlatformOptions"
+              placeholder="选择或输入购买平台" filterable tag clearable />
           </n-form-item-gi>
 
           <n-form-item-gi label="购买时间" :span="2">
-            <n-date-picker
-              v-model:value="upgradeForm.purchase_date"
-              type="datetime"
-              placeholder="默认为当前时间"
-              style="width: 100%"
-              clearable
-            />
+            <n-date-picker v-model:value="upgradeForm.purchase_date" type="datetime" placeholder="默认为当前时间"
+              style="width: 100%" clearable />
           </n-form-item-gi>
         </n-grid>
 
@@ -337,15 +223,9 @@
     </n-modal>
 
     <!-- 导出对话框 -->
-    <n-modal
-      v-model:show="showExportModal"
-      title="导出数据"
-      preset="dialog"
-      :positive-text="exportLoading ? '导出中...' : '确认导出'"
-      negative-text="取消"
-      @positive-click="handleExport"
-      style="width: 680px"
-    >
+    <n-modal v-model:show="showExportModal" title="导出数据" preset="dialog"
+      :positive-text="exportLoading ? '导出中...' : '确认导出'" negative-text="取消" @positive-click="handleExport"
+      style="width: 680px">
       <n-space vertical :size="16" style="margin-top: 16px">
         <!-- 导出模式 -->
         <div>
@@ -355,12 +235,7 @@
               <n-radio value="filter">按当前筛选条件全量导出</n-radio>
               <n-radio value="selected">
                 导出勾选记录
-                <n-tag
-                  v-if="checkedRowKeys.length > 0"
-                  type="success"
-                  size="small"
-                  style="margin-left: 6px"
-                >
+                <n-tag v-if="checkedRowKeys.length > 0" type="success" size="small" style="margin-left: 6px">
                   已选 {{ checkedRowKeys.length }} 条
                 </n-tag>
                 <n-tag v-else type="warning" size="small" style="margin-left: 6px">未勾选</n-tag>
@@ -410,58 +285,30 @@
     </n-modal>
 
     <!-- 批量导入对话框 -->
-    <n-modal
-      v-model:show="showBatchModal"
-      title="批量导入卡密"
-      preset="dialog"
-      positive-text="导入"
-      negative-text="取消"
-      @positive-click="handleBatchSubmit"
-      style="width: 1200px; max-width: 95vw"
-    >
+    <n-modal v-model:show="showBatchModal" title="批量导入卡密" preset="dialog" positive-text="导入" negative-text="取消"
+      @positive-click="handleBatchSubmit" style="width: 1200px; max-width: 95vw">
       <n-space vertical style="margin-top: 20px" :size="16">
         <!-- 公共字段配置 -->
         <n-card title="公共字段配置" size="small">
           <n-grid :cols="6" :x-gap="12" :y-gap="12">
             <n-form-item-gi label="订阅类型">
-              <n-select
-                v-model:value="batchConfig.subscription_type"
-                :options="subscriptionTypeOptions"
-                placeholder="选择或输入订阅类型"
-                filterable
-                tag
-                clearable
-              />
+              <n-select v-model:value="batchConfig.subscription_type" :options="subscriptionTypeOptions"
+                placeholder="选择或输入订阅类型" filterable tag clearable />
             </n-form-item-gi>
 
             <n-form-item-gi label="订阅剩余天数">
-              <n-input-number
-                v-model:value="batchConfig.subscription_remaining_days"
-                :min="0"
-                placeholder="默认30天"
-                style="width: 100%"
-              />
+              <n-input-number v-model:value="batchConfig.subscription_remaining_days" :min="0" placeholder="默认30天"
+                style="width: 100%" />
             </n-form-item-gi>
 
             <n-form-item-gi label="购买价格">
-              <n-input-number
-                v-model:value="batchConfig.purchase_price"
-                :min="0"
-                :precision="2"
-                placeholder="购买价格"
-                style="width: 100%"
-              />
+              <n-input-number v-model:value="batchConfig.purchase_price" :min="0" :precision="2" placeholder="购买价格"
+                style="width: 100%" />
             </n-form-item-gi>
 
             <n-form-item-gi label="购买平台">
-              <n-select
-                v-model:value="batchConfig.purchase_from"
-                :options="purchasePlatformOptions"
-                placeholder="选择或输入购买平台"
-                filterable
-                tag
-                clearable
-              />
+              <n-select v-model:value="batchConfig.purchase_from" :options="purchasePlatformOptions"
+                placeholder="选择或输入购买平台" filterable tag clearable />
             </n-form-item-gi>
 
             <n-form-item-gi label="卖家名称">
@@ -469,45 +316,30 @@
             </n-form-item-gi>
 
             <n-form-item-gi label="购买时间">
-              <n-date-picker
-                v-model:value="batchConfig.purchase_date"
-                type="datetime"
-                placeholder="默认为当前时间"
-                style="width: 100%"
-                clearable
-              />
+              <n-date-picker v-model:value="batchConfig.purchase_date" type="datetime" placeholder="默认为当前时间"
+                style="width: 100%" clearable />
             </n-form-item-gi>
 
             <n-form-item-gi label="邮箱地址">
-              <n-select
-                v-model:value="batchConfig.mail_url"
-                :options="mailUrlOptions"
-                placeholder="选择或输入邮箱地址"
-                filterable
-                tag
-                clearable
-              />
+              <n-select v-model:value="batchConfig.mail_url" :options="mailUrlOptions" placeholder="选择或输入邮箱地址"
+                filterable tag clearable />
             </n-form-item-gi>
 
             <n-form-item-gi label="出售状态">
-              <n-select
-                v-model:value="batchConfig.sell_status"
-                :options="sellStatusOptions"
-              />
+              <n-select v-model:value="batchConfig.sell_status" :options="sellStatusOptions" />
             </n-form-item-gi>
 
             <n-form-item-gi label="订阅状态">
-              <n-select
-                v-model:value="batchConfig.subscription_status"
-                :options="subscriptionStatusOptions"
-              />
+              <n-select v-model:value="batchConfig.subscription_status" :options="subscriptionStatusOptions" />
             </n-form-item-gi>
 
             <n-form-item-gi label="账号类型">
-              <n-select
-                v-model:value="batchConfig.account_type"
-                :options="accountTypeOptions"
-              />
+              <n-select v-model:value="batchConfig.account_type" :options="accountTypeOptions" />
+            </n-form-item-gi>
+
+            <n-form-item-gi label="接码链接">
+              <n-select v-model:value="batchConfig.code_link" :options="codeLinkOptions" placeholder="选择或输入接码链接"
+                filterable tag clearable />
             </n-form-item-gi>
 
             <n-form-item-gi label="备注">
@@ -523,66 +355,38 @@
           </n-alert>
           <n-grid :cols="8" :x-gap="12" :y-gap="12">
             <n-form-item-gi label="账号">
-              <n-input-number
-                v-model:value="batchConfig.field_mapping.account"
-                :min="1"
-                placeholder="必填"
-                style="width: 100%"
-              />
+              <n-input-number v-model:value="batchConfig.field_mapping.account" :min="1" placeholder="必填"
+                style="width: 100%" />
             </n-form-item-gi>
 
             <n-form-item-gi label="密码">
-              <n-input-number
-                v-model:value="batchConfig.field_mapping.password"
-                :min="0"
-                placeholder="0=不导入"
-                style="width: 100%"
-              />
+              <n-input-number v-model:value="batchConfig.field_mapping.password" :min="0" placeholder="0=不导入"
+                style="width: 100%" />
             </n-form-item-gi>
 
             <n-form-item-gi label="邮箱密码">
-              <n-input-number
-                v-model:value="batchConfig.field_mapping.mail_password"
-                :min="0"
-                placeholder="0=不导入"
-                style="width: 100%"
-              />
+              <n-input-number v-model:value="batchConfig.field_mapping.mail_password" :min="0" placeholder="0=不导入"
+                style="width: 100%" />
             </n-form-item-gi>
 
             <n-form-item-gi label="订阅时间">
-              <n-input-number
-                v-model:value="batchConfig.field_mapping.subscription_time"
-                :min="0"
-                placeholder="0=不导入"
-                style="width: 100%"
-              />
+              <n-input-number v-model:value="batchConfig.field_mapping.subscription_time" :min="0" placeholder="0=不导入"
+                style="width: 100%" />
             </n-form-item-gi>
 
             <n-form-item-gi label="Token">
-              <n-input-number
-                v-model:value="batchConfig.field_mapping.token"
-                :min="0"
-                placeholder="0=不导入"
-                style="width: 100%"
-              />
+              <n-input-number v-model:value="batchConfig.field_mapping.token" :min="0" placeholder="0=不导入"
+                style="width: 100%" />
             </n-form-item-gi>
 
             <n-form-item-gi label="API Key">
-              <n-input-number
-                v-model:value="batchConfig.field_mapping.api_key"
-                :min="0"
-                placeholder="0=不导入"
-                style="width: 100%"
-              />
+              <n-input-number v-model:value="batchConfig.field_mapping.api_key" :min="0" placeholder="0=不导入"
+                style="width: 100%" />
             </n-form-item-gi>
 
             <n-form-item-gi label="2FA">
-              <n-input-number
-                v-model:value="batchConfig.field_mapping['2fa']"
-                :min="0"
-                placeholder="0=不导入"
-                style="width: 100%"
-              />
+              <n-input-number v-model:value="batchConfig.field_mapping['2fa']" :min="0" placeholder="0=不导入"
+                style="width: 100%" />
             </n-form-item-gi>
           </n-grid>
         </n-card>
@@ -591,40 +395,19 @@
         <n-alert type="warning">
           每行一条数据，字段之间使用"----"分隔。根据上方字段映射配置，按顺序填写对应字段数据。
         </n-alert>
-        <n-input
-          v-model:value="batchImportText"
-          type="textarea"
+        <n-input v-model:value="batchImportText" type="textarea"
           placeholder="示例（假设配置：账号=1，密码=2，邮箱密码=3）：&#10;account1@example.com----password1----mailpass1&#10;account2@example.com----password2----mailpass2&#10;&#10;包含Token示例（假设配置：账号=1，密码=2，Token=3）：&#10;account3@example.com----password3----token123"
-          :rows="8"
-        />
+          :rows="8" />
       </n-space>
     </n-modal>
 
     <!-- 新增代充对话框 -->
-    <n-modal
-      v-model:show="showRechargeModal"
-      title="新增代充"
-      preset="dialog"
-      positive-text="确认提交"
-      negative-text="取消"
-      @positive-click="handleRechargeSubmit"
-      style="width: 480px"
-    >
-      <n-form
-        :model="rechargeForm"
-        label-placement="left"
-        label-width="100px"
-        style="margin-top: 20px"
-      >
+    <n-modal v-model:show="showRechargeModal" title="新增代充" preset="dialog" positive-text="确认提交" negative-text="取消"
+      @positive-click="handleRechargeSubmit" style="width: 480px">
+      <n-form :model="rechargeForm" label-placement="left" label-width="100px" style="margin-top: 20px">
         <n-form-item label="订阅类型">
-          <n-select
-            v-model:value="rechargeForm.subscription_type"
-            :options="subscriptionTypeOptions"
-            placeholder="选择或输入订阅类型"
-            filterable
-            tag
-            clearable
-          />
+          <n-select v-model:value="rechargeForm.subscription_type" :options="subscriptionTypeOptions"
+            placeholder="选择或输入订阅类型" filterable tag clearable />
         </n-form-item>
 
         <n-form-item label="账号">
@@ -632,23 +415,13 @@
         </n-form-item>
 
         <n-form-item label="购买价格">
-          <n-input-number
-            v-model:value="rechargeForm.purchase_price"
-            :min="0"
-            :precision="2"
-            placeholder="代充成本"
-            style="width: 100%"
-          />
+          <n-input-number v-model:value="rechargeForm.purchase_price" :min="0" :precision="2" placeholder="代充成本"
+            style="width: 100%" />
         </n-form-item>
 
         <n-form-item label="售出价格">
-          <n-input-number
-            v-model:value="rechargeForm.sell_price"
-            :min="0"
-            :precision="2"
-            placeholder="售出金额"
-            style="width: 100%"
-          />
+          <n-input-number v-model:value="rechargeForm.sell_price" :min="0" :precision="2" placeholder="售出金额"
+            style="width: 100%" />
         </n-form-item>
 
         <n-form-item label="售出对方">
@@ -658,25 +431,14 @@
     </n-modal>
 
     <!-- 批量取货对话框 -->
-    <n-modal
-      v-model:show="showBatchPickupModal"
-      title="批量取货"
-      preset="dialog"
-      positive-text="确认取货"
-      negative-text="取消"
-      @positive-click="handleBatchPickup"
-      style="width: 500px"
-    >
+    <n-modal v-model:show="showBatchPickupModal" title="批量取货" preset="dialog" positive-text="确认取货" negative-text="取消"
+      @positive-click="handleBatchPickup" style="width: 500px">
       <n-space vertical :size="16" style="margin-top: 16px">
         <n-alert type="info">
           已勾选 <strong>{{ checkedRowKeys.length }}</strong> 条记录，确认后将全部标记为已出售，并复制卡密信息到剪贴板。
         </n-alert>
 
-        <n-form
-          :model="batchPickupForm"
-          label-placement="left"
-          label-width="100px"
-        >
+        <n-form :model="batchPickupForm" label-placement="left" label-width="100px">
           <n-form-item label="复制格式">
             <n-radio-group v-model:value="batchPickupForm.format">
               <n-space>
@@ -688,13 +450,8 @@
           </n-form-item>
 
           <n-form-item label="售出价格">
-            <n-input-number
-              v-model:value="batchPickupForm.sell_price"
-              :min="0"
-              :precision="2"
-              placeholder="非必填"
-              style="width: 100%"
-            />
+            <n-input-number v-model:value="batchPickupForm.sell_price" :min="0" :precision="2" placeholder="非必填"
+              style="width: 100%" />
           </n-form-item>
 
           <n-form-item label="售出对方">
@@ -705,30 +462,16 @@
     </n-modal>
 
     <!-- 取货对话框 -->
-    <n-modal
-      v-model:show="showPickupModal"
-      :title="pickupStep === 1 ? '我要取货 - 选择条件' : '我要取货 - 预览确认'"
-      preset="dialog"
-      :positive-text="pickupStep === 1 ? '下一步' : '完成取货'"
-      negative-text="取消"
-      @positive-click="handlePickupSubmit"
-      @negative-click="handlePickupCancel"
-      style="width: 700px"
-    >
+    <n-modal v-model:show="showPickupModal" :title="pickupStep === 1 ? '我要取货 - 选择条件' : '我要取货 - 预览确认'" preset="dialog"
+      :positive-text="pickupStep === 1 ? '下一步' : '完成取货'" negative-text="取消" @positive-click="handlePickupSubmit"
+      @negative-click="handlePickupCancel" style="width: 700px">
       <n-space vertical style="margin-top: 20px" :size="16">
         <!-- 第一步：选择条件 -->
         <div v-if="pickupStep === 1">
-          <n-form
-            :model="pickupForm"
-            label-placement="left"
-            label-width="100px"
-          >
+          <n-form :model="pickupForm" label-placement="left" label-width="100px">
             <n-form-item label="订阅类型" path="subscription_type">
-              <n-select
-                v-model:value="pickupForm.subscription_type"
-                :options="unsoldSubscriptionTypes"
-                placeholder="请选择订阅类型"
-              />
+              <n-select v-model:value="pickupForm.subscription_type" :options="unsoldSubscriptionTypes"
+                placeholder="请选择订阅类型" />
             </n-form-item>
 
             <n-form-item label="取货格式" path="format">
@@ -752,42 +495,23 @@
           <!-- 卡密信息预览 -->
           <n-card title="卡密信息" size="small" style="margin-bottom: 16px">
             <div style="position: relative">
-              <n-button
-                size="small"
-                style="position: absolute; top: -40px; right: 0"
-                @click="handleCopyPickupInfo"
-              >
+              <n-button size="small" style="position: absolute; top: -40px; right: 0" @click="handleCopyPickupInfo">
                 复制
               </n-button>
-              <pre 
-                ref="pickupCardInfoRef"
-                class="card-info-display"
-                @click="handleSelectCardInfo"
-              >{{ pickupCardInfo }}</pre>
+              <pre ref="pickupCardInfoRef" class="card-info-display" @click="handleSelectCardInfo">{{ pickupCardInfo }}
+          </pre>
             </div>
           </n-card>
 
           <!-- 售出信息 -->
-          <n-form
-            :model="completeForm"
-            label-placement="left"
-            label-width="100px"
-          >
+          <n-form :model="completeForm" label-placement="left" label-width="100px">
             <n-form-item label="售出价格">
-              <n-input-number
-                v-model:value="completeForm.sell_price"
-                :min="0"
-                :precision="2"
-                placeholder="非必填"
-                style="width: 100%"
-              />
+              <n-input-number v-model:value="completeForm.sell_price" :min="0" :precision="2" placeholder="非必填"
+                style="width: 100%" />
             </n-form-item>
 
             <n-form-item label="售出对方">
-              <n-input
-                v-model:value="completeForm.sell_to"
-                placeholder="非必填"
-              />
+              <n-input v-model:value="completeForm.sell_to" placeholder="非必填" />
             </n-form-item>
           </n-form>
         </div>
@@ -795,41 +519,104 @@
     </n-modal>
 
     <!-- 已发货确认弹窗 -->
-    <n-modal
-      v-model:show="showShippedModal"
-      title="确认已发货"
-      preset="dialog"
-      positive-text="确认发货"
-      negative-text="取消"
-      @positive-click="handleShippedSubmit"
-      style="width: 420px"
-    >
+    <n-modal v-model:show="showShippedModal" title="确认已发货" preset="dialog" positive-text="确认发货" negative-text="取消"
+      @positive-click="handleShippedSubmit" style="width: 420px">
       <n-space vertical style="margin-top: 20px" :size="16">
         <n-alert type="info">
           确认后将把该卡密状态标记为已出售
         </n-alert>
-        <n-form
-          :model="shippedForm"
-          label-placement="left"
-          label-width="100px"
-        >
+        <n-form :model="shippedForm" label-placement="left" label-width="100px">
           <n-form-item label="售出价格">
-            <n-input-number
-              v-model:value="shippedForm.sell_price"
-              :min="0"
-              :precision="2"
-              placeholder="非必填"
-              style="width: 100%"
-            />
+            <n-input-number v-model:value="shippedForm.sell_price" :min="0" :precision="2" placeholder="非必填"
+              style="width: 100%" />
           </n-form-item>
           <n-form-item label="售出对方">
-            <n-input
-              v-model:value="shippedForm.sell_to"
-              placeholder="非必填"
-            />
+            <n-input v-model:value="shippedForm.sell_to" placeholder="非必填" />
           </n-form-item>
         </n-form>
       </n-space>
+    </n-modal>
+
+    <!-- 提链结果弹窗 -->
+    <n-modal v-model:show="showGotoProModal" title="提链成功 - 付款链接" preset="card" style="width: 580px">
+      <n-space vertical :size="12">
+        <n-alert type="success">付款链接已生成，请选择后续操作</n-alert>
+        <n-input :value="gotoProLink" readonly type="textarea" :rows="3"
+          style="font-size: 12px; word-break: break-all" />
+      </n-space>
+      <template #footer>
+        <n-space justify="end">
+          <n-button @click="showGotoProModal = false">关闭</n-button>
+          <n-button @click="handleCopyGotoProLink">复制链接</n-button>
+          <n-button type="error" @click="handleGotoProFail">支付失败</n-button>
+          <n-button type="success" @click="handleGotoProSuccess">支付成功</n-button>
+        </n-space>
+      </template>
+    </n-modal>
+
+    <!-- 提链-支付成功：单卡升级成品弹窗 -->
+    <n-modal v-model:show="showGotoProSuccessModal" title="支付成功 - 更新为成品" preset="dialog" positive-text="确认更新"
+      negative-text="取消" @positive-click="handleGotoProSuccessSubmit" style="width: 600px">
+      <n-form label-placement="left" label-width="120px" style="margin-top: 20px">
+        <n-grid :cols="2" :x-gap="24" :y-gap="12">
+          <n-form-item-gi label="订阅类型">
+            <n-select v-model:value="upgradeForm.subscription_type" :options="subscriptionTypeOptions"
+              placeholder="选择或输入订阅类型" filterable tag clearable />
+          </n-form-item-gi>
+
+          <n-form-item-gi label="订阅时间">
+            <n-date-picker v-model:value="upgradeForm.subscription_time" type="datetime" placeholder="默认为当前时间"
+              style="width: 100%" clearable />
+          </n-form-item-gi>
+
+          <n-form-item-gi label="购买价格(追加)">
+            <n-input-number v-model:value="upgradeForm.purchase_price" :min="0" :precision="2" placeholder="追加到已有价格"
+              style="width: 100%" />
+          </n-form-item-gi>
+
+          <n-form-item-gi label="购买平台">
+            <n-select v-model:value="upgradeForm.purchase_from" :options="purchasePlatformOptions"
+              placeholder="选择或输入购买平台" filterable tag clearable />
+          </n-form-item-gi>
+
+          <n-form-item-gi label="购买时间" :span="2">
+            <n-date-picker v-model:value="upgradeForm.purchase_date" type="datetime" placeholder="默认为当前时间"
+              style="width: 100%" clearable />
+          </n-form-item-gi>
+        </n-grid>
+
+        <n-alert type="info" style="margin-top: 12px">
+          将为该账号更新为成品，订阅状态设置为"已订阅"、账号类型设置为"成品"。
+        </n-alert>
+      </n-form>
+    </n-modal>
+
+    <!-- 提链-支付失败：填写备注弹窗 -->
+    <n-modal v-model:show="showGotoProFailModal" title="支付失败 - 填写备注" preset="dialog" positive-text="确认保存"
+      negative-text="取消" @positive-click="handleGotoProFailSubmit" style="width: 480px">
+      <n-form label-placement="left" label-width="80px" style="margin-top: 20px">
+        <n-form-item label="备注原因">
+          <n-input v-model:value="gotoProFailRemark" type="textarea" :rows="4" placeholder="请输入支付失败的备注原因" />
+        </n-form-item>
+      </n-form>
+    </n-modal>
+
+    <!-- 批量冻结/解冻弹窗 -->
+    <n-modal v-model:show="showFreezeModal"
+      :title="freezeAction === 1 ? `批量冻结 (${checkedRowKeys.length})` : `批量解冻 (${checkedRowKeys.length})`"
+      preset="dialog"
+      :positive-text="freezeAction === 1 ? '确认冻结' : '确认解冻'"
+      negative-text="取消"
+      @positive-click="handleFreezeSubmit"
+      style="width: 480px">
+      <n-form label-placement="left" label-width="80px" style="margin-top: 20px">
+        <n-form-item v-if="freezeAction === 1" label="冻结备注">
+          <n-input v-model:value="freezeRemark" type="textarea" :rows="3" placeholder="请输入冻结原因（选填）" />
+        </n-form-item>
+        <n-alert v-if="freezeAction === 1" type="warning" style="margin-top: 8px">
+          冻结后该卡密将无法提链和更新为成品，请谨慎操作。
+        </n-alert>
+      </n-form>
     </n-modal>
   </div>
 </template>
@@ -871,7 +658,6 @@ import {
   getCardList,
   createCard,
   updateCard,
-  deleteCard,
   batchImportCards,
   batchUpgradeToProduct,
   batchPickup,
@@ -882,10 +668,14 @@ import {
   completePickup,
   rollbackPickup,
   rollbackSoldCard,
-  enableOnDemandSpend,
+  batchEnableOnDemandSpend,
+  gotoProUpgrade,
+  updateCardRemark,
+  batchFreezeCards,
   type Card,
   type CardRequest,
 } from '@/api/card'
+import { getDigisellerPrices, type DigisellerPrice } from '@/api/digiseller'
 
 const route = useRoute()
 const message = useMessage()
@@ -918,7 +708,7 @@ const pageTitle = computed(() => {
 // 取货卡密信息格式化
 const pickupCardInfo = computed(() => {
   if (!pickedCard.value) return ''
-  
+
   const card = pickedCard.value
   if (pickupForm.value.format === 'digiseller') {
     // 密码和邮箱密码均为空时，使用邮箱验证码登录格式
@@ -961,9 +751,11 @@ const searchKeyword = ref('')
 const searchSubscriptionType = ref('')
 const searchSubscriptionStatus = ref(0)
 const searchIsCheck = ref(0)
+const searchFreezeStatus = ref(0)
 // 购买时间精确查询，格式 "2026-03-06 22:25:36"
 const searchPurchaseDate = ref('')
 const batchCheckLoading = ref(false)
+const batchOnDemandLoading = ref(false)
 const batchImportText = ref('')
 
 // 普号列表批量勾选
@@ -1058,7 +850,7 @@ const upgradeForm = ref({
   subscription_type: '',
   subscription_time: Date.now() as number | undefined,   // 毫秒（n-date-picker）
   purchase_price: undefined as number | undefined,
-  purchase_from: '微信',
+  purchase_from: '支付宝',
   purchase_date: Date.now() as number | undefined,       // 毫秒（n-date-picker）
 })
 
@@ -1085,6 +877,29 @@ const showPickupModal = ref(false)
 const pickupStep = ref(1) // 1: 选择条件, 2: 预览确认
 const unsoldSubscriptionTypes = ref<{ label: string; value: string }[]>([])
 const pickedCard = ref<Card | null>(null)
+// Digiseller价格配置缓存
+const digisellerPrices = ref<DigisellerPrice[]>([])
+
+// 提链相关状态
+const gotoProLoading = ref<Record<number, boolean>>({})
+const showGotoProModal = ref(false)
+const gotoProLink = ref('')
+const gotoProCardId = ref<number>(0)
+const gotoProSubscriptionType = ref('')
+const showGotoProSuccessModal = ref(false)
+const showGotoProFailModal = ref(false)
+const gotoProFailRemark = ref('')
+
+// 批量冻结/解冻弹窗
+const showFreezeModal = ref(false)
+const freezeAction = ref<1 | -1>(1)
+const freezeRemark = ref('')
+// 提链订阅类型选项（下拉）
+const gotoProTypeOptions = [
+  { label: 'Pro', value: 'pro' },
+  { label: 'Pro+', value: 'pro_plus' },
+  { label: 'Ultra', value: 'ultra' },
+]
 const pickupCardInfoRef = ref<HTMLPreElement | null>(null)
 
 // 取货表单
@@ -1112,13 +927,14 @@ const batchConfig = ref({
   subscription_type: 'pro',
   subscription_remaining_days: 30 as number | undefined,
   purchase_price: undefined as number | undefined,
-  purchase_from: '微信',
+  purchase_from: '支付宝',
   purchase_by: '',
   purchase_date: undefined as number | undefined,
   mail_url: 'https://login.live.com',
   sell_status: 1,
   subscription_status: 1,
   account_type: 2,
+  code_link: 'https://www.xckj.site/easy-mailbox/frontend/',
   remark: '',
   field_mapping: {
     account: 1,
@@ -1197,7 +1013,7 @@ const statusOptions = [
 // 订阅类型选项（支持手动输入）
 const subscriptionTypeOptions = [
   { label: 'Pro', value: 'pro' },
-  { label: 'Pro+', value: 'pro+' },
+  { label: 'Pro+', value: 'pro_plus' },
   { label: 'Ultra', value: 'ultra' },
   { label: 'Go', value: 'go' },
   { label: 'Plus', value: 'plus' },
@@ -1206,6 +1022,7 @@ const subscriptionTypeOptions = [
 
 // 购买平台选项（支持手动输入）
 const purchasePlatformOptions = [
+  { label: '支付宝', value: '支付宝' },
   { label: '微信', value: '微信' },
   { label: 'Telegram', value: 'Telegram' },
   { label: '闲鱼', value: '闲鱼' },
@@ -1218,6 +1035,12 @@ const mailUrlOptions = [
   { label: 'https://mail.com', value: 'https://mail.com' },
   { label: 'https://gmx.us', value: 'https://gmx.us' },
   { label: 'https://gmail.com', value: 'https://gmail.com' },
+]
+
+const codeLinkOptions = [
+  { label: 'https://www.xckj.site/easy-mailbox/frontend/', value: 'https://www.xckj.site/easy-mailbox/frontend/' },
+  { label: 'https://ms.lqqq.cc/web/', value: 'https://ms.lqqq.cc/web/' },
+  { label: 'https://emails.520952.xyz/', value: 'https://emails.520952.xyz/' },
 ]
 
 // 格式化 Unix 时间戳为可读时间
@@ -1242,117 +1065,123 @@ const columns = computed<DataTableColumns<Card>>(() => {
   const isAll = cardType.value === 'all'
 
   const baseColumns: DataTableColumns<Card> = [
-  // 所有列表均支持批量勾选
-  { type: 'selection' as const },
-  {
-    title: 'ID',
-    key: 'id',
-    width: 60,
-  },
-  {
-    title: '账号',
-    key: 'account',
-    width: 200,
-  },
-  // 普号列表显示密码和邮箱密码
-  ...(isAll ? [
+    // 所有列表均支持批量勾选
+    { type: 'selection' as const },
     {
-      title: '密码',
-      key: 'password',
-      width: 130,
-      render: (row: Card) => row.password || '—',
+      title: 'ID',
+      key: 'id',
+      width: 60,
     },
     {
-      title: '邮箱密码',
-      key: 'mail_password',
-      width: 130,
-      render: (row: Card) => row.mail_password || '—',
+      title: '账号',
+      key: 'account',
+      width: 200,
     },
-  ] as DataTableColumns<Card> : []),
-  // 订阅类型：普号列表不显示
-  ...(!isAll ? [{
-    title: '订阅类型',
-    key: 'subscription_type',
-    width: 100,
-  }] as DataTableColumns<Card> : []),
-  // 订阅状态：非普号列表显示（未售+已售均显示，含掉订阅-1）
-  ...(!isAll ? [
+    // 普号列表显示密码、邮箱密码和备注
+    ...(isAll ? [
+      {
+        title: '密码',
+        key: 'password',
+        width: 130,
+        render: (row: Card) => row.password || '—',
+      },
+      {
+        title: '邮箱密码',
+        key: 'mail_password',
+        width: 130,
+        render: (row: Card) => row.mail_password || '—',
+      },
+      {
+        title: '备注',
+        key: 'remark',
+        width: 160,
+        render: (row: Card) => row.remark || '—',
+      },
+    ] as DataTableColumns<Card> : []),
+    // 订阅类型：普号列表不显示
+    ...(!isAll ? [{
+      title: '订阅类型',
+      key: 'subscription_type',
+      width: 100,
+    }] as DataTableColumns<Card> : []),
+    // 订阅状态：非普号列表显示（未售+已售均显示，含掉订阅-1）
+    ...(!isAll ? [
+      {
+        title: '订阅状态',
+        key: 'subscription_status',
+        width: 100,
+        render: (row: Card) => {
+          const map: Record<number, { label: string; type: 'success' | 'warning' | 'error' }> = {
+            1: { label: '已订阅', type: 'success' },
+            2: { label: '未订阅', type: 'warning' },
+            [-1]: { label: '掉订阅', type: 'error' },
+          }
+          const info = map[row.subscription_status] ?? { label: String(row.subscription_status), type: 'warning' as const }
+          return h(NTag, { type: info.type, size: 'small' }, { default: () => info.label })
+        },
+      },
+    ] as DataTableColumns<Card> : []),
+    ...(isSold ? [{
+      title: '卖家',
+      key: 'purchase_by',
+      width: 80,
+      render: (row: Card) => row.purchase_by || '—',
+    }] as DataTableColumns<Card> : []),
     {
-      title: '订阅状态',
-      key: 'subscription_status',
+      title: '价格',
+      key: 'purchase_price',
+      width: 80,
+    },
+    {
+      title: '订阅时间',
+      key: 'subscription_time',
+      width: 170,
+      render: (row: Card) => formatTimestamp(row.subscription_time ?? row.purchase_date),
+    },
+    ...(!isSold ? [{
+      title: '剩余天数',
+      key: 'remaining_days',
+      width: 90,
+      render: (row: Card) => {
+        const days = calcRemainingDays(row, isSold)
+        if (days === null) return '—'
+        const type = days > 7 ? 'success' : days > 0 ? 'warning' : 'error'
+        return h(NTag, { type, size: 'small' }, { default: () => `${days}天` })
+      },
+    }] as DataTableColumns<Card> : []),
+    // 未售/已售列表显示订阅额度
+    ...(!isAll ? [{
+      title: '额度',
+      key: 'subscription_credits',
+      width: 80,
+      render: (row: Card) => row.subscription_credits != null ? `$${row.subscription_credits.toFixed(2)}` : '—',
+    }] as DataTableColumns<Card> : []),
+    // 未售/已售列表显示检查状态
+    ...(!isAll ? [{
+      title: '检查状态',
+      key: 'is_check',
       width: 100,
       render: (row: Card) => {
-        const map: Record<number, { label: string; type: 'success' | 'warning' | 'error' }> = {
-          1:  { label: '已订阅', type: 'success' },
-          2:  { label: '未订阅', type: 'warning' },
-          [-1]: { label: '掉订阅', type: 'error' },
+        const map: Record<number, { label: string; type: 'default' | 'success' | 'error' }> = {
+          [-1]: { label: '未检查', type: 'default' },
+          1: { label: '检查成功', type: 'success' },
+          2: { label: '检查失败', type: 'error' },
         }
-        const info = map[row.subscription_status] ?? { label: String(row.subscription_status), type: 'warning' as const }
+        const val = row.is_check ?? -1
+        const info = map[val] ?? { label: String(val), type: 'default' as const }
         return h(NTag, { type: info.type, size: 'small' }, { default: () => info.label })
       },
-    },
-  ] as DataTableColumns<Card> : []),
-  ...(isSold ? [{
-    title: '卖家',
-    key: 'purchase_by',
-    width: 80,
-    render: (row: Card) => row.purchase_by || '—',
-  }] as DataTableColumns<Card> : []),
-  {
-    title: '价格',
-    key: 'purchase_price',
-    width: 80,
-  },
-  {
-    title: '订阅时间',
-    key: 'subscription_time',
-    width: 170,
-    render: (row: Card) => formatTimestamp(row.subscription_time ?? row.purchase_date),
-  },
-  ...(!isSold ? [{
-    title: '剩余天数',
-    key: 'remaining_days',
-    width: 90,
-    render: (row: Card) => {
-      const days = calcRemainingDays(row, isSold)
-      if (days === null) return '—'
-      const type = days > 7 ? 'success' : days > 0 ? 'warning' : 'error'
-      return h(NTag, { type, size: 'small' }, { default: () => `${days}天` })
-    },
-  }] as DataTableColumns<Card> : []),
-  // 未售/已售列表显示订阅额度
-  ...(!isAll ? [{
-    title: '额度',
-    key: 'subscription_credits',
-    width: 80,
-    render: (row: Card) => row.subscription_credits != null ? `$${row.subscription_credits.toFixed(2)}` : '—',
-  }] as DataTableColumns<Card> : []),
-  // 未售/已售列表显示检查状态
-  ...(!isAll ? [{
-    title: '检查状态',
-    key: 'is_check',
-    width: 100,
-    render: (row: Card) => {
-      const map: Record<number, { label: string; type: 'default' | 'success' | 'error' }> = {
-        [-1]: { label: '未检查', type: 'default' },
-        1:    { label: '检查成功', type: 'success' },
-        2:    { label: '检查失败', type: 'error' },
-      }
-      const val = row.is_check ?? -1
-      const info = map[val] ?? { label: String(val), type: 'default' as const }
-      return h(NTag, { type: info.type, size: 'small' }, { default: () => info.label })
-    },
-  }] as DataTableColumns<Card> : []),
-  // 已售列表显示售出对方和出售时间
-  ...(isSold ? [
-    {
-      title: '出售时间',
-      key: 'sell_date',
-      width: 170,
-      render: (row: Card) => formatTimestamp(row.sell_date),
-    },
-  ] as DataTableColumns<Card> : []),
- 
+    }] as DataTableColumns<Card> : []),
+    // 已售列表显示售出对方和出售时间
+    ...(isSold ? [
+      {
+        title: '出售时间',
+        key: 'sell_date',
+        width: 170,
+        render: (row: Card) => formatTimestamp(row.sell_date),
+      },
+    ] as DataTableColumns<Card> : []),
+
   ]
 
   // 复制格式选项
@@ -1393,15 +1222,6 @@ const columns = computed<DataTableColumns<Card>>(() => {
             onClick: () => handleEdit(row),
           },
           { default: () => '编辑' }
-        ),
-        h(
-          NButton,
-          {
-            size: 'small',
-            type: 'error',
-            onClick: () => handleDelete(row),
-          },
-          { default: () => '删除' }
         ),
       ]
 
@@ -1444,18 +1264,55 @@ const columns = computed<DataTableColumns<Card>>(() => {
         )
       }
 
-      // 未售/已售列表中，均显示"开启按需付费"按钮
-      buttons.push(
-        h(
-          NButton,
-          {
-            size: 'small',
-            type: 'info',
-            onClick: () => handleEnableOnDemand(row),
-          },
-          { default: () => '后付费' }
+      // 普号/已售列表中，token 存在时显示"提链"下拉按钮
+      // 普号列表：冻结时禁用；已售列表：始终可用
+      if ((cardType.value === 'all' || cardType.value === 'sold') && row.token) {
+        const isFrozen = cardType.value === 'all' && row.freeze_status === 1
+        buttons.push(
+          h(
+            NDropdown,
+            {
+              trigger: 'click',
+              options: gotoProTypeOptions.map(opt => ({ label: opt.label, key: opt.value })),
+              onSelect: (key: string) => {
+                if (!isFrozen) handleGotoProWithType(row, key)
+              },
+              disabled: isFrozen,
+            },
+            {
+              default: () => h(
+                NButton,
+                {
+                  size: 'small',
+                  type: isFrozen ? 'default' : 'warning',
+                  loading: !!gotoProLoading.value[row.id],
+                  disabled: isFrozen,
+                  title: isFrozen ? '已冻结，无法提链' : undefined,
+                },
+                { default: () => isFrozen ? '已冻结' : '提链' }
+              ),
+            }
+          )
         )
-      )
+      }
+
+      // 所有列表中，code_link 存在时显示"接码"按钮
+      if (row.code_link) {
+        buttons.push(
+          h(
+            NButton,
+            {
+              size: 'small',
+              type: 'info',
+              onClick: () => {
+                const url = `${row.code_link}/${row.account}----${row.mail_password || ''}`
+                window.open(url, '_blank')
+              },
+            },
+            { default: () => '接码' }
+          )
+        )
+      }
 
       return h(NSpace, {}, { default: () => buttons })
     },
@@ -1469,7 +1326,7 @@ const loadCards = async () => {
   console.log('📡 loadCards 调用:')
   console.log('  category:', category.value)
   console.log('  cardType:', cardType.value)
-  
+
   if (!category.value) {
     console.log('  ❌ 缺少卡密类别参数')
     message.error('缺少卡密类别参数')
@@ -1488,9 +1345,10 @@ const loadCards = async () => {
       ...(searchSubscriptionStatus.value !== 0 ? { subscription_status: searchSubscriptionStatus.value } : {}),
       ...(searchIsCheck.value !== 0 ? { is_check: searchIsCheck.value } : {}),
       ...(searchPurchaseDate.value ? { purchase_date: searchPurchaseDate.value } : {}),
+      ...(searchFreezeStatus.value !== 0 ? { freeze_status: searchFreezeStatus.value } : {}),
     }
     console.log('  📤 请求参数:', params)
-    
+
     const response = await getCardList(params)
 
     if (response.code === 200) {
@@ -1539,16 +1397,129 @@ const handleBatchCheck = async () => {
   }
 }
 
-const handleEnableOnDemand = async (row: Card) => {
+// 批量开启按需付费
+const handleBatchEnableOnDemand = async () => {
+  const ids = checkedRowKeys.value as number[]
+  if (ids.length === 0) {
+    message.warning('请先勾选要操作的记录')
+    return
+  }
+  batchOnDemandLoading.value = true
   try {
-    const response = await enableOnDemandSpend(category.value, row.id)
+    const response = await batchEnableOnDemandSpend(category.value, ids)
     if (response.code === 200) {
-      message.success(response.message || '按需付费已开启')
+      message.success(response.message || '操作完成')
     } else {
-      message.error(response.message || '开启失败')
+      message.error(response.message || '操作失败')
     }
   } catch (error: any) {
-    message.error(error.response?.data?.message || '开启失败')
+    message.error(error.response?.data?.message || '操作失败')
+  } finally {
+    batchOnDemandLoading.value = false
+  }
+}
+
+// 提链：获取 Cursor Pro 付款链接
+// 提链：选择订阅类型后直接发起请求
+const handleGotoProWithType = async (row: Card, subscriptionType: string) => {
+  if (!row.token) return
+  gotoProLoading.value[row.id] = true
+  try {
+    const response = await gotoProUpgrade(row.token, subscriptionType)
+    if (response.code === 200 && response.data) {
+      gotoProCardId.value = row.id
+      gotoProSubscriptionType.value = subscriptionType
+      gotoProLink.value = response.data
+      showGotoProModal.value = true
+    } else {
+      message.error(response.message || '获取付款链接失败')
+    }
+  } catch (error: any) {
+    message.error(error.response?.data?.message || '获取付款链接失败')
+  } finally {
+    gotoProLoading.value[row.id] = false
+  }
+}
+
+const handleCopyGotoProLink = async () => {
+  try {
+    await navigator.clipboard.writeText(gotoProLink.value)
+    message.success('已复制到剪贴板')
+  } catch {
+    message.error('复制失败，请手动复制')
+  }
+}
+
+// 支付成功：关闭提链弹窗，打开升级成品弹窗
+const handleGotoProSuccess = () => {
+  showGotoProModal.value = false
+  upgradeForm.value = {
+    subscription_type: gotoProSubscriptionType.value,
+    subscription_time: Date.now(),
+    purchase_price: undefined,
+    purchase_from: '支付宝',
+    purchase_date: Date.now(),
+  }
+  showGotoProSuccessModal.value = true
+}
+
+// 支付成功确认：单卡升级为成品
+const handleGotoProSuccessSubmit = async () => {
+  try {
+    const now = Math.floor(Date.now() / 1000)
+    const subscriptionTime = upgradeForm.value.subscription_time
+      ? Math.floor(upgradeForm.value.subscription_time / 1000)
+      : now
+    const purchaseDate = upgradeForm.value.purchase_date
+      ? Math.floor(upgradeForm.value.purchase_date / 1000)
+      : now
+
+    const response = await batchUpgradeToProduct({
+      category: category.value,
+      ids: [gotoProCardId.value],
+      subscription_type: upgradeForm.value.subscription_type || undefined,
+      subscription_time: subscriptionTime,
+      purchase_price: upgradeForm.value.purchase_price,
+      purchase_from: upgradeForm.value.purchase_from || undefined,
+      purchase_date: purchaseDate,
+    })
+
+    if (response.code === 200) {
+      message.success(response.message || '更新成功')
+      showGotoProSuccessModal.value = false
+      await loadCards()
+    } else {
+      message.error(response.message || '更新失败')
+      return false
+    }
+  } catch (error: any) {
+    message.error(error.response?.data?.message || '更新失败')
+    return false
+  }
+}
+
+// 支付失败：关闭提链弹窗，打开备注弹窗
+const handleGotoProFail = () => {
+  showGotoProModal.value = false
+  gotoProFailRemark.value = ''
+  showGotoProFailModal.value = true
+}
+
+// 支付失败确认：保存备注到数据库
+const handleGotoProFailSubmit = async () => {
+  try {
+    const response = await updateCardRemark(category.value, gotoProCardId.value, gotoProFailRemark.value)
+    if (response.code === 200) {
+      message.success('备注已保存')
+      showGotoProFailModal.value = false
+      await loadCards()
+    } else {
+      message.error(response.message || '保存失败')
+      return false
+    }
+  } catch (error: any) {
+    message.error(error.response?.data?.message || '保存失败')
+    return false
   }
 }
 
@@ -1559,6 +1530,7 @@ const handleReset = () => {
   searchSubscriptionStatus.value = 0
   searchIsCheck.value = 0
   searchPurchaseDate.value = ''
+  searchFreezeStatus.value = 0
   pagination.value.page = 1
   loadCards()
 }
@@ -1599,6 +1571,7 @@ const handleAdd = () => {
     token: '',
     mail_url: '',
     remark: '',
+    code_link: '',
   }
   showModal.value = true
 }
@@ -1626,32 +1599,9 @@ const handleEdit = (card: Card) => {
     token: card.token || '',
     mail_url: card.mail_url || '',
     remark: card.remark || '',
+    code_link: card.code_link || '',
   }
   showModal.value = true
-}
-
-// 删除卡密
-const handleDelete = (card: Card) => {
-  dialog.error({
-    title: '确认删除',
-    content: `确定要删除卡密"${card.account}"吗？删除后不可恢复。`,
-    positiveText: '确认删除',
-    negativeText: '取消',
-    onPositiveClick: async () => {
-      try {
-        const response = await deleteCard(category.value, card.id)
-        if (response.code === 200) {
-          message.success('删除成功')
-          await loadCards()
-        } else {
-          message.error(response.message || '删除失败')
-        }
-      } catch (error: any) {
-        console.error('删除卡密失败', error)
-        message.error(error.response?.data?.message || '删除失败')
-      }
-    },
-  })
 }
 
 // 取消取货弹窗：若第一步已完成（卡密已被标记为发货中），刷新列表
@@ -1690,8 +1640,9 @@ const handleRollbackSold = (card: Card) => {
 // 打开已发货弹窗
 const handleShipped = (card: Card) => {
   shippedCard.value = card
+  const price = card.subscription_type ? getDigisellerPrice(card.subscription_type) : undefined
   shippedForm.value = {
-    sell_price: 20,
+    sell_price: price ?? 20,
     sell_to: 'Digiseller',
   }
   showShippedModal.value = true
@@ -1866,6 +1817,10 @@ const handleExport = async () => {
       type: cardType.value,
       keyword: searchKeyword.value,
       ...(searchSubscriptionType.value ? { subscription_type: searchSubscriptionType.value } : {}),
+      ...(searchSubscriptionStatus.value !== 0 ? { subscription_status: searchSubscriptionStatus.value } : {}),
+      ...(searchIsCheck.value !== 0 ? { is_check: searchIsCheck.value } : {}),
+      ...(searchPurchaseDate.value ? { purchase_date: searchPurchaseDate.value } : {}),
+      ...(searchFreezeStatus.value !== 0 ? { freeze_status: searchFreezeStatus.value } : {}),
     })
 
     if (response.code === 200) {
@@ -1919,7 +1874,7 @@ const handleBatchUpgrade = async () => {
         subscription_type: '',
         subscription_time: Date.now(),
         purchase_price: undefined,
-        purchase_from: '微信',
+        purchase_from: '支付宝',
         purchase_date: Date.now(),
       }
       await loadCards()
@@ -1942,13 +1897,14 @@ const handleBatchImport = () => {
     subscription_type: 'pro',
     subscription_remaining_days: 30,
     purchase_price: undefined,
-    purchase_from: '微信',
+    purchase_from: '支付宝',
     purchase_by: '',
     purchase_date: undefined,
     mail_url: 'https://login.live.com',
     sell_status: 1,
     subscription_status: 1,
     account_type: 2,
+    code_link: 'https://www.xckj.site/easy-mailbox/frontend/',
     remark: '',
     field_mapping: currentMapping,
   }
@@ -1969,7 +1925,7 @@ const handleBatchSubmit = async () => {
 
     // 获取当前时间戳（秒）
     const currentTimestamp = Math.floor(Date.now() / 1000)
-    
+
     // 计算购买时间
     const purchaseDate = batchConfig.value.purchase_date
       ? Math.floor(batchConfig.value.purchase_date / 1000)
@@ -1987,20 +1943,20 @@ const handleBatchSubmit = async () => {
 
       // 使用"----"分割
       const parts = trimmedLine.split('----').map((p) => p.trim())
-      
+
       if (parts.length === 0) continue
 
       // 根据字段映射提取数据
       const mapping = batchConfig.value.field_mapping
       const account = mapping.account > 0 && parts[mapping.account - 1] ? parts[mapping.account - 1] : ''
-      
+
       if (!account) {
         continue // 跳过没有账号的行
       }
 
       const password = mapping.password > 0 && parts[mapping.password - 1] ? parts[mapping.password - 1] : ''
       const mailPassword = mapping.mail_password > 0 && parts[mapping.mail_password - 1] ? parts[mapping.mail_password - 1] : ''
-      
+
       // 订阅时间：如果配置了位置则从数据中读取，为0则不设置
       let subscriptionTime: number | undefined = undefined
       if (mapping.subscription_time > 0) {
@@ -2040,6 +1996,7 @@ const handleBatchSubmit = async () => {
         api_key: apiKey || undefined,
         '2fa': twoFA || undefined,
         mail_url: batchConfig.value.mail_url || undefined,
+        code_link: batchConfig.value.code_link || undefined,
         remark: batchConfig.value.remark || undefined,
       }
 
@@ -2121,6 +2078,26 @@ const handleRechargeSubmit = async () => {
   }
 }
 
+// 打开批量取货弹窗，根据已勾选卡密的订阅类型自动填充售价
+const handleOpenBatchPickup = () => {
+  const selectedCards = checkedRowKeys.value
+    .map(id => selectedCardsMap.value.get(id as number))
+    .filter((c): c is Card => !!c)
+
+  const subscriptionTypes = [...new Set(selectedCards.map(c => c.subscription_type).filter((t): t is string => !!t))]
+  let defaultPrice: number | undefined = undefined
+  if (subscriptionTypes.length === 1) {
+    defaultPrice = getDigisellerPrice(subscriptionTypes[0])
+  }
+
+  batchPickupForm.value = {
+    format: 'digiseller',
+    sell_price: defaultPrice ?? 20,
+    sell_to: 'Digiseller',
+  }
+  showBatchPickupModal.value = true
+}
+
 // 批量取货处理
 const handleBatchPickup = async () => {
   const ids = checkedRowKeys.value as number[]
@@ -2150,8 +2127,12 @@ const handleBatchPickup = async () => {
     const fmt = batchPickupForm.value.format
     const lines = cards.map(card => {
       if (fmt === 'digiseller') {
+        if (!card.password && !card.mail_password) {
+          return `Пожалуйста, войдите в систему, используя код подтверждения, отправленный на электронную почту:\n\n${card.account}\n\nmail-login: ${card.mail_url || ''}\n\nПожалуйста, выполните следующие шаги заново:\n1. Введите аккаунт: ${card.account}\n2. Нажмите «Далее»\n3. Нажмите кнопку: «Email sign-in code»`
+        }
         return `account: ${card.account}\npass: ${card.password || ''}\nmail-pass: ${card.mail_password || ''}\n\nmail-login: ${card.mail_url || ''}`
       } else if (fmt === 'reverse') {
+        debugger
         return `${card.account}----${card.token || ''}`
       } else {
         return `${card.account}----${card.password || ''}----${card.mail_password || ''}`
@@ -2186,12 +2167,21 @@ const handlePickup = async () => {
     sell_price: 20,
     sell_to: 'Digiseller',
   }
-  
-  // 加载未售订阅类型
+
+  // 并行加载未售订阅类型和Digiseller价格配置
   try {
-    const response = await getUnsoldSubscriptionTypes(category.value)
-    if (response.code === 200) {
-      unsoldSubscriptionTypes.value = (response.data || []).map((type) => ({
+    const [typesResponse, pricesResponse] = await Promise.all([
+      getUnsoldSubscriptionTypes(category.value),
+      getDigisellerPrices(),
+    ])
+
+    // 缓存价格配置
+    if (pricesResponse.code === 200 && pricesResponse.data) {
+      digisellerPrices.value = pricesResponse.data
+    }
+
+    if (typesResponse.code === 200) {
+      unsoldSubscriptionTypes.value = (typesResponse.data || []).map((type) => ({
         label: type,
         value: type,
       }))
@@ -2204,7 +2194,7 @@ const handlePickup = async () => {
         pickupForm.value.subscription_type = unsoldSubscriptionTypes.value[0].value
       }
     } else {
-      message.error(response.message || '获取订阅类型失败')
+      message.error(typesResponse.message || '获取订阅类型失败')
       return
     }
   } catch (error: any) {
@@ -2212,7 +2202,7 @@ const handlePickup = async () => {
     message.error('获取订阅类型失败')
     return
   }
-  
+
   showPickupModal.value = true
 }
 
@@ -2224,21 +2214,29 @@ const handlePickupSubmit = async () => {
       message.error('请选择订阅类型')
       return false
     }
-    
+
     try {
       const response = await pickupCard({
         category: category.value,
         subscription_type: pickupForm.value.subscription_type,
         format: pickupForm.value.format,
       })
-      
+
       if (response.code === 200) {
         pickedCard.value = response.data
         pickupStep.value = 2
 
+        // 根据订阅类型自动填充Digiseller配置的售价
+        const matchedPrice = digisellerPrices.value.find(
+          (p) => p.subscription_type === pickupForm.value.subscription_type
+        )
+        if (matchedPrice !== undefined) {
+          completeForm.value.sell_price = matchedPrice.price
+        }
+
         // 刷新列表，使 sell_status=2(发货中) 状态即时生效
         await loadCards()
-        
+
         // 自动复制卡密信息到剪贴板
         try {
           await navigator.clipboard.writeText(pickupCardInfo.value)
@@ -2247,7 +2245,7 @@ const handlePickupSubmit = async () => {
           console.error('自动复制失败', error)
           message.success('取货成功')
         }
-        
+
         return false // 阻止关闭对话框
       } else {
         message.error(response.message || '取货失败')
@@ -2264,7 +2262,7 @@ const handlePickupSubmit = async () => {
       message.error('未找到已取货的卡密')
       return false
     }
-    
+
     try {
       const response = await completePickup({
         category: category.value,
@@ -2272,7 +2270,7 @@ const handlePickupSubmit = async () => {
         sell_price: completeForm.value.sell_price,
         sell_to: completeForm.value.sell_to || undefined,
       })
-      
+
       if (response.code === 200) {
         // 复制默认文本到剪贴板
         const defaultText = `Ваш заказ выполнен !
@@ -2282,7 +2280,7 @@ const handlePickupSubmit = async () => {
 Подписывайтесь на наш канал, чтобы получать больше выгодных предложений: https://t.me/AI_GUO_GUO
 
 хорошего дня )`
-        
+
         try {
           await navigator.clipboard.writeText(defaultText)
           message.success('取货完成，已复制默认消息到剪贴板')
@@ -2290,7 +2288,7 @@ const handlePickupSubmit = async () => {
           console.error('复制失败', error)
           message.success('取货完成')
         }
-        
+
         showPickupModal.value = false
         await loadCards() // 刷新列表
       } else {
@@ -2337,6 +2335,19 @@ watch(
   }
 )
 
+// 监听代充弹窗订阅类型变化，自动填充Digiseller售价
+watch(
+  () => rechargeForm.value.subscription_type,
+  (type) => {
+    if (type) {
+      const price = getDigisellerPrice(type)
+      if (price !== undefined) {
+        rechargeForm.value.sell_price = price
+      }
+    }
+  }
+)
+
 // 监听路由参数变化，当切换不同类型的列表时重新加载数据
 watch(
   () => [route.query.category, route.query.type],
@@ -2346,21 +2357,78 @@ watch(
       console.log('🔄 路由参数变化，重新加载数据')
       console.log('  category:', oldCategory, '->', newCategory)
       console.log('  type:', oldType, '->', newType)
-      
+
       // 重置分页和搜索条件
       pagination.value.page = 1
       searchKeyword.value = ''
       searchSubscriptionType.value = ''
-      
+      searchFreezeStatus.value = 0
+
       // 重新加载数据
       loadCards()
     }
   }
 )
 
+// 打开批量冻结/解冻弹窗
+const handleOpenFreezeModal = (action: 1 | -1) => {
+  freezeAction.value = action
+  freezeRemark.value = ''
+  showFreezeModal.value = true
+}
+
+// 提交批量冻结/解冻
+const handleFreezeSubmit = async () => {
+  const ids = checkedRowKeys.value as number[]
+  if (ids.length === 0) {
+    message.warning('请先勾选要操作的记录')
+    return false
+  }
+  try {
+    const response = await batchFreezeCards({
+      category: category.value,
+      ids,
+      freeze: freezeAction.value,
+      remark: freezeAction.value === 1 ? freezeRemark.value : '',
+    })
+    if (response.code === 200) {
+      message.success(response.message || '操作成功')
+      showFreezeModal.value = false
+      checkedRowKeys.value = []
+      selectedCardsMap.value.clear()
+      await loadCards()
+    } else {
+      message.error(response.message || '操作失败')
+      return false
+    }
+  } catch (error: any) {
+    message.error(error.response?.data?.message || '操作失败')
+    return false
+  }
+}
+
+// 加载Digiseller价格配置
+const loadDigisellerPrices = async () => {
+  try {
+    const res = await getDigisellerPrices()
+    if (res.code === 200 && res.data) {
+      digisellerPrices.value = res.data
+    }
+  } catch {
+    // 静默失败，不影响主流程
+  }
+}
+
+// 根据订阅类型获取Digiseller配置的售价
+const getDigisellerPrice = (subscriptionType: string): number | undefined => {
+  const matched = digisellerPrices.value.find(p => p.subscription_type === subscriptionType)
+  return matched?.price
+}
+
 // 初始化
 onMounted(() => {
   loadCards()
+  loadDigisellerPrices()
 })
 </script>
 
@@ -2410,4 +2478,3 @@ onMounted(() => {
   transform: translateY(0);
 }
 </style>
-

@@ -139,6 +139,52 @@
               </n-form-item>
             </n-form>
           </n-tab-pane>
+
+          <n-tab-pane name="digiseller" tab="Digiseller设置">
+            <div class="max-w-2xl">
+              <p class="text-sm text-gray-500 mb-4">配置各订阅类型的今日售价，取货时将自动填充对应售价。</p>
+              <n-spin :show="digisellerLoading">
+                <n-table :bordered="false" :single-line="false" size="small">
+                  <thead>
+                    <tr>
+                      <th style="width: 160px">订阅类型</th>
+                      <th>今日售价（USD）</th>
+                      <th style="width: 100px">操作</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="item in digisellerPriceList" :key="item.subscription_type">
+                      <td>
+                        <n-tag :bordered="false" type="info" size="small">{{ item.subscription_type }}</n-tag>
+                      </td>
+                      <td>
+                        <n-input-number
+                          v-model:value="item.price"
+                          :min="0"
+                          :precision="2"
+                          :step="0.5"
+                          placeholder="请输入售价"
+                          style="width: 160px"
+                        >
+                          <template #prefix>$</template>
+                        </n-input-number>
+                      </td>
+                      <td>
+                        <n-button
+                          type="primary"
+                          size="small"
+                          :loading="item.saving"
+                          @click="handleSaveDigisellerPrice(item)"
+                        >
+                          保存
+                        </n-button>
+                      </td>
+                    </tr>
+                  </tbody>
+                </n-table>
+              </n-spin>
+            </div>
+          </n-tab-pane>
         </n-tabs>
       </n-card>
     </n-space>
@@ -146,7 +192,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import {
   NSpace,
   NCard,
@@ -160,8 +206,12 @@ import {
   NCheckboxGroup,
   NCheckbox,
   NButton,
+  NTable,
+  NTag,
+  NSpin,
   useMessage,
 } from 'naive-ui'
+import { getDigisellerPrices, upsertDigisellerPrice } from '@/api/digiseller'
 
 const message = useMessage()
 
@@ -221,6 +271,64 @@ const handleTestEmail = () => {
     message.success('测试邮件发送成功')
   }, 1000)
 }
+
+// 所有订阅类型
+const allSubscriptionTypes = ['pro', 'pro_plus', 'ultra', 'go', 'plus', 'team']
+
+interface DigisellerPriceRow {
+  subscription_type: string
+  price: number
+  saving: boolean
+}
+
+const digisellerLoading = ref(false)
+const digisellerPriceList = ref<DigisellerPriceRow[]>(
+  allSubscriptionTypes.map((t) => ({ subscription_type: t, price: 0, saving: false }))
+)
+
+// 加载已保存的价格配置
+const loadDigisellerPrices = async () => {
+  digisellerLoading.value = true
+  try {
+    const res = await getDigisellerPrices()
+    if (res.code === 200 && res.data) {
+      const map = new Map(res.data.map((item) => [item.subscription_type, item.price]))
+      digisellerPriceList.value.forEach((row) => {
+        if (map.has(row.subscription_type)) {
+          row.price = map.get(row.subscription_type)!
+        }
+      })
+    }
+  } catch (e) {
+    message.error('加载Digiseller价格配置失败')
+  } finally {
+    digisellerLoading.value = false
+  }
+}
+
+// 保存单行价格
+const handleSaveDigisellerPrice = async (item: DigisellerPriceRow) => {
+  item.saving = true
+  try {
+    const res = await upsertDigisellerPrice({
+      subscription_type: item.subscription_type,
+      price: item.price,
+    })
+    if (res.code === 200) {
+      message.success(`${item.subscription_type} 售价保存成功`)
+    } else {
+      message.error(res.message || '保存失败')
+    }
+  } catch (e) {
+    message.error('保存失败')
+  } finally {
+    item.saving = false
+  }
+}
+
+onMounted(() => {
+  loadDigisellerPrices()
+})
 </script>
 
 <style scoped>

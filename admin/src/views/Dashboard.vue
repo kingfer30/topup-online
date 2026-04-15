@@ -123,20 +123,20 @@
                     <span class="type-stat-row-label">收入（CNY）</span>
                     <span class="type-stat-row-value cny">¥{{ item.revenue_cny.toFixed(2) }}</span>
                   </div>
-                  <!-- 库存按订阅类型细分 -->
+                  <!-- 库存按订阅类型细分：成品 -->
                   <div class="type-stat-divider"></div>
                   <div class="type-stat-stock-header">
-                    <span class="type-stat-row-label">库存明细</span>
-                    <span class="type-stat-row-value" :class="item.stock_count > 0 ? 'stock-ok' : 'stock-empty'">
-                      合计 {{ item.stock_count }} 件
+                    <span class="type-stat-row-label">成品库存</span>
+                    <span class="type-stat-row-value" :class="item.product_stock_count > 0 ? 'stock-ok' : 'stock-empty'">
+                      合计 {{ item.product_stock_count }} 件
                     </span>
                   </div>
                   <div
-                    v-if="item.stock_by_type && item.stock_by_type.length > 0"
+                    v-if="item.product_stock_by_type && item.product_stock_by_type.length > 0"
                     class="type-stat-stock-list"
                   >
                     <div
-                      v-for="sub in item.stock_by_type"
+                      v-for="sub in item.product_stock_by_type"
                       :key="sub.subscription_type"
                       class="type-stat-stock-row"
                     >
@@ -146,7 +146,32 @@
                       </span>
                     </div>
                   </div>
-                  <div v-else class="type-stat-stock-empty">暂无库存</div>
+                  <div v-else class="type-stat-stock-empty">暂无成品库存</div>
+
+                  <!-- 库存按订阅类型细分：普号 -->
+                  <div class="type-stat-divider"></div>
+                  <div class="type-stat-stock-header">
+                    <span class="type-stat-row-label">普号库存</span>
+                    <span class="type-stat-row-value" :class="item.regular_stock_count > 0 ? 'stock-ok' : 'stock-empty'">
+                      合计 {{ item.regular_stock_count }} 件
+                    </span>
+                  </div>
+                  <div
+                    v-if="item.regular_stock_by_type && item.regular_stock_by_type.length > 0"
+                    class="type-stat-stock-list"
+                  >
+                    <div
+                      v-for="sub in item.regular_stock_by_type"
+                      :key="sub.subscription_type"
+                      class="type-stat-stock-row"
+                    >
+                      <span class="stock-sub-type">{{ sub.subscription_type || '(未设置)' }}</span>
+                      <span class="stock-sub-count" :class="sub.count > 0 ? 'stock-ok' : 'stock-empty'">
+                        {{ sub.count }} 件
+                      </span>
+                    </div>
+                  </div>
+                  <div v-else class="type-stat-stock-empty">暂无普号库存</div>
                 </div>
               </n-card>
             </n-grid-item>
@@ -203,7 +228,7 @@ const totalRevenueCNY = computed(() =>
   statList.value.reduce((sum, item) => sum + item.revenue_cny, 0)
 )
 const totalStockCount = computed(() =>
-  statList.value.reduce((sum, item) => sum + item.stock_count, 0)
+  statList.value.reduce((sum, item) => sum + item.product_stock_count + item.regular_stock_count, 0)
 )
 
 // 获取统计数据

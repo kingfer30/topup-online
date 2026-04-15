@@ -38,13 +38,17 @@ type AccountCard struct {
 	TwoFA                   string         `json:"2fa" gorm:"column:2fa;type:varchar(100);comment:2fa"`
 	MailUrl                 string         `json:"mail_url" gorm:"type:varchar(50);comment:邮箱地址"`
 	Remark                  string         `json:"remark" gorm:"type:varchar(100);comment:备注"`
+	CodeLink                string         `json:"code_link" gorm:"type:varchar(300);comment:接码链接"`
+	FreezeStatus            int            `json:"freeze_status" gorm:"type:tinyint(2);default:-1;comment:冻结状态 -1未冻结 1已冻结"`
+	FreezeTime              *int64         `json:"freeze_time" gorm:"type:bigint(20);comment:冻结时间"`
+	FreezeRemark            string         `json:"freeze_remark" gorm:"type:varchar(200);comment:冻结备注"`
 	CreatedAt               time.Time      `json:"created_at"`
 	UpdatedAt               time.Time      `json:"updated_at"`
 	DeletedAt               gorm.DeletedAt `json:"deleted_at" gorm:"index"`
 }
 
 // GetAllCardsForExport 获取符合条件的全部卡密（不分页，用于导出）
-func GetAllCardsForExport(tableName string, cardType string, keyword string, subscriptionType string, subscriptionStatus int, isCheck int, purchaseDate int64) ([]AccountCard, error) {
+func GetAllCardsForExport(tableName string, cardType string, keyword string, subscriptionType string, subscriptionStatus int, isCheck int, purchaseDate int64, freezeStatus int) ([]AccountCard, error) {
 	var cards []AccountCard
 
 	query := DB.Table(tableName)
@@ -77,11 +81,16 @@ func GetAllCardsForExport(tableName string, cardType string, keyword string, sub
 		query = query.Where("purchase_date = ?", purchaseDate)
 	}
 
+	// 冻结状态筛选（仅普号列表，0 表示不过滤）
+	if freezeStatus != 0 && cardType == "all" {
+		query = query.Where("freeze_status = ?", freezeStatus)
+	}
+
 	if keyword != "" {
 		query = query.Where("account LIKE ? OR mail_url LIKE ?", "%"+keyword+"%", "%"+keyword+"%")
 	}
 
-	orderClause := "id DESC"
+	orderClause := "freeze_status ASC, updated_at DESC, id DESC"
 	if cardType == "unsold" {
 		orderClause = "sell_status DESC, purchase_date ASC, id ASC"
 	} else if cardType == "sold" {
@@ -93,7 +102,7 @@ func GetAllCardsForExport(tableName string, cardType string, keyword string, sub
 }
 
 // GetCardList 获取卡密列表
-func GetCardList(tableName string, cardType string, page, pageSize int, keyword string, subscriptionType string, subscriptionStatus int, isCheck int, purchaseDate int64) ([]AccountCard, int64, error) {
+func GetCardList(tableName string, cardType string, page, pageSize int, keyword string, subscriptionType string, subscriptionStatus int, isCheck int, purchaseDate int64, freezeStatus int) ([]AccountCard, int64, error) {
 	var cards []AccountCard
 	var total int64
 
@@ -130,6 +139,11 @@ func GetCardList(tableName string, cardType string, page, pageSize int, keyword 
 		query = query.Where("purchase_date = ?", purchaseDate)
 	}
 
+	// 冻结状态筛选（仅普号列表，0 表示不过滤）
+	if freezeStatus != 0 && cardType == "all" {
+		query = query.Where("freeze_status = ?", freezeStatus)
+	}
+
 	// 关键词搜索
 	if keyword != "" {
 		query = query.Where("account LIKE ? OR mail_url LIKE ?", "%"+keyword+"%", "%"+keyword+"%")
@@ -140,9 +154,10 @@ func GetCardList(tableName string, cardType string, page, pageSize int, keyword 
 		return nil, 0, err
 	}
 
-	// 分页查询：未售列表按 sell_status DESC（发货中=2 排前面），已售列表按 sell_date DESC，其余按 id DESC
+	// 分页查询：未售列表按 sell_status DESC（发货中=2 排前面），已售列表按 sell_date DESC
+	// 普号列表：未冻结（freeze_status=-1）排前，已冻结（freeze_status=1）排后，同组内按 updated_at DESC
 	offset := (page - 1) * pageSize
-	orderClause := "id DESC"
+	orderClause := "freeze_status ASC, updated_at DESC, id DESC"
 	if cardType == "unsold" {
 		orderClause = "sell_status DESC, purchase_date ASC, id ASC"
 	} else if cardType == "sold" {
@@ -210,7 +225,30 @@ func UpdateCard(tableName string, id int, card *AccountCard) error {
 	}
 
 	card.Id = id
-	return DB.Table(tableName).Where("id = ?", id).Updates(card).Error
+	// 只更新编辑表单中实际可编辑的字段，避免把 purchase_date/subscription_time
+	// 等表单未涉及的时间字段误写为 NULL（GORM map 更新会写入 nil 值）
+	updates := map[string]interface{}{
+		"account":             card.Account,
+		"password":            card.Password,
+		"mail_password":       card.MailPassword,
+		"subscription_status": card.SubscriptionStatus,
+		"subscription_type":   card.SubscriptionType,
+		"purchase_price":      card.PurchasePrice,
+		"purchase_from":       card.PurchaseFrom,
+		"purchase_by":         card.PurchaseBy,
+		"sell_price":          card.SellPrice,
+		"sell_to":             card.SellTo,
+		"sell_status":         card.SellStatus,
+		"account_type":        card.AccountType,
+		"status":              card.Status,
+		"api_key":             card.ApiKey,
+		"token":               card.Token,
+		"2fa":                 card.TwoFA,
+		"mail_url":            card.MailUrl,
+		"remark":              card.Remark,
+		"code_link":           card.CodeLink,
+	}
+	return DB.Table(tableName).Where("id = ?", id).Updates(updates).Error
 }
 
 // DeleteCard 删除卡密（软删除）
@@ -259,11 +297,12 @@ func CheckTableExists(tableName string) bool {
 	return count > 0
 }
 
-// GetUnsoldSubscriptionTypes 获取未售出的订阅类型列表
+// GetUnsoldSubscriptionTypes 获取未售出的订阅类型列表（仅成品 account_type=2）
 func GetUnsoldSubscriptionTypes(tableName string) ([]string, error) {
 	var types []string
 	err := DB.Table(tableName).
 		Where("sell_status = ?", 1).
+		Where("account_type = ?", 2).
 		Where("subscription_type != ?", "").
 		Distinct("subscription_type").
 		Pluck("subscription_type", &types).Error
@@ -277,9 +316,10 @@ func PickupCard(tableName string, subscriptionType string, format string) (*Acco
 
 	// 开启事务
 	err := DB.Transaction(func(tx *gorm.DB) error {
-		// 查询一条未售出的卡密，按订阅过期时间升序（先进先出）
+		// 查询一条未售出的成品卡密（account_type=2），按订阅过期时间升序（先进先出）
 		query := tx.Table(tableName).
 			Where("sell_status = ?", 1).
+			Where("account_type = ?", 2).
 			Where("subscription_type = ?", subscriptionType).
 			Order("subscription_expired_time ASC, id ASC")
 
@@ -377,12 +417,14 @@ type SubscriptionTypeStat struct {
 
 // CardTypeStat 卡密类型统计
 type CardTypeStat struct {
-	Category    string                 `json:"category"`
-	SoldCount   int64                  `json:"sold_count"`
-	StockCount  int64                  `json:"stock_count"`   // 剩余未售库存合计
-	StockByType []SubscriptionTypeStat `json:"stock_by_type"` // 按订阅类型细分库存
-	RevenueUSD  float64                `json:"revenue_usd"`
-	RevenueCNY  float64                `json:"revenue_cny"`
+	Category           string                 `json:"category"`
+	SoldCount          int64                  `json:"sold_count"`
+	ProductStockCount  int64                  `json:"product_stock_count"`  // 成品未售库存合计（account_type=2）
+	ProductStockByType []SubscriptionTypeStat `json:"product_stock_by_type"` // 成品按订阅类型细分
+	RegularStockCount  int64                  `json:"regular_stock_count"`  // 普号库存合计（account_type=1，未冻结）
+	RegularStockByType []SubscriptionTypeStat `json:"regular_stock_by_type"` // 普号按订阅类型细分
+	RevenueUSD         float64                `json:"revenue_usd"`
+	RevenueCNY         float64                `json:"revenue_cny"`
 }
 
 // GetDashboardStats 获取控制台按卡密类型统计销售数据
@@ -431,34 +473,53 @@ func GetDashboardStats(dateStr string) ([]CardTypeStat, error) {
 			continue
 		}
 
-		// 按订阅类型统计剩余未售库存（sell_status = 1 未出售）
+		// 按订阅类型统计成品未售库存（account_type=2, sell_status=1）
 		type subTypeRow struct {
 			SubscriptionType string `gorm:"column:subscription_type"`
 			Count            int64  `gorm:"column:cnt"`
 		}
-		var subTypeRows []subTypeRow
+		var productRows []subTypeRow
 		DB.Raw(fmt.Sprintf(
-			"SELECT subscription_type, COUNT(*) AS cnt FROM `%s` WHERE sell_status = 1 AND deleted_at IS NULL GROUP BY subscription_type ORDER BY cnt DESC",
+			"SELECT subscription_type, COUNT(*) AS cnt FROM `%s` WHERE account_type = 2 AND sell_status = 1 AND deleted_at IS NULL GROUP BY subscription_type ORDER BY cnt DESC",
 			tableName,
-		)).Scan(&subTypeRows)
+		)).Scan(&productRows)
 
-		stockByType := make([]SubscriptionTypeStat, 0, len(subTypeRows))
-		var totalStock int64
-		for _, row := range subTypeRows {
-			stockByType = append(stockByType, SubscriptionTypeStat{
+		productStockByType := make([]SubscriptionTypeStat, 0, len(productRows))
+		var productStock int64
+		for _, row := range productRows {
+			productStockByType = append(productStockByType, SubscriptionTypeStat{
 				SubscriptionType: row.SubscriptionType,
 				Count:            row.Count,
 			})
-			totalStock += row.Count
+			productStock += row.Count
+		}
+
+		// 按订阅类型统计普号库存（account_type=1，排除已冻结）
+		var regularRows []subTypeRow
+		DB.Raw(fmt.Sprintf(
+			"SELECT subscription_type, COUNT(*) AS cnt FROM `%s` WHERE account_type = 1 AND (freeze_status IS NULL OR freeze_status != 1) AND deleted_at IS NULL GROUP BY subscription_type ORDER BY cnt DESC",
+			tableName,
+		)).Scan(&regularRows)
+
+		regularStockByType := make([]SubscriptionTypeStat, 0, len(regularRows))
+		var regularStock int64
+		for _, row := range regularRows {
+			regularStockByType = append(regularStockByType, SubscriptionTypeStat{
+				SubscriptionType: row.SubscriptionType,
+				Count:            row.Count,
+			})
+			regularStock += row.Count
 		}
 
 		stats = append(stats, CardTypeStat{
-			Category:    category,
-			SoldCount:   soldResult.SoldCount,
-			StockCount:  totalStock,
-			StockByType: stockByType,
-			RevenueUSD:  soldResult.RevenueUSD,
-			RevenueCNY:  soldResult.RevenueUSD * 7,
+			Category:           category,
+			SoldCount:          soldResult.SoldCount,
+			ProductStockCount:  productStock,
+			ProductStockByType: productStockByType,
+			RegularStockCount:  regularStock,
+			RegularStockByType: regularStockByType,
+			RevenueUSD:         soldResult.RevenueUSD,
+			RevenueCNY:         soldResult.RevenueUSD * 7,
 		})
 	}
 
@@ -482,9 +543,18 @@ func BatchUpgradeToProduct(tableName string, req BatchUpgradeRequest) (int64, er
 		return 0, errors.New("未选择任何记录")
 	}
 
+	// 过滤掉已冻结的卡密
+	var validIDs []int
+	DB.Table(tableName).
+		Where("id IN ? AND (freeze_status IS NULL OR freeze_status != 1)", req.IDs).
+		Pluck("id", &validIDs)
+	if len(validIDs) == 0 {
+		return 0, errors.New("所选卡密均已冻结，无法更新为成品")
+	}
+
 	// 购买价格累加（单独执行，使用 SQL 表达式）
 	if req.PurchasePrice != nil {
-		err := DB.Table(tableName).Where("id IN ?", req.IDs).
+		err := DB.Table(tableName).Where("id IN ?", validIDs).
 			UpdateColumn("purchase_price", gorm.Expr("COALESCE(purchase_price, 0) + ?", *req.PurchasePrice)).Error
 		if err != nil {
 			return 0, fmt.Errorf("更新购买价格失败: %v", err)
@@ -509,7 +579,27 @@ func BatchUpgradeToProduct(tableName string, req BatchUpgradeRequest) (int64, er
 		updates["purchase_date"] = req.PurchaseDate
 	}
 
-	result := DB.Table(tableName).Where("id IN ?", req.IDs).Updates(updates)
+	result := DB.Table(tableName).Where("id IN ?", validIDs).Updates(updates)
+	return result.RowsAffected, result.Error
+}
+
+// BatchFreezeCards 批量冻结/解冻普号卡密
+// freeze=1 冻结，freeze=-1 解冻
+func BatchFreezeCards(tableName string, ids []int, freeze int, remark string) (int64, error) {
+	if len(ids) == 0 {
+		return 0, errors.New("未选择任何记录")
+	}
+	updates := map[string]interface{}{
+		"freeze_status": freeze,
+		"freeze_remark": remark,
+	}
+	if freeze == 1 {
+		now := time.Now().Unix()
+		updates["freeze_time"] = now
+	} else {
+		updates["freeze_time"] = nil
+	}
+	result := DB.Table(tableName).Where("id IN ?", ids).Updates(updates)
 	return result.RowsAffected, result.Error
 }
 
@@ -553,7 +643,7 @@ func GetUnsoldCardsWithToken(tableName string, limit int) ([]*AccountCard, error
 	now := time.Now()
 	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).Unix()
 	err := DB.Table(tableName).
-		Where("sell_status = ? AND token IS NOT NULL AND token != ''", 1).
+		Where("sell_status = ? ADN account_type=2 AND token IS NOT NULL AND token != ''", 1).
 		Where("check_time IS NULL OR check_time < ?", todayStart).
 		Limit(limit).
 		Find(&cards).Error
@@ -585,6 +675,10 @@ func MigrateCardTableColumns() error {
 		{"subscription_credits", "decimal(10,2) NULL COMMENT '订阅额度'"},
 		{"is_check", "tinyint(2) NOT NULL DEFAULT -1 COMMENT '检查状态 -1未检查 1检查成功 2检查失败'"},
 		{"check_time", "bigint(20) NULL COMMENT '检查时间'"},
+		{"code_link", "varchar(300) NULL COMMENT '接码链接'"},
+		{"freeze_status", "tinyint(2) NOT NULL DEFAULT -1 COMMENT '冻结状态 -1未冻结 1已冻结'"},
+		{"freeze_time", "bigint(20) NULL COMMENT '冻结时间'"},
+		{"freeze_remark", "varchar(200) NULL COMMENT '冻结备注'"},
 	}
 
 	for _, tableName := range tableNames {

@@ -38,6 +38,7 @@ type CardRequest struct {
 	TwoFA                   string   `json:"2fa"`
 	MailUrl                 string   `json:"mail_url"`
 	Remark                  string   `json:"remark"`
+	CodeLink                string   `json:"code_link"`
 }
 
 // GetCardList 获取卡密列表
@@ -59,11 +60,13 @@ func GetCardList(c *gin.Context) {
 	subscriptionStatusStr := c.DefaultQuery("subscription_status", "0")
 	isCheckStr := c.DefaultQuery("is_check", "0")
 	purchaseDateStr := c.Query("purchase_date")
+	freezeStatusStr := c.DefaultQuery("freeze_status", "0")
 
 	page, _ := strconv.Atoi(pageStr)
 	pageSize, _ := strconv.Atoi(pageSizeStr)
 	subscriptionStatus, _ := strconv.Atoi(subscriptionStatusStr)
 	isCheck, _ := strconv.Atoi(isCheckStr)
+	freezeStatus, _ := strconv.Atoi(freezeStatusStr)
 
 	// 将购买时间输入转换为 Unix 时间戳：
 	// - 纯数字（如 "1772678419"）：直接当时间戳使用
@@ -97,7 +100,7 @@ func GetCardList(c *gin.Context) {
 	}
 
 	// 查询卡密列表
-	cards, total, err := model.GetCardList(tableName, cardType, page, pageSize, keyword, subscriptionType, subscriptionStatus, isCheck, purchaseDate)
+	cards, total, err := model.GetCardList(tableName, cardType, page, pageSize, keyword, subscriptionType, subscriptionStatus, isCheck, purchaseDate, freezeStatus)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"code":    500,
@@ -222,6 +225,7 @@ func CreateCard(c *gin.Context) {
 		TwoFA:                   req.TwoFA,
 		MailUrl:                 req.MailUrl,
 		Remark:                  req.Remark,
+		CodeLink:                req.CodeLink,
 	}
 
 	// 设置默认值
@@ -318,6 +322,7 @@ func UpdateCard(c *gin.Context) {
 		TwoFA:                   req.TwoFA,
 		MailUrl:                 req.MailUrl,
 		Remark:                  req.Remark,
+		CodeLink:                req.CodeLink,
 	}
 
 	if err := model.UpdateCard(tableName, id, card); err != nil {
@@ -436,6 +441,7 @@ func BatchImportCards(c *gin.Context) {
 			TwoFA:                   cardReq.TwoFA,
 			MailUrl:                 cardReq.MailUrl,
 			Remark:                  cardReq.Remark,
+			CodeLink:                cardReq.CodeLink,
 		}
 
 		// 设置默认值
@@ -750,6 +756,7 @@ func ExportCards(c *gin.Context) {
 	cardType := c.DefaultQuery("type", "all")
 	keyword := c.Query("keyword")
 	subscriptionType := c.Query("subscription_type")
+	exportFreezeStatus, _ := strconv.Atoi(c.DefaultQuery("freeze_status", "0"))
 
 	tableName := model.GetTableNameByCategory(category)
 	if !model.CheckTableExists(tableName) {
@@ -757,7 +764,7 @@ func ExportCards(c *gin.Context) {
 		return
 	}
 
-	cards, err := model.GetAllCardsForExport(tableName, cardType, keyword, subscriptionType, 0, 0, 0)
+	cards, err := model.GetAllCardsForExport(tableName, cardType, keyword, subscriptionType, 0, 0, 0, exportFreezeStatus)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{"code": 500, "message": "导出失败: " + err.Error()})
 		return
@@ -907,5 +914,128 @@ func EnableOnDemandSpendHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"code":    200,
 		"message": "按需付费已成功开启",
+	})
+}
+
+// UpdateCardRemarkRequest 更新备注请求
+type UpdateCardRemarkRequest struct {
+	Category string `json:"category" binding:"required"`
+	Id       int    `json:"id" binding:"required"`
+	Remark   string `json:"remark"`
+}
+
+// UpdateCardRemark 单独更新卡密备注字段
+func UpdateCardRemark(c *gin.Context) {
+	var req UpdateCardRemarkRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"code":    400,
+			"message": "参数错误: " + err.Error(),
+		})
+		return
+	}
+
+	tableName := model.GetTableNameByCategory(req.Category)
+	if !model.CheckTableExists(tableName) {
+		c.JSON(http.StatusOK, gin.H{
+			"code":    404,
+			"message": "该卡密类别不存在",
+		})
+		return
+	}
+
+	if err := model.DB.Table(tableName).Where("id = ?", req.Id).Update("remark", req.Remark).Error; err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"code":    500,
+			"message": "更新备注失败: " + err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    200,
+		"message": "备注已更新",
+	})
+}
+
+// BatchEnableOnDemandSpendHandler 批量为卡密开启按需付费
+func BatchEnableOnDemandSpendHandler(c *gin.Context) {
+	var req struct {
+		Category string `json:"category" binding:"required"`
+		IDs      []int  `json:"ids" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusOK, gin.H{"code": 400, "message": "参数错误: " + err.Error()})
+		return
+	}
+
+	tableName := model.GetTableNameByCategory(req.Category)
+	if !model.CheckTableExists(tableName) {
+		c.JSON(http.StatusOK, gin.H{"code": 404, "message": "该卡密类别不存在"})
+		return
+	}
+
+	successCount := 0
+	failMessages := []string{}
+
+	for _, id := range req.IDs {
+		card, err := model.GetCardById(tableName, id)
+		if err != nil || card.Token == "" {
+			failMessages = append(failMessages, fmt.Sprintf("ID %d: token 为空或不存在", id))
+			continue
+		}
+		workosID, err := scheduler.ExtractWorkosID(card.Token)
+		if err != nil {
+			failMessages = append(failMessages, fmt.Sprintf("ID %d: 提取 workos_id 失败", id))
+			continue
+		}
+		if err := scheduler.EnableOnDemandSpend(workosID, card.Token); err != nil {
+			failMessages = append(failMessages, fmt.Sprintf("ID %d: %v", id, err))
+			continue
+		}
+		successCount++
+	}
+
+	msg := fmt.Sprintf("成功开启 %d 条", successCount)
+	if len(failMessages) > 0 {
+		msg += fmt.Sprintf("，失败 %d 条", len(failMessages))
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 200, "message": msg, "data": successCount})
+}
+
+// BatchFreezeCards 批量冻结/解冻普号卡密
+func BatchFreezeCards(c *gin.Context) {
+	var req struct {
+		Category string `json:"category" binding:"required"`
+		IDs      []int  `json:"ids" binding:"required"`
+		Freeze   int    `json:"freeze"` // 1=冻结 -1=解冻
+		Remark   string `json:"remark"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusOK, gin.H{"code": 400, "message": "参数错误: " + err.Error()})
+		return
+	}
+
+	tableName := model.GetTableNameByCategory(req.Category)
+	if !model.CheckTableExists(tableName) {
+		c.JSON(http.StatusOK, gin.H{"code": 404, "message": "该卡密类别不存在"})
+		return
+	}
+
+	affected, err := model.BatchFreezeCards(tableName, req.IDs, req.Freeze, req.Remark)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"code": 500, "message": "操作失败: " + err.Error()})
+		return
+	}
+
+	action := "冻结"
+	if req.Freeze == -1 {
+		action = "解冻"
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"code":    200,
+		"message": fmt.Sprintf("成功%s %d 条记录", action, affected),
+		"data":    affected,
 	})
 }

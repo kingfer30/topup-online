@@ -69,9 +69,13 @@ func SetApiRouter(router *gin.Engine) {
 			adminGroup.POST("/cards/rollback-sold", controller.RollbackSoldCard)                      // 回滚已售（已出售→未出售）
 			adminGroup.POST("/cards/batch-upgrade", controller.BatchUpgradeToProduct)                 // 批量升级为成品
 			adminGroup.POST("/cards/batch-pickup", controller.BatchPickup)                            // 批量取货
-			adminGroup.GET("/cards/export", controller.ExportCards)                                    // 导出卡密
-			adminGroup.POST("/cards/batch-check", controller.BatchCheckCards)                          // 批量检查订阅状态
-			adminGroup.POST("/cards/enable-on-demand", controller.EnableOnDemandSpendHandler)           // 开启按需付费
+			adminGroup.GET("/cards/export", controller.ExportCards)                                   // 导出卡密
+			adminGroup.POST("/cards/batch-check", controller.BatchCheckCards)                         // 批量检查订阅状态
+			adminGroup.POST("/cards/enable-on-demand", controller.EnableOnDemandSpendHandler)               // 开启按需付费
+			adminGroup.POST("/cards/batch-enable-on-demand", controller.BatchEnableOnDemandSpendHandler)   // 批量开启按需付费
+			adminGroup.POST("/cards/update-remark", controller.UpdateCardRemark)                      // 单独更新备注
+			adminGroup.POST("/cards/goto-pro", controller.GotoPro)                                   // 提链：获取 Cursor Pro 付款链接
+			adminGroup.POST("/cards/batch-freeze", controller.BatchFreezeCards)                     // 批量冻结/解冻普号
 
 			// 话术管理接口（管理员专用）
 			adminGroup.GET("/sales-talks", controller.GetSalesTalkList)                   // 获取话术列表
@@ -82,7 +86,9 @@ func SetApiRouter(router *gin.Engine) {
 			adminGroup.POST("/sales-talks/batch-tag", controller.BatchUpdateSalesTalkTag) // 批量更新标签
 
 			// Digiseller 对接接口（管理员专用）
-			adminGroup.GET("/digiseller/check-code/:unique_code", controller.CheckUniqueCode) // 查询唯一码支付信息
+			adminGroup.GET("/digiseller/check-code/:unique_code", controller.CheckUniqueCode)  // 查询唯一码支付信息
+			adminGroup.GET("/digiseller/prices", controller.GetDigisellerPrices)               // 获取订阅类型售价配置
+			adminGroup.POST("/digiseller/prices", controller.UpsertDigisellerPrice)            // 新增或更新订阅类型售价
 		}
 
 		// 用户认证相关（无需认证）

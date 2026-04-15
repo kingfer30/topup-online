@@ -30,6 +30,10 @@ export interface Card {
   '2fa'?: string
   mail_url?: string
   remark?: string
+  code_link?: string
+  freeze_status?: number
+  freeze_time?: number
+  freeze_remark?: string
   created_at?: string
   updated_at?: string
 }
@@ -45,6 +49,7 @@ export interface CardListParams {
   subscription_status?: number // 已售列表订阅状态过滤
   is_check?: number            // 检查状态过滤 -1未检查 1检查成功 2检查失败
   subscription_time?: string   // 订阅时间精确查询，格式 "2006-01-02 15:04:05"
+  freeze_status?: number       // 冻结状态过滤 -1未冻结 1已冻结（仅普号列表）
 }
 
 // 卡密列表响应
@@ -57,7 +62,7 @@ export interface CardListResponse {
 
 // 创建/更新卡密请求
 export interface CardRequest {
-  account: string
+  account?: string
   password?: string
   mail_password?: string
   subscription_status?: number
@@ -80,6 +85,7 @@ export interface CardRequest {
   '2fa'?: string
   mail_url?: string
   remark?: string
+  code_link?: string
 }
 
 // 获取卡密列表
@@ -187,12 +193,14 @@ export interface SubscriptionTypeStat {
 
 // 控制台统计 - 按卡密类型
 export interface CardTypeStat {
-  category: string                       // 卡密类型名称
-  sold_count: number                     // 今日售出数量
-  stock_count: number                    // 剩余未售库存合计
-  stock_by_type: SubscriptionTypeStat[]  // 按订阅类型细分库存
-  revenue_usd: number                    // 今日收入（美元）
-  revenue_cny: number                    // 今日收入（人民币，汇率7）
+  category: string                               // 卡密类型名称
+  sold_count: number                             // 今日售出数量
+  product_stock_count: number                    // 成品未售库存合计（account_type=2）
+  product_stock_by_type: SubscriptionTypeStat[]  // 成品按订阅类型细分
+  regular_stock_count: number                    // 普号库存合计（account_type=1，未冻结）
+  regular_stock_by_type: SubscriptionTypeStat[]  // 普号按订阅类型细分
+  revenue_usd: number                            // 今日收入（美元）
+  revenue_cny: number                            // 今日收入（人民币，汇率7）
 }
 
 // 获取控制台统计数据，date 格式 YYYY-MM-DD，不传则默认今天
@@ -248,5 +256,33 @@ export const batchCheckCards = (data: BatchCheckRequest): Promise<ApiResponse<nu
 // 开启按需付费接口
 export const enableOnDemandSpend = (category: string, id: number): Promise<ApiResponse> => {
   return http.post('/admin/cards/enable-on-demand', { category, id }) as Promise<ApiResponse>
+}
+
+// 批量开启按需付费接口
+export const batchEnableOnDemandSpend = (category: string, ids: number[]): Promise<ApiResponse<number>> => {
+  return http.post('/admin/cards/batch-enable-on-demand', { category, ids }) as Promise<ApiResponse<number>>
+}
+
+// 提链：获取 Cursor Pro 付款链接
+export const gotoProUpgrade = (token: string, subscriptionType: string): Promise<ApiResponse<string>> => {
+  return http.post('/admin/cards/goto-pro', { token, subscription_type: subscriptionType }) as Promise<ApiResponse<string>>
+}
+
+// 单独更新卡密备注
+export const updateCardRemark = (category: string, id: number, remark: string): Promise<ApiResponse> => {
+  return http.post('/admin/cards/update-remark', { category, id, remark }) as Promise<ApiResponse>
+}
+
+// 批量冻结/解冻请求
+export interface BatchFreezeRequest {
+  category: string
+  ids: number[]
+  freeze: number  // 1=冻结 -1=解冻
+  remark?: string
+}
+
+// 批量冻结/解冻接口
+export const batchFreezeCards = (data: BatchFreezeRequest): Promise<ApiResponse<number>> => {
+  return http.post('/admin/cards/batch-freeze', data) as Promise<ApiResponse<number>>
 }
 
