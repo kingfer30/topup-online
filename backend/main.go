@@ -53,6 +53,10 @@ func main() {
 		}
 		logger.SysLog("Database migration completed")
 
+		if err := model.EnsureAIMenuPlacement(); err != nil {
+			logger.SysLog("EnsureAIMenuPlacement: " + err.Error())
+		}
+
 		// 启动镜像卡密 Token 定时获取任务（每 30 分钟执行一次）
 		logger.SysLog("Starting MirrorCard Token Scheduler...")
 		tokenScheduler := scheduler.NewMirrorCardTokenScheduler(30)

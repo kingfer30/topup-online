@@ -311,8 +311,14 @@ func seedDefaultMenus(db *gorm.DB) error {
 		return fmt.Errorf("创建控制台菜单失败: %w", err)
 	}
 
-	// 2. 用户管理
-	userMenu := &model.Menu{ParentId: 0, Title: "用户管理", Key: "user", Icon: "👥", Sort: 2}
+	// 2. AI翻译
+	aiTranslate := &model.Menu{ParentId: 0, Title: "AI翻译", Key: "ai-translate", Path: "/admin/ai-translate", Icon: "🌐", Sort: 2}
+	if err := createMenu(aiTranslate); err != nil {
+		return fmt.Errorf("创建AI翻译菜单失败: %w", err)
+	}
+
+	// 3. 用户管理
+	userMenu := &model.Menu{ParentId: 0, Title: "用户管理", Key: "user", Icon: "👥", Sort: 3}
 	if err := createMenu(userMenu); err != nil {
 		return fmt.Errorf("创建用户管理菜单失败: %w", err)
 	}
@@ -327,8 +333,8 @@ func seedDefaultMenus(db *gorm.DB) error {
 		}
 	}
 
-	// 3. 订单管理
-	orderMenu := &model.Menu{ParentId: 0, Title: "订单管理", Key: "order", Icon: "📦", Sort: 3}
+	// 4. 订单管理
+	orderMenu := &model.Menu{ParentId: 0, Title: "订单管理", Key: "order", Icon: "📦", Sort: 4}
 	if err := createMenu(orderMenu); err != nil {
 		return fmt.Errorf("创建订单管理菜单失败: %w", err)
 	}
@@ -343,14 +349,14 @@ func seedDefaultMenus(db *gorm.DB) error {
 		}
 	}
 
-	// 4. 话术管理
-	salesTalkMenu := &model.Menu{ParentId: 0, Title: "话术管理", Key: "sales-talk", Path: "/admin/sales-talks", Icon: "💬", Sort: 4}
+	// 5. 话术管理
+	salesTalkMenu := &model.Menu{ParentId: 0, Title: "话术管理", Key: "sales-talk", Path: "/admin/sales-talks", Icon: "💬", Sort: 5}
 	if err := createMenu(salesTalkMenu); err != nil {
 		return fmt.Errorf("创建话术管理菜单失败: %w", err)
 	}
 
-	// 5. 镜像管理
-	mirrorMenu := &model.Menu{ParentId: 0, Title: "镜像管理", Key: "mirror", Icon: "🔐", Sort: 5}
+	// 6. 镜像管理
+	mirrorMenu := &model.Menu{ParentId: 0, Title: "镜像管理", Key: "mirror", Icon: "🔐", Sort: 6}
 	if err := createMenu(mirrorMenu); err != nil {
 		return fmt.Errorf("创建镜像管理菜单失败: %w", err)
 	}
@@ -360,8 +366,8 @@ func seedDefaultMenus(db *gorm.DB) error {
 		return fmt.Errorf("创建镜像管理子菜单失败: %w", err)
 	}
 
-	// 6. 系统设置
-	systemMenu := &model.Menu{ParentId: 0, Title: "系统设置", Key: "system", Icon: "⚙️", Sort: 6}
+	// 7. 系统设置
+	systemMenu := &model.Menu{ParentId: 0, Title: "系统设置", Key: "system", Icon: "⚙️", Sort: 7}
 	if err := createMenu(systemMenu); err != nil {
 		return fmt.Errorf("创建系统设置菜单失败: %w", err)
 	}

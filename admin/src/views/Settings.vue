@@ -50,6 +50,42 @@
             </n-form>
           </n-tab-pane>
 
+          <n-tab-pane name="ai-model" tab="AI模型设置">
+            <n-form
+              ref="aiFormRef"
+              :model="aiSettings"
+              label-placement="left"
+              label-width="120px"
+              class="max-w-2xl"
+            >
+              <n-form-item label="模型名称">
+                <n-input v-model:value="aiSettings.model_name" placeholder="例如 gpt-4o-mini" />
+              </n-form-item>
+              <n-form-item label="Base URL">
+                <n-input
+                  v-model:value="aiSettings.base_url"
+                  placeholder="https://api.openai.com（不含 /v1/chat/completions）"
+                />
+              </n-form-item>
+              <n-form-item label="API Key">
+                <n-input
+                  v-model:value="aiSettings.api_key"
+                  type="password"
+                  show-password-on="click"
+                  placeholder="留空则不修改已保存的密钥"
+                />
+              </n-form-item>
+              <n-form-item>
+                <n-space vertical :size="8">
+                  <n-text depth="3" style="font-size: 12px">
+                    供「AI翻译」等后台能力使用，需为 OpenAI 兼容的 Chat Completions 接口。
+                  </n-text>
+                  <n-button type="primary" :loading="aiSaving" @click="handleSaveAI">保存 AI 配置</n-button>
+                </n-space>
+              </n-form-item>
+            </n-form>
+          </n-tab-pane>
+
           <n-tab-pane name="payment" tab="支付设置">
             <n-form
               ref="paymentFormRef"
@@ -209,13 +245,23 @@ import {
   NTable,
   NTag,
   NSpin,
+  NText,
   useMessage,
 } from 'naive-ui'
 import { getDigisellerPrices, upsertDigisellerPrice } from '@/api/digiseller'
+import { getAdminAISettings, updateAdminAISettings } from '@/api/ai'
 
 const message = useMessage()
 
 // 基础设置
+const aiFormRef = ref()
+const aiSaving = ref(false)
+const aiSettings = ref({
+  model_name: '',
+  base_url: '',
+  api_key: '',
+})
+
 const basicFormRef = ref()
 const basicSettings = ref({
   siteName: 'ChatGPT充值平台',
@@ -245,6 +291,41 @@ const notificationSettings = ref({
 })
 
 // 保存方法
+const loadAISettings = async () => {
+  try {
+    const res = await getAdminAISettings()
+    if (res.code === 200 && res.data) {
+      aiSettings.value.model_name = res.data.model_name || ''
+      aiSettings.value.base_url = res.data.base_url || ''
+      aiSettings.value.api_key = ''
+    }
+  } catch {
+    message.error('加载 AI 模型配置失败')
+  }
+}
+
+const handleSaveAI = async () => {
+  aiSaving.value = true
+  try {
+    const res = await updateAdminAISettings({
+      model_name: aiSettings.value.model_name,
+      base_url: aiSettings.value.base_url,
+      api_key: aiSettings.value.api_key,
+    })
+    if (res.code === 200) {
+      message.success('AI 配置已保存')
+      aiSettings.value.api_key = ''
+      await loadAISettings()
+    } else {
+      message.error(res.message || '保存失败')
+    }
+  } catch {
+    message.error('保存失败')
+  } finally {
+    aiSaving.value = false
+  }
+}
+
 const handleSaveBasic = () => {
   message.success('基础设置保存成功')
 }
@@ -328,6 +409,7 @@ const handleSaveDigisellerPrice = async (item: DigisellerPriceRow) => {
 
 onMounted(() => {
   loadDigisellerPrices()
+  loadAISettings()
 })
 </script>
 

@@ -51,7 +51,7 @@ type AccountCard struct {
 func GetAllCardsForExport(tableName string, cardType string, keyword string, subscriptionType string, subscriptionStatus int, isCheck int, purchaseDate int64, freezeStatus int) ([]AccountCard, error) {
 	var cards []AccountCard
 
-	query := DB.Table(tableName)
+	query := DB.Table(tableName).Where("status != ?", -1)
 
 	switch cardType {
 	case "all":
@@ -76,9 +76,10 @@ func GetAllCardsForExport(tableName string, cardType string, keyword string, sub
 		query = query.Where("is_check = ?", isCheck)
 	}
 
-	// 购买时间精确匹配（未售/已售列表均支持，0 表示不过滤）
+	// 购买时间按范围（未售/已售列表均支持，0 表示不过滤）
+	// purchaseDate 表示 startOfDay，end=start+86400
 	if purchaseDate > 0 && (cardType == "sold" || cardType == "unsold") {
-		query = query.Where("purchase_date = ?", purchaseDate)
+		query = query.Where("purchase_date >= ? AND purchase_date < ?", purchaseDate, purchaseDate+86400)
 	}
 
 	// 冻结状态筛选（仅普号列表，0 表示不过滤）
@@ -107,7 +108,7 @@ func GetCardList(tableName string, cardType string, page, pageSize int, keyword 
 	var total int64
 
 	// 构建查询
-	query := DB.Table(tableName)
+	query := DB.Table(tableName).Where("status != ?", -1)
 
 	// 根据类型筛选
 	switch cardType {
@@ -134,9 +135,9 @@ func GetCardList(tableName string, cardType string, page, pageSize int, keyword 
 		query = query.Where("is_check = ?", isCheck)
 	}
 
-	// 购买时间精确匹配（未售/已售列表均支持，0 表示不过滤）
+	// 购买时间按范围（未售/已售列表均支持，0 表示不过滤）
 	if purchaseDate > 0 && (cardType == "sold" || cardType == "unsold") {
-		query = query.Where("purchase_date = ?", purchaseDate)
+		query = query.Where("purchase_date >= ? AND purchase_date < ?", purchaseDate, purchaseDate+86400)
 	}
 
 	// 冻结状态筛选（仅普号列表，0 表示不过滤）
@@ -177,7 +178,7 @@ func GetCardsByIds(tableName string, ids []int) ([]*AccountCard, error) {
 	}
 	var cards []*AccountCard
 	err := DB.Table(tableName).
-		Where("id IN ? AND token IS NOT NULL AND token != ''", ids).
+		Where("id IN ? AND status != ? AND token IS NOT NULL AND token != ''", ids, -1).
 		Find(&cards).Error
 	return cards, err
 }
@@ -188,7 +189,7 @@ func GetCardById(tableName string, id int) (*AccountCard, error) {
 		return nil, errors.New("id 为空")
 	}
 	var card AccountCard
-	err := DB.Table(tableName).First(&card, "id = ?", id).Error
+	err := DB.Table(tableName).Where("status != ?", -1).First(&card, "id = ?", id).Error
 	return &card, err
 }
 
@@ -303,6 +304,7 @@ func GetUnsoldSubscriptionTypes(tableName string) ([]string, error) {
 	err := DB.Table(tableName).
 		Where("sell_status = ?", 1).
 		Where("account_type = ?", 2).
+		Where("status != ?", -1).
 		Where("subscription_type != ?", "").
 		Distinct("subscription_type").
 		Pluck("subscription_type", &types).Error
@@ -320,6 +322,7 @@ func PickupCard(tableName string, subscriptionType string, format string) (*Acco
 		query := tx.Table(tableName).
 			Where("sell_status = ?", 1).
 			Where("account_type = ?", 2).
+			Where("status != ?", -1).
 			Where("subscription_type = ?", subscriptionType).
 			Order("subscription_expired_time ASC, id ASC")
 
@@ -366,7 +369,7 @@ func BatchPickup(tableName string, ids []int, sellPrice *float64, sellTo string)
 	}
 
 	result := DB.Table(tableName).
-		Where("id IN ? AND sell_status IN ?", ids, []int{1, 2}).
+		Where("id IN ? AND status != ? AND sell_status IN ?", ids, -1, []int{1, 2}).
 		Updates(updates)
 	return result.RowsAffected, result.Error
 }
@@ -377,7 +380,7 @@ func RollbackSoldCard(tableName string, id int) error {
 		return errors.New("id 为空")
 	}
 
-	result := DB.Table(tableName).Where("id = ? AND sell_status = ?", id, 3).Updates(map[string]interface{}{
+	result := DB.Table(tableName).Where("id = ? AND status != ? AND sell_status = ?", id, -1, 3).Updates(map[string]interface{}{
 		"sell_status":   1,
 		"sell_price":    nil,
 		"sell_date":     nil,
@@ -399,7 +402,7 @@ func RollbackPickup(tableName string, id int) error {
 		return errors.New("id 为空")
 	}
 
-	result := DB.Table(tableName).Where("id = ? AND sell_status = ?", id, 2).Update("sell_status", 1)
+	result := DB.Table(tableName).Where("id = ? AND status != ? AND sell_status = ?", id, -1, 2).Update("sell_status", 1)
 	if result.Error != nil {
 		return result.Error
 	}
@@ -466,7 +469,7 @@ func GetDashboardStats(dateStr string) ([]CardTypeStat, error) {
 			RevenueUSD float64 `gorm:"column:revenue_usd"`
 		}
 		err := DB.Raw(fmt.Sprintf(
-			"SELECT COUNT(*) AS sold_count, COALESCE(SUM(sell_price), 0) AS revenue_usd FROM `%s` WHERE sell_status = 3 AND sell_date >= ? AND sell_date < ? AND deleted_at IS NULL",
+			"SELECT COUNT(*) AS sold_count, COALESCE(SUM(sell_price), 0) AS revenue_usd FROM `%s` WHERE status != -1 AND sell_status = 3 AND sell_date >= ? AND sell_date < ? AND deleted_at IS NULL",
 			tableName,
 		), startOfDay, endOfDay).Scan(&soldResult).Error
 		if err != nil {
@@ -480,7 +483,7 @@ func GetDashboardStats(dateStr string) ([]CardTypeStat, error) {
 		}
 		var productRows []subTypeRow
 		DB.Raw(fmt.Sprintf(
-			"SELECT subscription_type, COUNT(*) AS cnt FROM `%s` WHERE account_type = 2 AND sell_status = 1 AND deleted_at IS NULL GROUP BY subscription_type ORDER BY cnt DESC",
+			"SELECT subscription_type, COUNT(*) AS cnt FROM `%s` WHERE status != -1 AND account_type = 2 AND sell_status = 1 AND deleted_at IS NULL GROUP BY subscription_type ORDER BY cnt DESC",
 			tableName,
 		)).Scan(&productRows)
 
@@ -497,7 +500,7 @@ func GetDashboardStats(dateStr string) ([]CardTypeStat, error) {
 		// 按订阅类型统计普号库存（account_type=1，排除已冻结）
 		var regularRows []subTypeRow
 		DB.Raw(fmt.Sprintf(
-			"SELECT subscription_type, COUNT(*) AS cnt FROM `%s` WHERE account_type = 1 AND (freeze_status IS NULL OR freeze_status != 1) AND deleted_at IS NULL GROUP BY subscription_type ORDER BY cnt DESC",
+			"SELECT subscription_type, COUNT(*) AS cnt FROM `%s` WHERE status != -1 AND account_type = 1 AND (freeze_status IS NULL OR freeze_status != 1) AND deleted_at IS NULL GROUP BY subscription_type ORDER BY cnt DESC",
 			tableName,
 		)).Scan(&regularRows)
 
@@ -625,7 +628,16 @@ func CompletePickup(tableName string, id int, sellPrice *float64, sellTo string)
 		updates["sell_to"] = sellTo
 	}
 
-	return DB.Table(tableName).Where("id = ?", id).Updates(updates).Error
+	return DB.Table(tableName).Where("id = ? AND status != ?", id, -1).Updates(updates).Error
+}
+
+// BatchDeleteByStatus 批量软删：将 status 置为 -1
+func BatchDeleteByStatus(tableName string, ids []int) (int64, error) {
+	if len(ids) == 0 {
+		return 0, errors.New("未选择任何记录")
+	}
+	result := DB.Table(tableName).Where("id IN ?", ids).Update("status", -1)
+	return result.RowsAffected, result.Error
 }
 
 // GetAllCardTableNames 获取所有 cards_* 表名

@@ -48,7 +48,11 @@ export interface CardListParams {
   subscription_type?: string
   subscription_status?: number // 已售列表订阅状态过滤
   is_check?: number            // 检查状态过滤 -1未检查 1检查成功 2检查失败
-  subscription_time?: string   // 订阅时间精确查询，格式 "2006-01-02 15:04:05"
+  // 购买时间筛选：
+  // - 传 YYYY-MM-DD：按当天(UTC+8)范围查询
+  // - 传 Unix 秒/毫秒、或 "YYYY-MM-DD HH:mm:ss"：后端也会兼容解析
+  purchase_date?: string
+  subscription_time?: string   // 订阅时间精确查询（保留兼容）
   freeze_status?: number       // 冻结状态过滤 -1未冻结 1已冻结（仅普号列表）
 }
 
@@ -284,5 +288,10 @@ export interface BatchFreezeRequest {
 // 批量冻结/解冻接口
 export const batchFreezeCards = (data: BatchFreezeRequest): Promise<ApiResponse<number>> => {
   return http.post('/admin/cards/batch-freeze', data) as Promise<ApiResponse<number>>
+}
+
+// 批量删除卡密（status=-1 软删）
+export const batchDeleteCards = (data: { category: string; ids: number[] }): Promise<ApiResponse<number>> => {
+  return http.post('/admin/cards/batch-delete', data) as Promise<ApiResponse<number>>
 }
 

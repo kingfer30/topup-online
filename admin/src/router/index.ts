@@ -91,6 +91,12 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/SalesTalks.vue'),
         meta: { title: '话术管理', requiresAuth: true },
       },
+      {
+        path: 'ai-translate',
+        name: 'AiTranslate',
+        component: () => import('@/views/AiTranslate.vue'),
+        meta: { title: 'AI翻译', requiresAuth: true },
+      },
     ],
   },
 ]

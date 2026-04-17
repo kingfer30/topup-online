@@ -1,0 +1,35 @@
+fetch("https://cursor.com/api/checkout", {
+  "headers": {
+    "content-type": "application/json",
+    "cookie": "workos_id=user_01KDPYTKMSV4QVGAM9383ATCJG; WorkosCursorSessionToken=user_01KDPYTKMSV4QVGAM9383ATCJG%3A%3AeyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhdXRoMHx1c2VyXzAxS0RQWVRLTVNWNFFWR0FNOTM4M0FUQ0pHIiwidGltZSI6IjE3NzE4NTAyNzEiLCJyYW5kb21uZXNzIjoiY2MyMjI1ZmUtNDI0Mi00OTA2IiwiZXhwIjoxNzc3MDM0MjcxLCJpc3MiOiJodHRwczovL2F1dGhlbnRpY2F0aW9uLmN1cnNvci5zaCIsInNjb3BlIjoib3BlbmlkIHByb2ZpbGUgZW1haWwgb2ZmbGluZV9hY2Nlc3MiLCJhdWQiOiJodHRwczovL2N1cnNvci5jb20iLCJ0eXBlIjoid2ViIiwid29ya29zU2Vzc2lvbklkIjoic2Vzc2lvbl8wMUtKNTgzMVhFNFBQOUQ0MTE2OVBXUTAwWCJ9.xPvPo2Ex4I37FU4-Typ6HrtRRtpzFSh36cguGtAOgE0",
+  },
+  "referrer": "https://cursor.com/dashboard",
+  "body": "{\"tier\":\"pro\",\"allowTrial\":false,\"allowAutomaticPayment\":false}",
+  "method": "POST",
+  "mode": "cors",
+  "credentials": "include"
+});
+
+-- cursor订阅检查
+fetch("https://cursor.com/api/usage-summary", {
+  "headers": {
+    "accept": "*/*",
+    "accept-language": "en-US,en;q=0.9",
+    "cache-control": "no-cache",
+    "pragma": "no-cache",
+    "priority": "u=1, i",
+    "sec-ch-ua": "\"Not(A:Brand\";v=\"8\", \"Chromium\";v=\"144\", \"Google Chrome\";v=\"144\"",
+    "sec-ch-ua-arch": "\"x86\"",
+    "sec-ch-ua-bitness": "\"64\"",
+    "sec-ch-ua-mobile": "?0",
+    "sec-ch-ua-platform": "\"Windows\"",
+    "sec-ch-ua-platform-version": "\"10.0.0\"",
+    "sec-fetch-dest": "empty",
+    "sec-fetch-mode": "cors",
+    "sec-fetch-site": "same-origin",
+    "cookie": "workos_id=user_01KFBE029Q08CTWPCC62W92CVD; WorkosCursorSessionToken=user_01KFBE029Q08CTWPCC62W92CVD%3A%3AeyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhdXRoMHx1c2VyXzAxS0ZCRTAyOVEwOENUV1BDQzYyVzkyQ1ZEIiwidGltZSI6IjE3NzEyMTI0NjUiLCJyYW5kb21uZXNzIjoiNzM5MDVjYzMtOTFmNC00OGNlIiwiZXhwIjoxNzc2Mzk2NDY1LCJpc3MiOiJodHRwczovL2F1dGhlbnRpY2F0aW9uLmN1cnNvci5zaCIsInNjb3BlIjoib3BlbmlkIHByb2ZpbGUgZW1haWwgb2ZmbGluZV9hY2Nlc3MiLCJhdWQiOiJodHRwczovL2N1cnNvci5jb20iLCJ0eXBlIjoid2ViIiwid29ya29zU2Vzc2lvbklkIjoic2Vzc2lvbl8wMUtISjdUUjdYWksyWFZRUVQzQUREQjM3NCJ9.1M2Nb2S_qyqUKsaqtBRQbYakMUbwUsakPWt65grJaXI; generaltranslation.locale-routing-enabled=true; generaltranslation.referrer-locale=en-US; __stripe_mid=5ee5582d-be8c-463f-8d74-74034b47c03f284ccb; __stripe_sid=2384c55e-fee6-4ba9-b7f6-5ca68fc9f3e80466d1; _dd_s=aid=6254a7ab-e69a-4282-8493-c79947a53af8&rum=2&id=f0bd33fc-f771-4f66-826e-2df65bd19645&created=1771212468139&expire=1771213474033",
+    "Referer": "https://cursor.com/dashboard?tab=billing"
+  },
+  "body": null,
+  "method": "GET"
+});

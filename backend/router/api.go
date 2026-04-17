@@ -76,6 +76,7 @@ func SetApiRouter(router *gin.Engine) {
 			adminGroup.POST("/cards/update-remark", controller.UpdateCardRemark)                      // 单独更新备注
 			adminGroup.POST("/cards/goto-pro", controller.GotoPro)                                   // 提链：获取 Cursor Pro 付款链接
 			adminGroup.POST("/cards/batch-freeze", controller.BatchFreezeCards)                     // 批量冻结/解冻普号
+			adminGroup.POST("/cards/batch-delete", controller.BatchDeleteCards)                     // 批量删除（status=-1）
 
 			// 话术管理接口（管理员专用）
 			adminGroup.GET("/sales-talks", controller.GetSalesTalkList)                   // 获取话术列表
@@ -89,6 +90,11 @@ func SetApiRouter(router *gin.Engine) {
 			adminGroup.GET("/digiseller/check-code/:unique_code", controller.CheckUniqueCode)  // 查询唯一码支付信息
 			adminGroup.GET("/digiseller/prices", controller.GetDigisellerPrices)               // 获取订阅类型售价配置
 			adminGroup.POST("/digiseller/prices", controller.UpsertDigisellerPrice)            // 新增或更新订阅类型售价
+
+			// AI 模型设置与翻译（管理员专用）
+			adminGroup.GET("/settings/ai", controller.GetAdminAISettings)
+			adminGroup.PUT("/settings/ai", controller.UpdateAdminAISettings)
+			adminGroup.POST("/ai/translate", controller.AdminAITranslate)
 		}
 
 		// 用户认证相关（无需认证）

@@ -41,6 +41,10 @@
             <template #icon><span>💳</span></template>
             新增代充
           </n-button>
+          <n-button type="error" :disabled="checkedRowKeys.length === 0" @click="handleBatchDelete">
+            <template #icon><span>🗑️</span></template>
+            批量删除 {{ checkedRowKeys.length > 0 ? `(${checkedRowKeys.length})` : '' }}
+          </n-button>
           <n-button type="primary" @click="handleAdd">
             <template #icon>
               <span>➕</span>
@@ -81,8 +85,14 @@
             { label: '未冻结', value: -1 },
             { label: '已冻结', value: 1 },
           ]" placeholder="冻结状态" style="width: 150px" />
-          <n-input v-if="cardType === 'sold' || cardType === 'unsold'" v-model:value="searchPurchaseDate"
-            placeholder="购买时间 如: 2026-03-06 22:25:36" clearable style="width: 220px" />
+          <n-date-picker
+            v-if="cardType === 'sold' || cardType === 'unsold'"
+            v-model:value="searchPurchaseDate"
+            type="date"
+            clearable
+            style="width: 180px"
+            placeholder="购买日期"
+          />
           <n-button type="primary" @click="handleSearch">搜索</n-button>
           <n-button @click="handleReset">重置</n-button>
         </n-space>
@@ -672,6 +682,7 @@ import {
   gotoProUpgrade,
   updateCardRemark,
   batchFreezeCards,
+  batchDeleteCards,
   type Card,
   type CardRequest,
 } from '@/api/card'
@@ -752,8 +763,8 @@ const searchSubscriptionType = ref('')
 const searchSubscriptionStatus = ref(0)
 const searchIsCheck = ref(0)
 const searchFreezeStatus = ref(0)
-// 购买时间精确查询，格式 "2026-03-06 22:25:36"
-const searchPurchaseDate = ref('')
+// 购买日期筛选（n-date-picker 返回毫秒）
+const searchPurchaseDate = ref<number | null>(null)
 const batchCheckLoading = ref(false)
 const batchOnDemandLoading = ref(false)
 const batchImportText = ref('')
@@ -1043,6 +1054,29 @@ const codeLinkOptions = [
   { label: 'https://emails.520952.xyz/', value: 'https://emails.520952.xyz/' },
 ]
 
+const getSubscriptionTypeTagType = (subscriptionType?: string): 'default' | 'primary' | 'info' | 'success' | 'warning' | 'error' => {
+  const t = (subscriptionType || '').toLowerCase()
+  const map: Record<string, 'default' | 'primary' | 'info' | 'success' | 'warning' | 'error'> = {
+    pro: 'success',
+    pro_plus: 'warning',
+    ultra: 'error',
+    go: 'info',
+    plus: 'primary',
+    team: 'default',
+  }
+  return map[t] ?? 'info'
+}
+
+const getSubscriptionStatusTagInfo = (subscriptionStatus?: number): { label: string; type: 'default' | 'primary' | 'info' | 'success' | 'warning' | 'error' } => {
+  const map: Record<number, { label: string; type: 'default' | 'primary' | 'info' | 'success' | 'warning' | 'error' }> = {
+    1: { label: '已订阅', type: 'success' },
+    2: { label: '未订阅', type: 'warning' },
+    [-1]: { label: '掉订阅', type: 'error' },
+  }
+  const v = subscriptionStatus ?? 0
+  return map[v] ?? { label: v ? String(v) : '—', type: 'default' }
+}
+
 // 格式化 Unix 时间戳为可读时间
 const formatTimestamp = (ts?: number | null): string => {
   if (!ts) return '—'
@@ -1051,18 +1085,26 @@ const formatTimestamp = (ts?: number | null): string => {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
 }
 
-// 计算剩余天数：未售列表用当前时间，已售列表用出售时间，均与购买时间相差取 30 - 已用天数
-const calcRemainingDays = (row: Card, isSold: boolean): number | null => {
-  if (!row.purchase_date) return null
-  const refTime = isSold && row.sell_date ? row.sell_date : Math.floor(Date.now() / 1000)
-  const usedDays = Math.floor((refTime - row.purchase_date) / 86400)
-  return 30 - usedDays
+// 格式化 time.Time JSON（RFC3339 / 常见格式）为可读时间
+const formatDateTimeString = (val?: string | null): string => {
+  if (!val) return '—'
+  const d = new Date(val)
+  if (Number.isNaN(d.getTime())) return val
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+}
+
+const formatYYYYMMDD = (ms: number) => {
+  const d = new Date(ms)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
 
 // 表格列定义（computed，根据列表类型展示不同列）
 const columns = computed<DataTableColumns<Card>>(() => {
   const isSold = cardType.value === 'sold'
   const isAll = cardType.value === 'all'
+  const isUnsold = cardType.value === 'unsold'
 
   const baseColumns: DataTableColumns<Card> = [
     // 所有列表均支持批量勾选
@@ -1076,6 +1118,49 @@ const columns = computed<DataTableColumns<Card>>(() => {
       title: '账号',
       key: 'account',
       width: 200,
+      render: (row: Card) => {
+        // 未售/已售：账号单独一行，标签换行在下面一行
+        if (!isAll) {
+          const tags: any[] = []
+          if (row.subscription_type) {
+            tags.push(
+              h(
+                NTag,
+                { type: getSubscriptionTypeTagType(row.subscription_type), size: 'small', bordered: false },
+                { default: () => row.subscription_type }
+              )
+            )
+          }
+          const statusInfo = getSubscriptionStatusTagInfo(row.subscription_status)
+          if (statusInfo.label !== '—') {
+            tags.push(
+              h(
+                NTag,
+                { type: statusInfo.type, size: 'small', bordered: false },
+                { default: () => statusInfo.label }
+              )
+            )
+          }
+          if (tags.length > 0) {
+            return h(
+              'div',
+              {
+                style: {
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '6px',
+                  lineHeight: '1.2',
+                },
+              },
+              [
+                h('div', { style: { fontWeight: 500 } }, row.account),
+                h(NSpace, { size: 6, wrap: true }, { default: () => tags }),
+              ]
+            )
+          }
+        }
+        return h('span', row.account)
+      },
     },
     // 普号列表显示密码、邮箱密码和备注
     ...(isAll ? [
@@ -1098,30 +1183,8 @@ const columns = computed<DataTableColumns<Card>>(() => {
         render: (row: Card) => row.remark || '—',
       },
     ] as DataTableColumns<Card> : []),
-    // 订阅类型：普号列表不显示
-    ...(!isAll ? [{
-      title: '订阅类型',
-      key: 'subscription_type',
-      width: 100,
-    }] as DataTableColumns<Card> : []),
-    // 订阅状态：非普号列表显示（未售+已售均显示，含掉订阅-1）
-    ...(!isAll ? [
-      {
-        title: '订阅状态',
-        key: 'subscription_status',
-        width: 100,
-        render: (row: Card) => {
-          const map: Record<number, { label: string; type: 'success' | 'warning' | 'error' }> = {
-            1: { label: '已订阅', type: 'success' },
-            2: { label: '未订阅', type: 'warning' },
-            [-1]: { label: '掉订阅', type: 'error' },
-          }
-          const info = map[row.subscription_status] ?? { label: String(row.subscription_status), type: 'warning' as const }
-          return h(NTag, { type: info.type, size: 'small' }, { default: () => info.label })
-        },
-      },
-    ] as DataTableColumns<Card> : []),
-    ...(isSold ? [{
+    // 订阅类型、订阅状态：按需求不再单独成列（未售/已售展示在账号后面）
+    ...((isSold || isUnsold) ? [{
       title: '卖家',
       key: 'purchase_by',
       width: 80,
@@ -1132,22 +1195,19 @@ const columns = computed<DataTableColumns<Card>>(() => {
       key: 'purchase_price',
       width: 80,
     },
-    {
-      title: '订阅时间',
-      key: 'subscription_time',
+    // 普号列表：删除订阅时间/剩余天数，改为显示创建时间
+    ...(isAll ? [{
+      title: '创建时间',
+      key: 'created_at',
       width: 170,
-      render: (row: Card) => formatTimestamp(row.subscription_time ?? row.purchase_date),
-    },
-    ...(!isSold ? [{
-      title: '剩余天数',
-      key: 'remaining_days',
-      width: 90,
-      render: (row: Card) => {
-        const days = calcRemainingDays(row, isSold)
-        if (days === null) return '—'
-        const type = days > 7 ? 'success' : days > 0 ? 'warning' : 'error'
-        return h(NTag, { type, size: 'small' }, { default: () => `${days}天` })
-      },
+      render: (row: Card) => formatDateTimeString(row.created_at),
+    }] as DataTableColumns<Card> : []),
+    // 未售/已售：购买时间（用 purchase_date）
+    ...(!isAll ? [{
+      title: '购买时间',
+      key: 'purchase_date',
+      width: 170,
+      render: (row: Card) => formatTimestamp(row.purchase_date),
     }] as DataTableColumns<Card> : []),
     // 未售/已售列表显示订阅额度
     ...(!isAll ? [{
@@ -1335,6 +1395,8 @@ const loadCards = async () => {
 
   loading.value = true
   try {
+    const purchaseDateParam =
+      searchPurchaseDate.value != null ? formatYYYYMMDD(searchPurchaseDate.value) : ''
     const params = {
       category: category.value,
       type: cardType.value,
@@ -1344,7 +1406,7 @@ const loadCards = async () => {
       ...(searchSubscriptionType.value ? { subscription_type: searchSubscriptionType.value } : {}),
       ...(searchSubscriptionStatus.value !== 0 ? { subscription_status: searchSubscriptionStatus.value } : {}),
       ...(searchIsCheck.value !== 0 ? { is_check: searchIsCheck.value } : {}),
-      ...(searchPurchaseDate.value ? { purchase_date: searchPurchaseDate.value } : {}),
+      ...(purchaseDateParam ? { purchase_date: purchaseDateParam } : {}),
       ...(searchFreezeStatus.value !== 0 ? { freeze_status: searchFreezeStatus.value } : {}),
     }
     console.log('  📤 请求参数:', params)
@@ -1529,10 +1591,40 @@ const handleReset = () => {
   searchSubscriptionType.value = ''
   searchSubscriptionStatus.value = 0
   searchIsCheck.value = 0
-  searchPurchaseDate.value = ''
+  searchPurchaseDate.value = null
   searchFreezeStatus.value = 0
   pagination.value.page = 1
   loadCards()
+}
+
+// 批量删除（status=-1 软删）
+const handleBatchDelete = () => {
+  const ids = checkedRowKeys.value as number[]
+  if (ids.length === 0) {
+    message.warning('请先勾选要删除的记录')
+    return
+  }
+  dialog.error({
+    title: '确认批量删除',
+    content: `确定要删除已勾选的 ${ids.length} 条记录吗？删除后将不会在列表中显示。`,
+    positiveText: '确认删除',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      try {
+        const res = await batchDeleteCards({ category: category.value, ids })
+        if (res.code === 200) {
+          message.success(res.message || `已删除 ${ids.length} 条`)
+          checkedRowKeys.value = []
+          selectedCardsMap.value.clear()
+          await loadCards()
+        } else {
+          message.error(res.message || '删除失败')
+        }
+      } catch (e: any) {
+        message.error(e.response?.data?.message || '删除失败')
+      }
+    },
+  })
 }
 
 // 分页变化
@@ -1812,6 +1904,8 @@ const handleExport = async () => {
   // 筛选条件全量导出：请求后端
   exportLoading.value = true
   try {
+    const purchaseDateParam =
+      searchPurchaseDate.value != null ? formatYYYYMMDD(searchPurchaseDate.value) : ''
     const response = await exportCards({
       category: category.value,
       type: cardType.value,
@@ -1819,7 +1913,7 @@ const handleExport = async () => {
       ...(searchSubscriptionType.value ? { subscription_type: searchSubscriptionType.value } : {}),
       ...(searchSubscriptionStatus.value !== 0 ? { subscription_status: searchSubscriptionStatus.value } : {}),
       ...(searchIsCheck.value !== 0 ? { is_check: searchIsCheck.value } : {}),
-      ...(searchPurchaseDate.value ? { purchase_date: searchPurchaseDate.value } : {}),
+      ...(purchaseDateParam ? { purchase_date: purchaseDateParam } : {}),
       ...(searchFreezeStatus.value !== 0 ? { freeze_status: searchFreezeStatus.value } : {}),
     })
 

@@ -69,15 +69,22 @@ func GetCardList(c *gin.Context) {
 	freezeStatus, _ := strconv.Atoi(freezeStatusStr)
 
 	// 将购买时间输入转换为 Unix 时间戳：
-	// - 纯数字（如 "1772678419"）：直接当时间戳使用
-	// - 日期字符串（如 "2026-03-05 10:40:19"）：按 UTC+8（北京时间）解析
+	// - 纯数字（Unix 秒/毫秒）：取该时间所在“当天”(UTC+8)的零点
+	// - 日期字符串（如 "2026-03-05" 或 "2026-03-05 10:40:19"）：按 UTC+8（北京时间）解析，取当天零点
 	var purchaseDate int64
 	cst := time.FixedZone("CST", 8*3600)
 	if purchaseDateStr != "" {
 		if ts, err := strconv.ParseInt(purchaseDateStr, 10, 64); err == nil {
-			purchaseDate = ts
+			// 支持毫秒
+			if ts > 1e12 {
+				ts = ts / 1000
+			}
+			t := time.Unix(ts, 0).In(cst)
+			purchaseDate = time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, cst).Unix()
+		} else if t, err := time.ParseInLocation("2006-01-02", purchaseDateStr, cst); err == nil {
+			purchaseDate = time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, cst).Unix()
 		} else if t, err := time.ParseInLocation("2006-01-02 15:04:05", purchaseDateStr, cst); err == nil {
-			purchaseDate = t.Unix()
+			purchaseDate = time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, cst).Unix()
 		}
 	}
 	if page < 1 {
@@ -118,6 +125,40 @@ func GetCardList(c *gin.Context) {
 			"page":      page,
 			"page_size": pageSize,
 		},
+	})
+}
+
+// BatchDeleteCards 批量删除卡密（status=-1 软删）
+func BatchDeleteCards(c *gin.Context) {
+	var req struct {
+		Category string `json:"category" binding:"required"`
+		IDs      []int  `json:"ids" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusOK, gin.H{"code": 400, "message": "参数错误: " + err.Error()})
+		return
+	}
+	if len(req.IDs) == 0 {
+		c.JSON(http.StatusOK, gin.H{"code": 400, "message": "未选择任何记录"})
+		return
+	}
+
+	tableName := model.GetTableNameByCategory(req.Category)
+	if !model.CheckTableExists(tableName) {
+		c.JSON(http.StatusOK, gin.H{"code": 404, "message": "该卡密类别不存在"})
+		return
+	}
+
+	affected, err := model.BatchDeleteByStatus(tableName, req.IDs)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"code": 500, "message": "删除失败: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    200,
+		"message": fmt.Sprintf("成功删除 %d 条记录", affected),
+		"data":    affected,
 	})
 }
 
@@ -756,7 +797,29 @@ func ExportCards(c *gin.Context) {
 	cardType := c.DefaultQuery("type", "all")
 	keyword := c.Query("keyword")
 	subscriptionType := c.Query("subscription_type")
+	subscriptionStatusStr := c.DefaultQuery("subscription_status", "0")
+	isCheckStr := c.DefaultQuery("is_check", "0")
+	purchaseDateStr := c.Query("purchase_date")
 	exportFreezeStatus, _ := strconv.Atoi(c.DefaultQuery("freeze_status", "0"))
+	subscriptionStatus, _ := strconv.Atoi(subscriptionStatusStr)
+	isCheck, _ := strconv.Atoi(isCheckStr)
+
+	// purchase_date 同 GetCardList：统一解析到当天零点（UTC+8）
+	var purchaseDate int64
+	cst := time.FixedZone("CST", 8*3600)
+	if purchaseDateStr != "" {
+		if ts, err := strconv.ParseInt(purchaseDateStr, 10, 64); err == nil {
+			if ts > 1e12 {
+				ts = ts / 1000
+			}
+			t := time.Unix(ts, 0).In(cst)
+			purchaseDate = time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, cst).Unix()
+		} else if t, err := time.ParseInLocation("2006-01-02", purchaseDateStr, cst); err == nil {
+			purchaseDate = time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, cst).Unix()
+		} else if t, err := time.ParseInLocation("2006-01-02 15:04:05", purchaseDateStr, cst); err == nil {
+			purchaseDate = time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, cst).Unix()
+		}
+	}
 
 	tableName := model.GetTableNameByCategory(category)
 	if !model.CheckTableExists(tableName) {
@@ -764,7 +827,7 @@ func ExportCards(c *gin.Context) {
 		return
 	}
 
-	cards, err := model.GetAllCardsForExport(tableName, cardType, keyword, subscriptionType, 0, 0, 0, exportFreezeStatus)
+	cards, err := model.GetAllCardsForExport(tableName, cardType, keyword, subscriptionType, subscriptionStatus, isCheck, purchaseDate, exportFreezeStatus)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{"code": 500, "message": "导出失败: " + err.Error()})
 		return
