@@ -221,6 +221,34 @@
               </n-spin>
             </div>
           </n-tab-pane>
+
+          <!-- 已登录设备 -->
+          <n-tab-pane name="sessions" tab="已登录设备">
+            <div class="mb-4 flex items-center justify-between">
+              <span class="text-sm text-gray-500">当前所有活跃登录设备</span>
+              <n-popconfirm
+                @positive-click="handleKickAll"
+                positive-text="确认踢出"
+                negative-text="取消"
+              >
+                <template #trigger>
+                  <n-button type="error" size="small" :loading="kickAllLoading">
+                    一键踢出所有设备（含自己）
+                  </n-button>
+                </template>
+                此操作将踢出所有设备（包括您自己），您将需要重新登录。确认继续？
+              </n-popconfirm>
+            </div>
+            <n-spin :show="sessionsLoading">
+              <n-data-table
+                :columns="sessionColumns"
+                :data="sessions"
+                :bordered="false"
+                size="small"
+                :row-class-name="(row: any) => row.is_current ? 'current-session-row' : ''"
+              />
+            </n-spin>
+          </n-tab-pane>
         </n-tabs>
       </n-card>
     </n-space>
@@ -228,7 +256,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, h } from 'vue'
+import { useRouter } from 'vue-router'
 import {
   NSpace,
   NCard,
@@ -246,10 +275,16 @@ import {
   NTag,
   NSpin,
   NText,
+  NDataTable,
+  NPopconfirm,
   useMessage,
+  type DataTableColumns,
 } from 'naive-ui'
 import { getDigisellerPrices, upsertDigisellerPrice } from '@/api/digiseller'
 import { getAdminAISettings, updateAdminAISettings } from '@/api/ai'
+import { getAdminSessions, kickSession, kickAllSessions, type AdminSession } from '@/api/admin'
+
+const router = useRouter()
 
 const message = useMessage()
 
@@ -407,9 +442,90 @@ const handleSaveDigisellerPrice = async (item: DigisellerPriceRow) => {
   }
 }
 
+// ==================== 已登录设备 ====================
+const sessions = ref<AdminSession[]>([])
+const sessionsLoading = ref(false)
+const kickAllLoading = ref(false)
+
+const loadSessions = async () => {
+  sessionsLoading.value = true
+  try {
+    const res = await getAdminSessions()
+    if (res.code === 200) {
+      sessions.value = res.data || []
+    }
+  } catch {
+    message.error('加载设备列表失败')
+  } finally {
+    sessionsLoading.value = false
+  }
+}
+
+const handleKickOne = async (uuid: string) => {
+  try {
+    const res = await kickSession(uuid)
+    if (res.code === 200) {
+      message.success('已踢出该设备')
+      await loadSessions()
+    } else {
+      message.error(res.message || '操作失败')
+    }
+  } catch {
+    message.error('操作失败')
+  }
+}
+
+const handleKickAll = async () => {
+  kickAllLoading.value = true
+  try {
+    await kickAllSessions()
+    // 踢出所有设备（含自己），清除本地 token 并跳转登录页
+    localStorage.removeItem('admin_token')
+    localStorage.removeItem('admin_info')
+    router.push('/login')
+  } catch {
+    message.error('操作失败')
+  } finally {
+    kickAllLoading.value = false
+  }
+}
+
+const sessionColumns: DataTableColumns<AdminSession> = [
+  {
+    title: '状态',
+    key: 'is_current',
+    width: 80,
+    render: (row) => row.is_current ? h(NTag, { type: 'success', size: 'small' }, { default: () => '当前' }) : null,
+  },
+  { title: 'IP 地址', key: 'ip_address', width: 140 },
+  {
+    title: '登录时间',
+    key: 'created_at',
+    width: 180,
+    render: (row) => new Date(row.created_at * 1000).toLocaleString('zh-CN'),
+  },
+  {
+    title: 'User-Agent',
+    key: 'user_agent',
+    ellipsis: { tooltip: true },
+  },
+  {
+    title: '操作',
+    key: 'actions',
+    width: 80,
+    render: (row) =>
+      h(
+        NButton,
+        { size: 'small', type: 'error', ghost: true, onClick: () => handleKickOne(row.session_uuid) },
+        { default: () => '踢出' },
+      ),
+  },
+]
+
 onMounted(() => {
   loadDigisellerPrices()
   loadAISettings()
+  loadSessions()
 })
 </script>
 

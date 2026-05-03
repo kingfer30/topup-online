@@ -56,6 +56,9 @@ func migrateDB() error {
 	if err = DB.AutoMigrate(&Admin{}); err != nil {
 		return err
 	}
+	if err = DB.AutoMigrate(&AdminSession{}); err != nil {
+		return err
+	}
 	if err = DB.AutoMigrate(&Order{}); err != nil {
 		return err
 	}

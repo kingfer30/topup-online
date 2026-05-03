@@ -1,13 +1,10 @@
 # 使用多阶段构建
 
 # 阶段1: 构建阶段
-FROM golang:1.23-alpine AS builder
+FROM golang:1.25-alpine AS builder
 
 # 设置工作目录
 WORKDIR /app
-
-# 安装必要的构建工具
-RUN apk add --no-cache git
 
 # 复制 go.mod 和 go.sum 并下载依赖
 COPY go.mod go.sum ./

@@ -76,6 +76,34 @@
       </n-layout-content>
     </n-layout>
   </n-layout>
+
+  <!-- 修改密码弹窗 -->
+  <n-modal
+    v-model:show="showPasswordModal"
+    preset="card"
+    title="修改密码"
+    :style="{ width: '420px' }"
+    :mask-closable="false"
+    @after-leave="resetPasswordForm"
+  >
+    <n-form ref="passwordFormRef" :model="passwordForm" :rules="passwordRules" label-placement="left" label-width="90px">
+      <n-form-item label="原密码" path="oldPassword">
+        <n-input v-model:value="passwordForm.oldPassword" type="password" show-password-on="click" placeholder="请输入原密码" />
+      </n-form-item>
+      <n-form-item label="新密码" path="newPassword">
+        <n-input v-model:value="passwordForm.newPassword" type="password" show-password-on="click" placeholder="请输入新密码" />
+      </n-form-item>
+      <n-form-item label="确认新密码" path="confirmPassword">
+        <n-input v-model:value="passwordForm.confirmPassword" type="password" show-password-on="click" placeholder="请再次输入新密码" />
+      </n-form-item>
+    </n-form>
+    <template #footer>
+      <n-space justify="end">
+        <n-button @click="showPasswordModal = false">取消</n-button>
+        <n-button type="primary" :loading="passwordLoading" @click="handleChangePassword">确认修改</n-button>
+      </n-space>
+    </template>
+  </n-modal>
 </template>
 
 <script setup lang="ts">
@@ -92,12 +120,21 @@ import {
   NButton,
   NAvatar,
   NDropdown,
+  NModal,
+  NForm,
+  NFormItem,
+  NInput,
+  NSpace,
   useMessage,
+  type FormInst,
   type MenuOption,
 } from 'naive-ui'
 import { RouterLink } from 'vue-router'
-import { adminLogout } from '@/api/admin'
+import CryptoJS from 'crypto-js'
+import { adminLogout, changePassword, getAdminInfo } from '@/api/admin'
 import { getMenuTree, type Menu } from '@/api/menu'
+
+const md5 = (str: string) => CryptoJS.MD5(str).toString()
 
 const router = useRouter()
 const route = useRoute()
@@ -247,6 +284,62 @@ const loadMenus = async () => {
   }
 }
 
+// 修改密码弹窗
+const showPasswordModal = ref(false)
+const passwordLoading = ref(false)
+const passwordFormRef = ref<FormInst | null>(null)
+const passwordForm = ref({ oldPassword: '', newPassword: '', confirmPassword: '' })
+
+const passwordRules = {
+  oldPassword: [{ required: true, message: '请输入原密码', trigger: 'blur' }],
+  newPassword: [{ required: true, message: '请输入新密码', trigger: 'blur', min: 6 }],
+  confirmPassword: [
+    { required: true, message: '请再次输入新密码', trigger: 'blur' },
+    {
+      validator: (_rule: any, value: string) => {
+        if (value !== passwordForm.value.newPassword) return new Error('两次输入的密码不一致')
+        return true
+      },
+      trigger: 'blur',
+    },
+  ],
+}
+
+const resetPasswordForm = () => {
+  passwordForm.value = { oldPassword: '', newPassword: '', confirmPassword: '' }
+}
+
+const handleChangePassword = () => {
+  passwordFormRef.value?.validate(async (errors) => {
+    if (errors) return
+    passwordLoading.value = true
+    try {
+      const res: any = await changePassword({
+        old_password: md5(passwordForm.value.oldPassword),
+        new_password: md5(passwordForm.value.newPassword),
+      })
+      if (res.code === 200) {
+        message.success('密码修改成功，请重新登录')
+        showPasswordModal.value = false
+        setTimeout(() => {
+          localStorage.removeItem('admin_token')
+          localStorage.removeItem('admin_info')
+          router.push('/login')
+        }, 1200)
+      } else {
+        message.error(res.message || '修改失败')
+      }
+    } catch (e) {
+      message.error('修改失败，请重试')
+    } finally {
+      passwordLoading.value = false
+    }
+  })
+}
+
+// 心跳轮询定时器
+let heartbeatTimer: ReturnType<typeof setInterval> | null = null
+
 // 加载管理员信息
 onMounted(async () => {
   const info = localStorage.getItem('admin_info')
@@ -263,11 +356,24 @@ onMounted(async () => {
 
   // 监听菜单刷新事件
   window.addEventListener('refreshMenus', loadMenus)
+
+  // 启动心跳检测，每 30 秒检查一次 session 是否有效
+  heartbeatTimer = setInterval(async () => {
+    try {
+      await getAdminInfo()
+    } catch {
+      // 401 由 http.ts 拦截器自动触发 admin-unauthorized 事件
+    }
+  }, 30000)
 })
 
-// 组件卸载时移除事件监听
+// 组件卸载时移除事件监听和定时器
 onUnmounted(() => {
   window.removeEventListener('refreshMenus', loadMenus)
+  if (heartbeatTimer !== null) {
+    clearInterval(heartbeatTimer)
+    heartbeatTimer = null
+  }
 })
 
 // 面包屑
@@ -322,7 +428,7 @@ const handleUserAction = async (key: string) => {
   } else if (key === 'profile') {
     router.push('/admin/profile')
   } else if (key === 'password') {
-    router.push('/admin/change-password')
+    showPasswordModal.value = true
   }
 }
 </script>

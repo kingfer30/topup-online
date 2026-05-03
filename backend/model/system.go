@@ -18,10 +18,25 @@ func (SystemConfig) TableName() string {
 // Admin 管理员表
 type Admin struct {
 	gorm.Model
-	Username string `gorm:"type:varchar(50);uniqueIndex;not null" json:"username"`
-	Password string `gorm:"type:varchar(255);not null" json:"-"` // 密码不返回给前端
-	Email    string `gorm:"type:varchar(100)" json:"email"`
-	Status   int    `gorm:"default:1" json:"status"` // 1:正常 0:禁用
+	Username     string `gorm:"type:varchar(50);uniqueIndex;not null" json:"username"`
+	Password     string `gorm:"type:varchar(255);not null" json:"-"` // 密码不返回给前端
+	Email        string `gorm:"type:varchar(100)" json:"email"`
+	Status       int    `gorm:"default:1" json:"status"`        // 1:正常 0:禁用
+	TokenVersion int    `gorm:"default:1" json:"token_version"` // token版本号，变更时强制客户端重新登录
+}
+
+// AdminSession 管理员登录会话表
+type AdminSession struct {
+	gorm.Model
+	AdminID     uint   `gorm:"not null;index" json:"admin_id"`
+	SessionUUID string `gorm:"type:varchar(100);uniqueIndex;not null" json:"session_uuid"`
+	IPAddress   string `gorm:"type:varchar(100)" json:"ip_address"`
+	UserAgent   string `gorm:"type:varchar(500)" json:"user_agent"`
+	IsActive    bool   `gorm:"default:true" json:"is_active"`
+}
+
+func (AdminSession) TableName() string {
+	return "admin_sessions"
 }
 
 func (Admin) TableName() string {

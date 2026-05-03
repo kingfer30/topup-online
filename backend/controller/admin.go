@@ -1,7 +1,6 @@
 package controller
 
 import (
-	"crypto/md5"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -12,9 +11,11 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 
 	"github.com/kingfer30/topup-online/constants"
+	"github.com/kingfer30/topup-online/middleware"
 	"github.com/kingfer30/topup-online/model"
 	crypto "github.com/kingfer30/topup-online/utils/cypto"
 	"github.com/kingfer30/topup-online/utils/random"
@@ -85,20 +86,30 @@ func AdminLogin(c *gin.Context) {
 		return
 	}
 
-	// // 验证密码（前端已MD5加密）
-	// if admin.Password != req.Password {
-	// 	c.JSON(http.StatusOK, gin.H{
-	// 		"code":    401,
-	// 		"message": "用户名或密码错误",
-	// 	})
-	// 	return
-	// }
+	// 验证密码（前端已MD5加密，后端用bcrypt二次校验）
+	if err := bcrypt.CompareHashAndPassword([]byte(admin.Password), []byte(req.Password)); err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"code":    401,
+			"message": "用户名或密码错误",
+		})
+		return
+	}
 
-	// 生成token
-	token := generateToken(admin.ID)
+	// 生成token（含版本号，版本号变更时已颁发的旧token自动失效）
+	token := generateToken(admin.ID, admin.TokenVersion)
 
-	// 保存token到数据库或Redis（这里简化处理，实际应该用Redis）
-	// TODO: 将token保存到Redis，设置过期时间
+	// 记录登录 session（token 格式：admin_{id}_{version}_{uuid}_{timestamp}，UUID 在第4段）
+	tokenParts := strings.Split(token, "_")
+	if len(tokenParts) >= 4 && db != nil {
+		session := model.AdminSession{
+			AdminID:     admin.ID,
+			SessionUUID: tokenParts[3],
+			IPAddress:   c.ClientIP(),
+			UserAgent:   c.GetHeader("User-Agent"),
+			IsActive:    true,
+		}
+		db.Create(&session)
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"code":    200,
@@ -110,28 +121,16 @@ func AdminLogin(c *gin.Context) {
 	})
 }
 
-// GetAdminInfo 获取管理员信息
+// GetAdminInfo 获取管理员信息（同时作为心跳检测接口）
 func GetAdminInfo(c *gin.Context) {
-	// 从header获取token
-	token := c.GetHeader("Authorization")
-	if token == "" {
+	adminID, ok := middleware.GetAdminID(c)
+	if !ok {
 		c.JSON(http.StatusOK, gin.H{
 			"code":    401,
 			"message": "未登录",
 		})
 		return
 	}
-
-	// 移除Bearer前缀
-	if len(token) > 7 && token[:7] == "Bearer " {
-		token = token[7:]
-	}
-
-	// TODO: 从Redis验证token并获取admin_id
-	// 这里简化处理，直接从token中解析（实际应该用JWT或Redis）
-
-	// 模拟返回管理员信息
-	adminID := 1 // 这里应该从token中解析出来
 
 	var admin model.Admin
 	if err := db.First(&admin, adminID).Error; err != nil {
@@ -151,11 +150,115 @@ func GetAdminInfo(c *gin.Context) {
 
 // Logout 退出登录
 func Logout(c *gin.Context) {
-	// TODO: 从Redis删除token
-
+	// 使当前 session 失效
+	if sessionUUID, exists := c.Get("session_uuid"); exists && db != nil {
+		db.Model(&model.AdminSession{}).
+			Where("session_uuid = ?", sessionUUID).
+			Update("is_active", false)
+	}
 	c.JSON(http.StatusOK, gin.H{
 		"code":    200,
 		"message": "退出成功",
+	})
+}
+
+// GetAdminSessions 获取当前管理员的活跃登录设备列表
+func GetAdminSessions(c *gin.Context) {
+	adminID, ok := middleware.GetAdminID(c)
+	if !ok {
+		c.JSON(http.StatusOK, gin.H{"code": 401, "message": "未登录"})
+		return
+	}
+	currentUUID, _ := c.Get("session_uuid")
+
+	var sessions []model.AdminSession
+	if err := db.Where("admin_id = ? AND is_active = true", adminID).Order("created_at DESC").Find(&sessions).Error; err != nil {
+		c.JSON(http.StatusOK, gin.H{"code": 500, "message": "查询失败: " + err.Error()})
+		return
+	}
+
+	type SessionVO struct {
+		ID          uint   `json:"id"`
+		SessionUUID string `json:"session_uuid"`
+		IPAddress   string `json:"ip_address"`
+		UserAgent   string `json:"user_agent"`
+		CreatedAt   int64  `json:"created_at"`
+		IsCurrent   bool   `json:"is_current"`
+	}
+	var result []SessionVO
+	for _, s := range sessions {
+		result = append(result, SessionVO{
+			ID:          s.ID,
+			SessionUUID: s.SessionUUID,
+			IPAddress:   s.IPAddress,
+			UserAgent:   s.UserAgent,
+			CreatedAt:   s.CreatedAt.Unix(),
+			IsCurrent:   s.SessionUUID == currentUUID,
+		})
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 200, "message": "获取成功", "data": result})
+}
+
+// KickSession 踢出指定设备
+func KickSession(c *gin.Context) {
+	adminID, ok := middleware.GetAdminID(c)
+	if !ok {
+		c.JSON(http.StatusOK, gin.H{"code": 401, "message": "未登录"})
+		return
+	}
+	sessionUUID := c.Param("uuid")
+	if sessionUUID == "" {
+		c.JSON(http.StatusOK, gin.H{"code": 400, "message": "session_uuid不能为空"})
+		return
+	}
+	result := db.Model(&model.AdminSession{}).
+		Where("session_uuid = ? AND admin_id = ?", sessionUUID, adminID).
+		Update("is_active", false)
+	if result.Error != nil {
+		c.JSON(http.StatusOK, gin.H{"code": 500, "message": "操作失败: " + result.Error.Error()})
+		return
+	}
+	if result.RowsAffected == 0 {
+		c.JSON(http.StatusOK, gin.H{"code": 404, "message": "session不存在"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 200, "message": "已踢出该设备"})
+}
+
+// KickAllSessions 踢出所有设备（含自己）
+func KickAllSessions(c *gin.Context) {
+	adminID, ok := middleware.GetAdminID(c)
+	if !ok {
+		c.JSON(http.StatusOK, gin.H{"code": 401, "message": "未登录"})
+		return
+	}
+	// 所有 session 置为 inactive
+	db.Model(&model.AdminSession{}).Where("admin_id = ?", adminID).Update("is_active", false)
+	// 递增 token_version，使所有已颁发 token 直接失效（双保险）
+	db.Exec("UPDATE admins SET token_version = token_version + 1 WHERE id = ?", adminID)
+	c.JSON(http.StatusOK, gin.H{"code": 200, "message": "已踢出所有设备"})
+}
+
+// ForceReLogin 强制所有已登录的管理员重新登录
+// 通过递增 token_version 使所有已颁发的 token 立即失效
+func ForceReLogin(c *gin.Context) {
+	if db == nil {
+		c.JSON(http.StatusOK, gin.H{
+			"code":    500,
+			"message": "数据库未初始化",
+		})
+		return
+	}
+	if err := db.Exec("UPDATE admins SET token_version = token_version + 1").Error; err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"code":    500,
+			"message": "操作失败: " + err.Error(),
+		})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"code":    200,
+		"message": "已强制所有管理员重新登录",
 	})
 }
 
@@ -174,8 +277,14 @@ func ChangePassword(c *gin.Context) {
 		return
 	}
 
-	// TODO: 从token获取当前管理员ID
-	adminID := 1
+	adminID, ok := middleware.GetAdminID(c)
+	if !ok {
+		c.JSON(http.StatusOK, gin.H{
+			"code":    401,
+			"message": "未登录",
+		})
+		return
+	}
 
 	var admin model.Admin
 	if err := db.First(&admin, adminID).Error; err != nil {
@@ -187,7 +296,7 @@ func ChangePassword(c *gin.Context) {
 	}
 
 	// 验证旧密码
-	if admin.Password != req.OldPassword {
+	if err := bcrypt.CompareHashAndPassword([]byte(admin.Password), []byte(req.OldPassword)); err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"code":    401,
 			"message": "原密码错误",
@@ -195,8 +304,16 @@ func ChangePassword(c *gin.Context) {
 		return
 	}
 
-	// 更新密码
-	if err := db.Model(&admin).Update("password", req.NewPassword).Error; err != nil {
+	// 新密码 bcrypt 哈希后存储
+	newHashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"code":    500,
+			"message": "密码加密失败",
+		})
+		return
+	}
+	if err := db.Model(&admin).Update("password", string(newHashedPassword)).Error; err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"code":    500,
 			"message": "修改密码失败: " + err.Error(),
@@ -204,21 +321,28 @@ func ChangePassword(c *gin.Context) {
 		return
 	}
 
+	// 密码修改后使所有 session 失效，强制重新登录
+	db.Exec("UPDATE admins SET token_version = token_version + 1 WHERE id = ?", adminID)
+	db.Exec("UPDATE admin_sessions SET is_active = false WHERE admin_id = ?", adminID)
+
 	c.JSON(http.StatusOK, gin.H{
 		"code":    200,
-		"message": "密码修改成功",
+		"message": "密码修改成功，请重新登录",
 	})
 }
 
-// generateToken 生成token
-func generateToken(adminID uint) string {
-	// 简单的token生成（生产环境应该使用JWT）
-	return fmt.Sprintf("admin_%d_%s_%d", adminID, uuid.New().String(), time.Now().Unix())
+// generateToken 生成token，格式：admin_{id}_{version}_{uuid}_{timestamp}
+func generateToken(adminID uint, version int) string {
+	return fmt.Sprintf("admin_%d_%d_%s_%d", adminID, version, uuid.New().String(), time.Now().Unix())
 }
 
-// hashPassword MD5加密密码
-func hashPassword(password string) string {
-	return fmt.Sprintf("%x", md5.Sum([]byte(password)))
+// hashPassword 对密码（前端已MD5）进行bcrypt哈希，用于安全存储
+func hashPassword(password string) (string, error) {
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return "", err
+	}
+	return string(hash), nil
 }
 
 // ==================== 用户管理相关接口 ====================

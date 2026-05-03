@@ -11,85 +11,23 @@ import (
 	redis "github.com/kingfer30/topup-online/config/cache"
 	"github.com/kingfer30/topup-online/constants"
 	"github.com/kingfer30/topup-online/utils/logger"
-	"github.com/kingfer30/topup-online/utils/random"
 	"github.com/kingfer30/topup-online/utils/request"
 )
 
-var baseUrl = "https://api.ow520.com"
+var cdkBaseUrl = "https://kkk.ow800.com"
 
-// 获取卡密详情
-func GetCardDetail(c *gin.Context) {
-	number := c.Param("number")
-	if number == "" {
-		c.JSON(http.StatusOK, gin.H{
-			"success": false,
-			"message": "please set the parameter of number ",
-			"data":    "",
-		})
-		return
-	}
-	url := fmt.Sprintf("%s/api/card-keys/%s", baseUrl, number)
-	err, resp := request.Curl(url, "GET", nil)
-	if err != nil {
-		c.JSON(http.StatusOK, gin.H{
-			"success": false,
-			"message": "request fail: " + err.Error(),
-			"data":    "",
-		})
-		return
-	}
-
-	defer resp.Body.Close()
-	var cdkData constants.CDKStatusResponse
-	bodyByte, _ := io.ReadAll(resp.Body)
-
-	logger.SysLogf("url: %s. body: %s", url, string(bodyByte))
-	err = json.Unmarshal(bodyByte, &cdkData)
-	if err != nil {
-		c.JSON(http.StatusOK, gin.H{
-			"success": false,
-			"message": "response unmarshal fail: " + err.Error(),
-			"data":    "",
-		})
-		return
-	}
-	if cdkData.Available == false {
-		errMsg := "this cdks status is abnormal"
-		switch cdkData.Error {
-		case "卡密不存在":
-			errMsg = "this cdk is not exists."
-		case "卡密已使用":
-			errMsg = "this cdk has been used."
-		case "卡密已停用":
-			errMsg = "this cdk has been suspended."
-		}
-		c.JSON(http.StatusOK, gin.H{
-			"success": false,
-			"message": errMsg,
-			"data":    "",
-		})
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "success",
-		"data":    cdkData,
-	})
-	return
-}
-
-// 用户信息校验
-func Check(c *gin.Context) {
-	param := constants.CDKCheckRequest{}
-	err := c.ShouldBindJSON(&param)
-	if err != nil {
+// 验证卡密
+func VerifyCard(c *gin.Context) {
+	param := constants.CDKVerifyRequest{}
+	if err := c.ShouldBindJSON(&param); err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
 			"message": "parameter error: " + err.Error(),
 		})
 		return
 	}
-	url := fmt.Sprintf("%s/api/parse-token", baseUrl)
+
+	url := fmt.Sprintf("%s/api/cards/verify", cdkBaseUrl)
 	err, resp := request.Curl(url, "POST", param)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
@@ -99,14 +37,13 @@ func Check(c *gin.Context) {
 		})
 		return
 	}
-
 	defer resp.Body.Close()
-	var accData constants.CDKCheckResponse
-	bodyByte, _ := io.ReadAll(resp.Body)
 
+	bodyByte, _ := io.ReadAll(resp.Body)
 	logger.SysLogf("url: %s. body: %s", url, string(bodyByte))
-	err = json.Unmarshal(bodyByte, &accData)
-	if err != nil {
+
+	var result map[string]interface{}
+	if err = json.Unmarshal(bodyByte, &result); err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
 			"message": "response unmarshal fail: " + err.Error(),
@@ -114,59 +51,58 @@ func Check(c *gin.Context) {
 		})
 		return
 	}
-	if accData.Success == false {
+
+	success, _ := result["success"].(bool)
+	if !success {
+		msg := ""
+		if m, ok := result["message"].(string); ok {
+			msg = m
+		}
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
-			"message": "failed to get this account information: " + accData.Message,
+			"message": "card verify failed: " + msg,
 			"data":    "",
 		})
 		return
 	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "success",
-		"data": gin.H{
-			"user_name": accData.Message,
-		},
+		"data":    result["data"],
 	})
-	return
 }
 
-// 充值任务
+// 验证卡密并充值
 func TopUp(c *gin.Context) {
 	param := constants.CDKTopupRequest{}
-	err := c.ShouldBindJSON(&param)
-	if err != nil {
+	if err := c.ShouldBindJSON(&param); err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
 			"message": "parameter error: " + err.Error(),
 		})
 		return
 	}
-	if param.Account == "" {
-		c.JSON(http.StatusOK, gin.H{
-			"success": false,
-			"message": "please set the parameter of account",
-		})
-		return
-	}
-	if count, serr := redis.Exists(fmt.Sprintf("Thread:%s", param.Account)); serr != nil || count == 0 {
-		if ok, err := redis.SetNx(fmt.Sprintf("Thread:%s", param.Account), "1", time.Duration(constants.GetCacheFrequency())*time.Second); ok || err == nil {
-			status, data := createThread(c, param)
+
+	// 防重复提交：以 userEmail 为维度限流
+	lockKey := fmt.Sprintf("Thread:%s", param.UserEmail)
+	if count, serr := redis.Exists(lockKey); serr != nil || count == 0 {
+		if ok, err := redis.SetNx(lockKey, "1", time.Duration(constants.GetCacheFrequency())*time.Second); ok || err == nil {
+			status, data := doTopUp(param)
 			c.JSON(status, data)
 			return
 		}
 	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"success": false,
 		"message": "Please do not submit repeated requests",
 	})
-	return
 }
 
-// 创建任务
-func createThread(c *gin.Context, param constants.CDKTopupRequest) (int, gin.H) {
-	url := fmt.Sprintf("%s/api/tasks", baseUrl)
+// 执行充值请求
+func doTopUp(param constants.CDKTopupRequest) (int, gin.H) {
+	url := fmt.Sprintf("%s/api/cards/verify-gpt", cdkBaseUrl)
 	err, resp := request.Curl(url, "POST", param)
 	if err != nil {
 		return http.StatusOK, gin.H{
@@ -174,77 +110,62 @@ func createThread(c *gin.Context, param constants.CDKTopupRequest) (int, gin.H) 
 			"message": "request fail: " + err.Error(),
 			"data":    "",
 		}
-
 	}
-
 	defer resp.Body.Close()
-	var resData constants.CDKTopupResponse
-	bodyByte, _ := io.ReadAll(resp.Body)
 
+	bodyByte, _ := io.ReadAll(resp.Body)
 	logger.SysLogf("url: %s. body: %s", url, string(bodyByte))
-	err = json.Unmarshal(bodyByte, &resData)
-	if err != nil {
+
+	var resData constants.CDKTopupResponse
+	if err = json.Unmarshal(bodyByte, &resData); err != nil {
 		return http.StatusOK, gin.H{
 			"success": false,
 			"message": "response unmarshal fail: " + err.Error(),
 			"data":    "",
 		}
 	}
-	if resData.Success == false {
+
+	if !resData.Success {
 		return http.StatusOK, gin.H{
 			"success": false,
-			"message": "failed to top up: " + resData.Error,
+			"message": "topup failed: " + resData.Data.Message,
 			"data":    "",
 		}
 	}
-	if resData.TaskId == "" {
+
+	if resData.Data.TaskId == "" {
 		return http.StatusOK, gin.H{
 			"success": false,
-			"message": "failed to top up:  failed to create task",
+			"message": "topup failed: task not created",
 			"data":    "",
 		}
 	}
-	var threadId = random.GetRandomString(32)
-	redis.SetNx(threadId, resData.TaskId, time.Duration(constants.GetCacheFrequency())*time.Second)
+
 	return http.StatusOK, gin.H{
 		"success": true,
 		"message": "success",
 		"data": gin.H{
-			"thread_id": threadId,
+			"taskId":       resData.Data.TaskId,
+			"processing":   resData.Data.Processing,
+			"needsPolling": resData.Data.NeedsPolling,
+			"message":      resData.Data.Message,
 		},
 	}
 }
 
-// 获取任务详情
-func GetThreadDetail(c *gin.Context) {
-	threadId := c.Param("id")
-	if threadId == "" {
+// 查询充值任务状态
+func QueryTaskStatus(c *gin.Context) {
+	param := constants.CDKQueryTaskRequest{}
+	if err := c.ShouldBindJSON(&param); err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
-			"message": "please set the parameter of thread-id ",
-			"data":    "",
+			"message": "parameter error: " + err.Error(),
 		})
 		return
 	}
-	taskId, err := redis.Get(threadId)
-	if err != nil {
-		c.JSON(http.StatusOK, gin.H{
-			"success": false,
-			"message": "failed to get this thread: failed to find thread-id",
-			"data":    "",
-		})
-		return
-	}
-	if taskId == "" {
-		c.JSON(http.StatusOK, gin.H{
-			"success": false,
-			"message": "failed to get this thread: thread-id not found",
-			"data":    "",
-		})
-		return
-	}
-	url := fmt.Sprintf("%s/api/tasks/%s", baseUrl, taskId)
-	err, resp := request.Curl(url, "GET", nil)
+
+	url := fmt.Sprintf("%s/api/recharge/query-task-status", cdkBaseUrl)
+	err, resp := request.Curl(url, "POST", param)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
@@ -253,14 +174,13 @@ func GetThreadDetail(c *gin.Context) {
 		})
 		return
 	}
-
 	defer resp.Body.Close()
-	var resData constants.CDKTaskResponse
-	bodyByte, _ := io.ReadAll(resp.Body)
 
+	bodyByte, _ := io.ReadAll(resp.Body)
 	logger.SysLogf("url: %s. body: %s", url, string(bodyByte))
-	err = json.Unmarshal(bodyByte, &resData)
-	if err != nil {
+
+	var resData constants.CDKQueryTaskResponse
+	if err = json.Unmarshal(bodyByte, &resData); err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
 			"message": "response unmarshal fail: " + err.Error(),
@@ -268,40 +188,37 @@ func GetThreadDetail(c *gin.Context) {
 		})
 		return
 	}
-	var data gin.H
-	switch resData.Status {
-	case "failed":
-		data = gin.H{
-			"success": false,
-			"message": "failed to top-up: " + resData.Error,
-			"data":    "",
-		}
-	case "pending":
-		data = gin.H{
+
+	switch resData.Data.Status {
+	case "success":
+		c.JSON(http.StatusOK, gin.H{
 			"success": true,
-			"message": "current thread is pending",
+			"message": resData.Data.Message,
 			"data": gin.H{
-				"status": "pending",
+				"status": "success",
 			},
-		}
+		})
 	case "processing":
-		data = gin.H{
-			"success": false,
-			"message": "current thread is processing",
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"message": resData.Data.Message,
 			"data": gin.H{
 				"status": "processing",
 			},
-		}
-	case "completed":
-		data = gin.H{
-			"success": true,
-			"message": "success",
+		})
+	case "failed":
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": resData.Data.Message,
 			"data": gin.H{
-				"status": "completed",
+				"status": "failed",
 			},
-		}
+		})
+	default:
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": "unknown task status: " + resData.Data.Status,
+			"data":    "",
+		})
 	}
-
-	c.JSON(http.StatusOK, data)
-	return
 }

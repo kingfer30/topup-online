@@ -47,6 +47,8 @@ export interface CardListParams {
   keyword?: string
   subscription_type?: string
   subscription_status?: number // 已售列表订阅状态过滤
+  sell_to?: string              // 已售列表：出售对方（模糊）
+  purchase_by?: string           // 已售列表：卖家名称（模糊）
   is_check?: number            // 检查状态过滤 -1未检查 1检查成功 2检查失败
   // 购买时间筛选：
   // - 传 YYYY-MM-DD：按当天(UTC+8)范围查询
@@ -187,6 +189,14 @@ export const rollbackPickup = (data: RollbackPickupRequest): Promise<ApiResponse
 // 回滚已售接口（将已出售重置为未出售）
 export const rollbackSoldCard = (data: RollbackPickupRequest): Promise<ApiResponse> => {
   return http.post('/admin/cards/rollback-sold', data) as Promise<ApiResponse>
+}
+
+// 提链结果为 cursor dashboard 且掉订阅时：批量回滚已售并标记订阅 -2、检查成功
+export const batchDashboardGotoResolve = (data: {
+  category: string
+  ids: number[]
+}): Promise<ApiResponse<number>> => {
+  return http.post('/admin/cards/batch-dashboard-goto-resolve', data) as Promise<ApiResponse<number>>
 }
 
 // 按订阅类型细分的库存

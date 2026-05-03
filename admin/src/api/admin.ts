@@ -36,6 +36,32 @@ export const changePassword = (data: {
   return http.post<ApiResponse>('/admin/change-password', data)
 }
 
+// ==================== 登录设备管理 ====================
+
+export interface AdminSession {
+  id: number
+  session_uuid: string
+  ip_address: string
+  user_agent: string
+  created_at: number
+  is_current: boolean
+}
+
+// 获取已登录设备列表
+export const getAdminSessions = () => {
+  return http.get<ApiResponse<AdminSession[]>>('/admin/sessions')
+}
+
+// 踢出指定设备
+export const kickSession = (uuid: string) => {
+  return http.delete<ApiResponse>(`/admin/sessions/${uuid}`)
+}
+
+// 踢出所有设备（含自己）
+export const kickAllSessions = () => {
+  return http.delete<ApiResponse>('/admin/sessions')
+}
+
 // ==================== 用户管理相关API ====================
 
 // 获取用户列表

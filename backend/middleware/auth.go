@@ -29,10 +29,9 @@ func AdminAuth() gin.HandlerFunc {
 			token = token[7:]
 		}
 
-		// TODO: 这里应该从Redis验证token并获取admin_id
-		// 临时实现：从token中解析admin_id（格式：admin_{id}_{uuid}_{timestamp}）
+		// token格式：admin_{id}_{version}_{uuid}_{timestamp}
 		parts := strings.Split(token, "_")
-		if len(parts) < 2 {
+		if len(parts) < 3 {
 			c.JSON(http.StatusOK, gin.H{
 				"code":    401,
 				"message": "无效的token",
@@ -42,6 +41,16 @@ func AdminAuth() gin.HandlerFunc {
 		}
 
 		adminID, err := strconv.Atoi(parts[1])
+		if err != nil {
+			c.JSON(http.StatusOK, gin.H{
+				"code":    401,
+				"message": "无效的token格式",
+			})
+			c.Abort()
+			return
+		}
+
+		tokenVersion, err := strconv.Atoi(parts[2])
 		if err != nil {
 			c.JSON(http.StatusOK, gin.H{
 				"code":    401,
@@ -69,6 +78,46 @@ func AdminAuth() gin.HandlerFunc {
 			})
 			c.Abort()
 			return
+		}
+
+		// 校验token版本号，不匹配说明已被强制登出
+		if tokenVersion != admin.TokenVersion {
+			c.JSON(http.StatusOK, gin.H{
+				"code":    401,
+				"message": "token已失效，请重新登录",
+			})
+			c.Abort()
+			return
+		}
+
+		// 校验 session 是否有效（是否被单独踢出）
+		// token格式：admin_{id}_{version}_{uuid}_{timestamp}，UUID 在第4段
+		if len(parts) >= 4 {
+			sessionUUID := parts[3]
+			var session model.AdminSession
+			err := model.DB.Where("session_uuid = ? AND admin_id = ?", sessionUUID, adminID).First(&session).Error
+			if err != nil {
+				// session 记录不存在（可能是 backend 重启前颁发的旧 token），
+				// token_version 已通过校验，补建 session 记录并放行
+				newSession := model.AdminSession{
+					AdminID:     uint(adminID),
+					SessionUUID: sessionUUID,
+					IPAddress:   c.ClientIP(),
+					UserAgent:   c.GetHeader("User-Agent"),
+					IsActive:    true,
+				}
+				model.DB.Create(&newSession)
+			} else if !session.IsActive {
+				// session 存在但已被踢出
+				c.JSON(http.StatusOK, gin.H{
+					"code":    401,
+					"message": "您的登录已在其他位置被踢出，请重新登录",
+				})
+				c.Abort()
+				return
+			}
+			// 将 session_uuid 存入 context，供 KickSession/Logout 等接口使用
+			c.Set("session_uuid", sessionUUID)
 		}
 
 		// 将admin_id存入context，供后续handler使用

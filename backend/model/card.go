@@ -15,7 +15,7 @@ type AccountCard struct {
 	Account                 string         `json:"account" gorm:"type:varchar(100);not null;uniqueIndex:idx_account"`
 	Password                string         `json:"password" gorm:"type:varchar(50)"`
 	MailPassword            string         `json:"mail_password" gorm:"type:varchar(50)"`
-	SubscriptionStatus      int            `json:"subscription_status" gorm:"type:tinyint(2);default:1;comment:订阅状态 1已订阅 2未订阅 -1掉订阅"`
+	SubscriptionStatus      int            `json:"subscription_status" gorm:"type:tinyint(2);default:1;comment:订阅状态 1已订阅 2未订阅 -1掉订阅 -2已订阅需点击pro"`
 	SubscriptionType        string         `json:"subscription_type" gorm:"type:varchar(30);comment:订阅类型;index:idx_subscription_type"`
 	SubscriptionTime        *int64         `json:"subscription_time" gorm:"type:bigint(20);comment:订阅时间;index:idx_subscription_time"`
 	SubscriptionExpiredTime *int64         `json:"subscription_expired_time" gorm:"type:bigint(20);comment:订阅过期时间"`
@@ -48,7 +48,7 @@ type AccountCard struct {
 }
 
 // GetAllCardsForExport 获取符合条件的全部卡密（不分页，用于导出）
-func GetAllCardsForExport(tableName string, cardType string, keyword string, subscriptionType string, subscriptionStatus int, isCheck int, purchaseDate int64, freezeStatus int) ([]AccountCard, error) {
+func GetAllCardsForExport(tableName string, cardType string, keyword string, subscriptionType string, subscriptionStatus int, isCheck int, purchaseDate int64, freezeStatus int, sellTo string, purchaseBy string) ([]AccountCard, error) {
 	var cards []AccountCard
 
 	query := DB.Table(tableName).Where("status != ?", -1)
@@ -57,7 +57,7 @@ func GetAllCardsForExport(tableName string, cardType string, keyword string, sub
 	case "all":
 		query = query.Where("account_type = ?", 1)
 	case "unsold":
-		query = query.Where("sell_status IN ?", []int{1, 2}).Where("subscription_status = ?", 1)
+		query = query.Where("sell_status IN ?", []int{1, 2}).Where("subscription_status IN ?", []int{1, -2})
 	case "sold":
 		query = query.Where("sell_status = ?", 3)
 	}
@@ -76,15 +76,27 @@ func GetAllCardsForExport(tableName string, cardType string, keyword string, sub
 		query = query.Where("is_check = ?", isCheck)
 	}
 
-	// 购买时间按范围（未售/已售列表均支持，0 表示不过滤）
-	// purchaseDate 表示 startOfDay，end=start+86400
-	if purchaseDate > 0 && (cardType == "sold" || cardType == "unsold") {
+	// 日期按范围（0 表示不过滤）：已售列表按 sell_date；未售列表按 purchase_date
+	if purchaseDate > 0 && cardType == "sold" {
+		query = query.Where("sell_date >= ? AND sell_date < ?", purchaseDate, purchaseDate+86400)
+	}
+	if purchaseDate > 0 && cardType == "unsold" {
 		query = query.Where("purchase_date >= ? AND purchase_date < ?", purchaseDate, purchaseDate+86400)
 	}
 
 	// 冻结状态筛选（仅普号列表，0 表示不过滤）
 	if freezeStatus != 0 && cardType == "all" {
 		query = query.Where("freeze_status = ?", freezeStatus)
+	}
+
+	// 出售对方（仅已售列表，模糊匹配）
+	if st := strings.TrimSpace(sellTo); st != "" && cardType == "sold" {
+		query = query.Where("sell_to LIKE ?", "%"+st+"%")
+	}
+
+	// 卖家名称（仅已售列表，模糊匹配）
+	if pb := strings.TrimSpace(purchaseBy); pb != "" && cardType == "sold" {
+		query = query.Where("purchase_by LIKE ?", "%"+pb+"%")
 	}
 
 	if keyword != "" {
@@ -103,7 +115,7 @@ func GetAllCardsForExport(tableName string, cardType string, keyword string, sub
 }
 
 // GetCardList 获取卡密列表
-func GetCardList(tableName string, cardType string, page, pageSize int, keyword string, subscriptionType string, subscriptionStatus int, isCheck int, purchaseDate int64, freezeStatus int) ([]AccountCard, int64, error) {
+func GetCardList(tableName string, cardType string, page, pageSize int, keyword string, subscriptionType string, subscriptionStatus int, isCheck int, purchaseDate int64, freezeStatus int, sellTo string, purchaseBy string) ([]AccountCard, int64, error) {
 	var cards []AccountCard
 	var total int64
 
@@ -115,7 +127,7 @@ func GetCardList(tableName string, cardType string, page, pageSize int, keyword 
 	case "all":
 		query = query.Where("account_type = ?", 1) // 普号列表：只显示普号
 	case "unsold":
-		query = query.Where("sell_status IN ?", []int{1, 2}).Where("subscription_status = ?", 1) // 未售列表：未出售 + 发货中，且仅已订阅
+		query = query.Where("sell_status IN ?", []int{1, 2}).Where("subscription_status IN ?", []int{1, -2}) // 未售：已订阅或已订阅需点击pro
 	case "sold":
 		query = query.Where("sell_status = ?", 3) // 已售列表：已出售
 	}
@@ -135,14 +147,27 @@ func GetCardList(tableName string, cardType string, page, pageSize int, keyword 
 		query = query.Where("is_check = ?", isCheck)
 	}
 
-	// 购买时间按范围（未售/已售列表均支持，0 表示不过滤）
-	if purchaseDate > 0 && (cardType == "sold" || cardType == "unsold") {
+	// 日期按范围（0 表示不过滤）：已售列表按 sell_date；未售列表按 purchase_date
+	if purchaseDate > 0 && cardType == "sold" {
+		query = query.Where("sell_date >= ? AND sell_date < ?", purchaseDate, purchaseDate+86400)
+	}
+	if purchaseDate > 0 && cardType == "unsold" {
 		query = query.Where("purchase_date >= ? AND purchase_date < ?", purchaseDate, purchaseDate+86400)
 	}
 
 	// 冻结状态筛选（仅普号列表，0 表示不过滤）
 	if freezeStatus != 0 && cardType == "all" {
 		query = query.Where("freeze_status = ?", freezeStatus)
+	}
+
+	// 出售对方（仅已售列表，模糊匹配）
+	if st := strings.TrimSpace(sellTo); st != "" && cardType == "sold" {
+		query = query.Where("sell_to LIKE ?", "%"+st+"%")
+	}
+
+	// 卖家名称（仅已售列表，模糊匹配）
+	if pb := strings.TrimSpace(purchaseBy); pb != "" && cardType == "sold" {
+		query = query.Where("purchase_by LIKE ?", "%"+pb+"%")
 	}
 
 	// 关键词搜索
@@ -394,6 +419,37 @@ func RollbackSoldCard(tableName string, id int) error {
 		return errors.New("卡密不存在或状态不是已出售")
 	}
 	return nil
+}
+
+// BatchDashboardGotoAfterResolve 提链返回 dashboard 时：仅当订阅状态为掉订阅(-1)时才回滚已售至未售，并标记订阅状态为已订阅需点击pro（-2）、检查成功
+func BatchDashboardGotoAfterResolve(tableName string, ids []int) (success int, errMsgs []string) {
+	for _, id := range ids {
+		if id == 0 {
+			continue
+		}
+		card, err := GetCardById(tableName, id)
+		if err != nil || card == nil {
+			errMsgs = append(errMsgs, fmt.Sprintf("ID %d: 记录不存在", id))
+			continue
+		}
+		if card.SubscriptionStatus != -1 {
+			errMsgs = append(errMsgs, fmt.Sprintf("ID %d (%s): 订阅状态非掉订阅，不可回滚", id, card.Account))
+			continue
+		}
+		if err := RollbackSoldCard(tableName, id); err != nil {
+			errMsgs = append(errMsgs, fmt.Sprintf("ID %d 回滚: %v", id, err))
+			continue
+		}
+		if err := DB.Table(tableName).Where("id = ?", id).Updates(map[string]interface{}{
+			"subscription_status": -2,
+			"is_check":            1,
+		}).Error; err != nil {
+			errMsgs = append(errMsgs, fmt.Sprintf("ID %d 更新状态: %v", id, err))
+			continue
+		}
+		success++
+	}
+	return success, errMsgs
 }
 
 // RollbackPickup 回滚取货：将发货中(2)重置为未出售(1)
@@ -648,14 +704,15 @@ func GetAllCardTableNames() ([]string, error) {
 	return tableNames, err
 }
 
-// GetUnsoldCardsWithToken 获取指定表中 sell_status=1 且 token 不为空，且今天未检查过的卡密
+// GetUnsoldCardsWithToken 获取指定表中 sell_status=1 且 token 不为空，且今天未检查过的成品卡密（不含 subscription_status=-2「已订阅需点击pro」，不参与每日掉订阅巡检）
 func GetUnsoldCardsWithToken(tableName string, limit int) ([]*AccountCard, error) {
 	var cards []*AccountCard
 	// 今天零点的 Unix 时间戳
 	now := time.Now()
 	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).Unix()
 	err := DB.Table(tableName).
-		Where("sell_status = ? ADN account_type=2 AND token IS NOT NULL AND token != ''", 1).
+		Where("sell_status = ? AND account_type=2 AND token IS NOT NULL AND token != ''", 1).
+		Where("subscription_status != ?", -2).
 		Where("check_time IS NULL OR check_time < ?", todayStart).
 		Limit(limit).
 		Find(&cards).Error

@@ -37,6 +37,11 @@
             <template #icon><span>💸</span></template>
             批量后付费 {{ checkedRowKeys.length > 0 ? `(${checkedRowKeys.length})` : '' }}
           </n-button>
+          <n-button v-if="cardType === 'sold'" type="warning" :disabled="checkedRowKeys.length === 0"
+            :loading="batchGotoProLoading" @click="handleBatchGotoPro">
+            <template #icon><span>🔗</span></template>
+            批量提链 {{ checkedRowKeys.length > 0 ? `(${checkedRowKeys.length})` : '' }}
+          </n-button>
           <n-button v-if="cardType === 'sold'" type="error" @click="handleOpenRecharge">
             <template #icon><span>💳</span></template>
             新增代充
@@ -74,6 +79,20 @@
           <n-select v-if="cardType === 'sold'" v-model:value="searchSubscriptionStatus"
             :options="[{ label: '全部订阅状态', value: 0 }, ...subscriptionStatusOptions]" placeholder="订阅状态"
             style="width: 150px" />
+          <n-input
+            v-if="cardType === 'sold'"
+            v-model:value="searchSellTo"
+            placeholder="出售对方"
+            clearable
+            style="width: 160px"
+          />
+          <n-input
+            v-if="cardType === 'sold'"
+            v-model:value="searchPurchaseBy"
+            placeholder="卖家"
+            clearable
+            style="width: 140px"
+          />
           <n-select v-if="cardType === 'sold' || cardType === 'unsold'" v-model:value="searchIsCheck" :options="[
             { label: '全部检查状态', value: 0 },
             { label: '未检查', value: -1 },
@@ -91,7 +110,7 @@
             type="date"
             clearable
             style="width: 180px"
-            placeholder="购买日期"
+            :placeholder="cardType === 'sold' ? '已售日期' : '购买日期'"
           />
           <n-button type="primary" @click="handleSearch">搜索</n-button>
           <n-button @click="handleReset">重置</n-button>
@@ -628,6 +647,18 @@
         </n-alert>
       </n-form>
     </n-modal>
+
+    <!-- 已售列表：批量提链结果（账号----链接） -->
+    <n-modal v-model:show="showBatchGotoProModal" title="批量提链结果" preset="card" style="width: 720px">
+      <n-input :value="batchGotoProResultText" type="textarea" readonly :rows="14"
+        placeholder="无展示链接（可能均为 dashboard：仅掉订阅会回滚，其余见下方说明）" style="font-family: monospace; font-size: 13px" />
+      <template #footer>
+        <n-space justify="end">
+          <n-button @click="handleCopyBatchGotoProResult">复制全部</n-button>
+          <n-button type="primary" @click="showBatchGotoProModal = false">关闭</n-button>
+        </n-space>
+      </template>
+    </n-modal>
   </div>
 </template>
 
@@ -678,6 +709,7 @@ import {
   completePickup,
   rollbackPickup,
   rollbackSoldCard,
+  batchDashboardGotoResolve,
   batchEnableOnDemandSpend,
   gotoProUpgrade,
   updateCardRemark,
@@ -761,6 +793,8 @@ const formRef = ref<FormInst | null>(null)
 const searchKeyword = ref('')
 const searchSubscriptionType = ref('')
 const searchSubscriptionStatus = ref(0)
+const searchSellTo = ref('')
+const searchPurchaseBy = ref('')
 const searchIsCheck = ref(0)
 const searchFreezeStatus = ref(0)
 // 购买日期筛选（n-date-picker 返回毫秒）
@@ -901,6 +935,15 @@ const showGotoProSuccessModal = ref(false)
 const showGotoProFailModal = ref(false)
 const gotoProFailRemark = ref('')
 
+// 已售列表：批量提链结果弹窗
+const showBatchGotoProModal = ref(false)
+const batchGotoProResultText = ref('')
+const batchGotoProLoading = ref(false)
+
+// 未售列表：订阅状态 -2 标签点击复制（俄语说明）
+const CURSOR_PRO_DELAY_RU_TEXT =
+  'Подписка Cursor иногда обновляется с задержкой. Вы можете ещё раз нажать кнопку обновления подписки. Если после обновления страницы отображается Pro — всё в порядке.\n\nЕсли по-прежнему отображается Free или вас сразу перенаправляет на страницу оплаты — пожалуйста, свяжитесь со мной для решения проблемы.'
+
 // 批量冻结/解冻弹窗
 const showFreezeModal = ref(false)
 const freezeAction = ref<1 | -1>(1)
@@ -1002,6 +1045,7 @@ const subscriptionStatusOptions = [
   { label: '已订阅', value: 1 },
   { label: '未订阅', value: 2 },
   { label: '掉订阅', value: -1 },
+  { label: '已订阅需点击pro', value: -2 },
 ]
 
 
@@ -1038,6 +1082,7 @@ const purchasePlatformOptions = [
   { label: 'Telegram', value: 'Telegram' },
   { label: '闲鱼', value: '闲鱼' },
   { label: '淘宝', value: '淘宝' },
+  { label: '卡充', value: '卡充' },
 ]
 
 // 邮箱地址选项（支持手动输入）
@@ -1072,6 +1117,7 @@ const getSubscriptionStatusTagInfo = (subscriptionStatus?: number): { label: str
     1: { label: '已订阅', type: 'success' },
     2: { label: '未订阅', type: 'warning' },
     [-1]: { label: '掉订阅', type: 'error' },
+    [-2]: { label: '已订阅需点击pro', type: 'warning' },
   }
   const v = subscriptionStatus ?? 0
   return map[v] ?? { label: v ? String(v) : '—', type: 'default' }
@@ -1133,13 +1179,37 @@ const columns = computed<DataTableColumns<Card>>(() => {
           }
           const statusInfo = getSubscriptionStatusTagInfo(row.subscription_status)
           if (statusInfo.label !== '—') {
-            tags.push(
-              h(
-                NTag,
-                { type: statusInfo.type, size: 'small', bordered: false },
-                { default: () => statusInfo.label }
+            if (isUnsold && row.subscription_status === -2) {
+              tags.push(
+                h(
+                  NTag,
+                  {
+                    type: statusInfo.type,
+                    size: 'small',
+                    bordered: false,
+                    style: { cursor: 'pointer' },
+                    title: '点击复制俄语说明',
+                    onClick: async () => {
+                      try {
+                        await navigator.clipboard.writeText(CURSOR_PRO_DELAY_RU_TEXT)
+                        message.success('已复制到剪贴板')
+                      } catch {
+                        message.error('复制失败')
+                      }
+                    },
+                  },
+                  { default: () => statusInfo.label }
+                )
               )
-            )
+            } else {
+              tags.push(
+                h(
+                  NTag,
+                  { type: statusInfo.type, size: 'small', bordered: false },
+                  { default: () => statusInfo.label }
+                )
+              )
+            }
           }
           if (tags.length > 0) {
             return h(
@@ -1209,8 +1279,8 @@ const columns = computed<DataTableColumns<Card>>(() => {
       width: 170,
       render: (row: Card) => formatTimestamp(row.purchase_date),
     }] as DataTableColumns<Card> : []),
-    // 未售/已售列表显示订阅额度
-    ...(!isAll ? [{
+    // 未售/已售：订阅额度（美元）
+    ...((isUnsold || isSold) ? [{
       title: '额度',
       key: 'subscription_credits',
       width: 80,
@@ -1232,8 +1302,14 @@ const columns = computed<DataTableColumns<Card>>(() => {
         return h(NTag, { type: info.type, size: 'small' }, { default: () => info.label })
       },
     }] as DataTableColumns<Card> : []),
-    // 已售列表显示售出对方和出售时间
+    // 已售列表显示出售对方、出售时间
     ...(isSold ? [
+      {
+        title: '出售对方',
+        key: 'sell_to',
+        width: 120,
+        render: (row: Card) => row.sell_to || '—',
+      },
       {
         title: '出售时间',
         key: 'sell_date',
@@ -1405,6 +1481,8 @@ const loadCards = async () => {
       keyword: searchKeyword.value,
       ...(searchSubscriptionType.value ? { subscription_type: searchSubscriptionType.value } : {}),
       ...(searchSubscriptionStatus.value !== 0 ? { subscription_status: searchSubscriptionStatus.value } : {}),
+      ...(searchSellTo.value.trim() ? { sell_to: searchSellTo.value.trim() } : {}),
+      ...(searchPurchaseBy.value.trim() ? { purchase_by: searchPurchaseBy.value.trim() } : {}),
       ...(searchIsCheck.value !== 0 ? { is_check: searchIsCheck.value } : {}),
       ...(purchaseDateParam ? { purchase_date: purchaseDateParam } : {}),
       ...(searchFreezeStatus.value !== 0 ? { freeze_status: searchFreezeStatus.value } : {}),
@@ -1478,6 +1556,128 @@ const handleBatchEnableOnDemand = async () => {
     message.error(error.response?.data?.message || '操作失败')
   } finally {
     batchOnDemandLoading.value = false
+  }
+}
+
+// 提链返回链接规范化（与后端一致：可能为 JSON 字符串）
+const normalizeGotoLinkFromResponse = (raw: string): string => {
+  let s = String(raw || '').trim()
+  try {
+    const parsed = JSON.parse(s) as unknown
+    if (typeof parsed === 'string') s = parsed.trim()
+  } catch {
+    /* 非 JSON */
+  }
+  return s.replace(/\/+$/, '')
+}
+
+const isCursorDashboardLink = (raw: string): boolean =>
+  normalizeGotoLinkFromResponse(raw) === 'https://cursor.com/dashboard'
+
+const mapSubscriptionToGotoProType = (subscriptionType?: string): string => {
+  const t = (subscriptionType || '').toLowerCase()
+  if (t === 'pro' || t === 'pro_plus' || t === 'ultra') return t
+  return 'pro'
+}
+
+// 已售列表：批量提链（展示 账号----链接；dashboard 且掉订阅(-1) 才回滚+标记 -2）
+const handleBatchGotoPro = async () => {
+  const ids = checkedRowKeys.value as number[]
+  if (ids.length === 0) {
+    message.warning('请先勾选记录')
+    return
+  }
+  batchGotoProLoading.value = true
+  const lines: string[] = []
+  const dashboardIds: number[] = []
+  const errLines: string[] = []
+
+  try {
+    for (const id of ids) {
+      const row =
+        selectedCardsMap.value.get(id) ?? cardList.value.find(c => c.id === id)
+      if (!row?.token) {
+        errLines.push(`${row?.account || `#${id}`}: 无 Token，已跳过`)
+        continue
+      }
+      const subType = mapSubscriptionToGotoProType(row.subscription_type)
+      try {
+        const response = await gotoProUpgrade(row.token, subType)
+        if (response.code !== 200 || !response.data) {
+          errLines.push(`${row.account}: ${response.message || '获取链接失败'}`)
+          continue
+        }
+        const link = normalizeGotoLinkFromResponse(String(response.data))
+        if (isCursorDashboardLink(String(response.data))) {
+          if (row.subscription_status !== -1) {
+            errLines.push(
+              `${row.account}: 提链结果为 dashboard，仅「掉订阅」可回滚，当前状态不可回滚`
+            )
+          } else {
+            dashboardIds.push(row.id)
+          }
+        } else {
+          lines.push(`${row.account}----${link}`)
+        }
+      } catch (e: any) {
+        errLines.push(`${row.account}: ${e.response?.data?.message || e.message || '请求失败'}`)
+      }
+    }
+
+    let dashboardResultMessage = ''
+    let dashboardBatchOk = false
+    if (dashboardIds.length > 0) {
+      const res = await batchDashboardGotoResolve({
+        category: category.value,
+        ids: dashboardIds,
+      })
+      if (res.code !== 200) {
+        errLines.push(`Dashboard 批量处理: ${res.message || '失败'}`)
+      } else {
+        dashboardBatchOk = true
+        dashboardResultMessage = res.message || ''
+      }
+    }
+
+    const parts: string[] = []
+    if (lines.length) {
+      parts.push('--- 账号----链接 ---')
+      parts.push(...lines)
+    }
+    if (errLines.length) {
+      parts.push('--- 异常或跳过 ---')
+      parts.push(...errLines)
+    }
+    if (dashboardIds.length) {
+      parts.push(
+        dashboardResultMessage
+          ? `--- ${dashboardResultMessage} ---`
+          : `--- 已为 ${dashboardIds.length} 条 dashboard（掉订阅）执行回滚并标记「已订阅需点击pro」---`
+      )
+    }
+    batchGotoProResultText.value = parts.join('\n') || '（无链接行输出，请查看上方说明）'
+    showBatchGotoProModal.value = true
+
+    const ok = lines.length + (dashboardBatchOk ? dashboardIds.length : 0)
+    message.success(
+      ok > 0
+        ? `处理完成：展示链接 ${lines.length} 条，dashboard 回滚/标记 ${dashboardIds.length} 条（仅掉订阅可回滚）`
+        : '处理结束（请查看结果中的错误信息）'
+    )
+    checkedRowKeys.value = []
+    selectedCardsMap.value.clear()
+    await loadCards()
+  } finally {
+    batchGotoProLoading.value = false
+  }
+}
+
+const handleCopyBatchGotoProResult = async () => {
+  try {
+    await navigator.clipboard.writeText(batchGotoProResultText.value)
+    message.success('已复制')
+  } catch {
+    message.error('复制失败')
   }
 }
 
@@ -1590,6 +1790,8 @@ const handleReset = () => {
   searchKeyword.value = ''
   searchSubscriptionType.value = ''
   searchSubscriptionStatus.value = 0
+  searchSellTo.value = ''
+  searchPurchaseBy.value = ''
   searchIsCheck.value = 0
   searchPurchaseDate.value = null
   searchFreezeStatus.value = 0
@@ -1912,6 +2114,8 @@ const handleExport = async () => {
       keyword: searchKeyword.value,
       ...(searchSubscriptionType.value ? { subscription_type: searchSubscriptionType.value } : {}),
       ...(searchSubscriptionStatus.value !== 0 ? { subscription_status: searchSubscriptionStatus.value } : {}),
+      ...(searchSellTo.value.trim() ? { sell_to: searchSellTo.value.trim() } : {}),
+      ...(searchPurchaseBy.value.trim() ? { purchase_by: searchPurchaseBy.value.trim() } : {}),
       ...(searchIsCheck.value !== 0 ? { is_check: searchIsCheck.value } : {}),
       ...(purchaseDateParam ? { purchase_date: purchaseDateParam } : {}),
       ...(searchFreezeStatus.value !== 0 ? { freeze_status: searchFreezeStatus.value } : {}),
@@ -2367,7 +2571,9 @@ const handlePickupSubmit = async () => {
 
       if (response.code === 200) {
         // 复制默认文本到剪贴板
-        const defaultText = `Ваш заказ выполнен !
+        const defaultText = `Скорость — наше всё, а отзыв — твой победный жест!
+
+Ваш заказ выполнен ! 
 
 Скорость нашей доставки быстра, как Молния Маккуин; сервис точен, как периодическая таблица Менделеева; — если вы согласны с этим, пожалуйста, оставьте положительный отзыв в заказе, и вы сразу же получите подарочную карту на сумму, равную 5% от общей суммы заказа.💰️
 
@@ -2456,6 +2662,11 @@ watch(
       pagination.value.page = 1
       searchKeyword.value = ''
       searchSubscriptionType.value = ''
+      searchSubscriptionStatus.value = 0
+      searchSellTo.value = ''
+      searchPurchaseBy.value = ''
+      searchIsCheck.value = 0
+      searchPurchaseDate.value = null
       searchFreezeStatus.value = 0
 
       // 重新加载数据

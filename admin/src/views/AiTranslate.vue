@@ -60,11 +60,6 @@
 
       <div class="panels">
         <div class="panel panel-in">
-          <div class="panel-actions">
-            <n-button size="small" quaternary circle aria-label="复制原文" title="复制原文" @click="copyText(sourceText)">
-              ⧉
-            </n-button>
-          </div>
           <n-input
             v-model:value="sourceText"
             type="textarea"
@@ -72,6 +67,11 @@
             placeholder="请输入文本"
             class="area-input"
           />
+          <div class="panel-actions">
+            <n-button size="small" quaternary circle aria-label="复制原文" title="复制原文" @click="copyText(sourceText)">
+              ⧉
+            </n-button>
+          </div>
         </div>
 
         <div class="panel-mid">
@@ -81,11 +81,6 @@
         </div>
 
         <div class="panel panel-out">
-          <div class="panel-actions">
-            <n-button size="small" quaternary circle aria-label="复制译文" title="复制译文" @click="copyText(outputText)">
-              ⧉
-            </n-button>
-          </div>
           <n-input
             v-model:value="outputText"
             type="textarea"
@@ -94,6 +89,11 @@
             :autosize="{ minRows: 14, maxRows: 24 }"
             class="area-output"
           />
+          <div class="panel-actions">
+            <n-button size="small" quaternary circle aria-label="复制译文" title="复制译文" @click="copyText(outputText)">
+              ⧉
+            </n-button>
+          </div>
         </div>
       </div>
 
@@ -112,7 +112,6 @@ import { adminAITranslate } from '@/api/ai'
 const message = useMessage()
 
 const LANGS = [
-  { label: '检测语言', value: 'auto' },
   { label: '中文（简体）', value: 'zh' },
   { label: '英语', value: 'en' },
   { label: '日语', value: 'ja' },
@@ -124,7 +123,6 @@ const LANGS = [
 ] as const
 
 const sourceQuick = [
-  { label: '检测语言', value: 'auto' },
   { label: '中文', value: 'zh' },
   { label: '俄语', value: 'ru' },
   { label: '英语', value: 'en' },
@@ -139,10 +137,10 @@ const targetQuick = [
 const allLangOptions = LANGS.map((x) => ({ label: x.label, value: x.value }))
 
 const targetSelectOptions = computed(() =>
-  LANGS.filter((x) => x.value !== 'auto').map((x) => ({ label: x.label, value: x.value }))
+  LANGS.map((x) => ({ label: x.label, value: x.value }))
 )
 
-const sourceLang = ref<string>('auto')
+const sourceLang = ref<string>('zh')
 const targetLang = ref<string>('ru')
 const sourceText = ref('')
 const outputText = ref('')
@@ -187,11 +185,6 @@ const copyText = async (text: string) => {
 const swapLangs = () => {
   const s = sourceLang.value
   const t = targetLang.value
-  if (s === 'auto') {
-    sourceLang.value = t
-    targetLang.value = 'ru'
-    return
-  }
   sourceLang.value = t
   targetLang.value = s
 }
@@ -307,14 +300,14 @@ const handleTranslate = async () => {
 
 .panel {
   min-height: 280px;
-  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .panel-actions {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  z-index: 2;
+  display: flex;
+  justify-content: flex-end;
 }
 
 .panel-mid {

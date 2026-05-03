@@ -90,7 +90,7 @@ func (s *CardCheckScheduler) Stop() {
 	s.stopChan <- true
 }
 
-// checkCards 检查所有 cards_* 表中未出售且有 token 的卡密
+// checkCards 检查所有 cards_* 表中未出售成品且有 token 的卡密（排除 subscription_status=-2）
 func (s *CardCheckScheduler) checkCards() {
 	s.mu.Lock()
 	defer s.mu.Unlock()

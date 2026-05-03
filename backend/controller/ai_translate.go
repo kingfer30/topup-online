@@ -58,8 +58,6 @@ func chatCompletionsURL(base string) string {
 
 func langLabel(code string) string {
 	switch strings.ToLower(strings.TrimSpace(code)) {
-	case "", "auto":
-		return "自动检测的源语言"
 	case "zh", "zh-cn":
 		return "中文（简体）"
 	case "en":
@@ -84,15 +82,14 @@ func langLabel(code string) string {
 func buildTranslatePrompt(sourceLang, targetLang, text string) (systemPrompt, userContent string) {
 	src := strings.TrimSpace(strings.ToLower(sourceLang))
 	tgt := strings.TrimSpace(strings.ToLower(targetLang))
+	if src == "" {
+		src = "zh"
+	}
 	srcLabel := langLabel(src)
 	tgtLabel := langLabel(tgt)
 
-	systemPrompt = "你是专业翻译助手，只输出译文本身，不要解释、不要前缀、不要用引号包裹整段译文。"
-	if src == "" || src == "auto" {
-		userContent = fmt.Sprintf("将以下文本翻译成「%s」。自动判断原文语言。\n\n%s", tgtLabel, text)
-	} else {
-		userContent = fmt.Sprintf("将以下文本从「%s」翻译成「%s」。\n\n%s", srcLabel, tgtLabel, text)
-	}
+	systemPrompt = "你是专业翻译助手，只需要将我发送的内容直接翻译并输出译文本身，不要解释、不要前缀、不要用引号包裹整段译文。"
+	userContent = fmt.Sprintf("将以下文本从「%s」翻译成「%s」。\n\n%s", srcLabel, tgtLabel, text)
 	return systemPrompt, userContent
 }
 

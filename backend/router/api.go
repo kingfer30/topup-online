@@ -18,6 +18,7 @@ func SetApiRouter(router *gin.Engine) {
 
 		// 管理员认证相关（无需认证）
 		apiRouter.POST("/admin/login", controller.AdminLogin)
+		apiRouter.POST("/admin/force-relogin", controller.ForceReLogin) // 强制所有 token 失效，要求重新登录
 
 		// 管理员相关（需要认证）
 		adminGroup := apiRouter.Group("/admin")
@@ -26,6 +27,11 @@ func SetApiRouter(router *gin.Engine) {
 			adminGroup.GET("/info", controller.GetAdminInfo)
 			adminGroup.POST("/logout", controller.Logout)
 			adminGroup.POST("/change-password", controller.ChangePassword)
+
+			// 登录设备管理
+			adminGroup.GET("/sessions", controller.GetAdminSessions)          // 获取已登录设备列表
+			adminGroup.DELETE("/sessions/:uuid", controller.KickSession)      // 踢出指定设备
+			adminGroup.DELETE("/sessions", controller.KickAllSessions)        // 踢出所有设备（含自己）
 
 			// 用户管理接口（管理员专用）
 			adminGroup.GET("/users", controller.GetUserList)       // 获取用户列表
@@ -67,6 +73,7 @@ func SetApiRouter(router *gin.Engine) {
 			adminGroup.POST("/cards/complete-pickup", controller.CompletePickup)                      // 完成取货
 			adminGroup.POST("/cards/rollback-pickup", controller.RollbackPickup)                      // 回滚取货（发货中→未出售）
 			adminGroup.POST("/cards/rollback-sold", controller.RollbackSoldCard)                      // 回滚已售（已出售→未出售）
+			adminGroup.POST("/cards/batch-dashboard-goto-resolve", controller.BatchDashboardGotoResolve) // 提链 dashboard 批量回滚并标记 -2
 			adminGroup.POST("/cards/batch-upgrade", controller.BatchUpgradeToProduct)                 // 批量升级为成品
 			adminGroup.POST("/cards/batch-pickup", controller.BatchPickup)                            // 批量取货
 			adminGroup.GET("/cards/export", controller.ExportCards)                                   // 导出卡密
@@ -123,9 +130,8 @@ func SetApiRouter(router *gin.Engine) {
 		}
 
 		// 卡密相关
-		apiRouter.GET("/cdk/:number", controller.GetCardDetail)
-		apiRouter.POST("/cdk/check", controller.GetCardDetail)
-		apiRouter.POST("/cdk/top-up", controller.GetCardDetail)
-		apiRouter.GET("/cdk/thread/:id", controller.GetCardDetail)
+		apiRouter.POST("/cdk/verify", controller.VerifyCard)
+		apiRouter.POST("/cdk/top-up", controller.TopUp)
+		apiRouter.POST("/cdk/query-task-status", controller.QueryTaskStatus)
 	}
 }

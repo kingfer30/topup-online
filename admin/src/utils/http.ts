@@ -43,13 +43,11 @@ service.interceptors.response.use(
     // 对响应数据做点什么
     const res = response.data
     
-    // 如果是401未授权，且不是登录接口，清除token并跳转到登录页
+    // 如果是401未授权，且不是登录接口，触发全局强制重新登录事件
     // 登录接口的401应该由业务层自己处理（用户名或密码错误）
     if (res.code === 401 && !response.config.url?.includes('/admin/login')) {
-      localStorage.removeItem('admin_token')
-      localStorage.removeItem('admin_info')
-      window.location.href = '/login'
-      return Promise.reject(new Error('未授权'))
+      window.dispatchEvent(new CustomEvent('admin-unauthorized', { detail: { message: res.message } }))
+      return Promise.reject(new Error(res.message || '未授权'))
     }
     
     return res
@@ -61,10 +59,8 @@ service.interceptors.response.use(
     if (error.response) {
       switch (error.response.status) {
         case 401:
-          // 未授权，跳转到登录页
-          localStorage.removeItem('admin_token')
-          localStorage.removeItem('admin_info')
-          window.location.href = '/login'
+          // HTTP 层 401，同样触发全局事件
+          window.dispatchEvent(new CustomEvent('admin-unauthorized', { detail: { message: '登录已过期，请重新登录' } }))
           break
         case 403:
           console.error('拒绝访问')

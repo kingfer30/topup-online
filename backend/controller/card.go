@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -61,6 +62,8 @@ func GetCardList(c *gin.Context) {
 	isCheckStr := c.DefaultQuery("is_check", "0")
 	purchaseDateStr := c.Query("purchase_date")
 	freezeStatusStr := c.DefaultQuery("freeze_status", "0")
+	sellTo := strings.TrimSpace(c.Query("sell_to"))
+	purchaseBy := strings.TrimSpace(c.Query("purchase_by"))
 
 	page, _ := strconv.Atoi(pageStr)
 	pageSize, _ := strconv.Atoi(pageSizeStr)
@@ -107,7 +110,7 @@ func GetCardList(c *gin.Context) {
 	}
 
 	// 查询卡密列表
-	cards, total, err := model.GetCardList(tableName, cardType, page, pageSize, keyword, subscriptionType, subscriptionStatus, isCheck, purchaseDate, freezeStatus)
+	cards, total, err := model.GetCardList(tableName, cardType, page, pageSize, keyword, subscriptionType, subscriptionStatus, isCheck, purchaseDate, freezeStatus, sellTo, purchaseBy)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"code":    500,
@@ -801,6 +804,8 @@ func ExportCards(c *gin.Context) {
 	isCheckStr := c.DefaultQuery("is_check", "0")
 	purchaseDateStr := c.Query("purchase_date")
 	exportFreezeStatus, _ := strconv.Atoi(c.DefaultQuery("freeze_status", "0"))
+	sellTo := strings.TrimSpace(c.Query("sell_to"))
+	purchaseBy := strings.TrimSpace(c.Query("purchase_by"))
 	subscriptionStatus, _ := strconv.Atoi(subscriptionStatusStr)
 	isCheck, _ := strconv.Atoi(isCheckStr)
 
@@ -827,7 +832,7 @@ func ExportCards(c *gin.Context) {
 		return
 	}
 
-	cards, err := model.GetAllCardsForExport(tableName, cardType, keyword, subscriptionType, subscriptionStatus, isCheck, purchaseDate, exportFreezeStatus)
+	cards, err := model.GetAllCardsForExport(tableName, cardType, keyword, subscriptionType, subscriptionStatus, isCheck, purchaseDate, exportFreezeStatus, sellTo, purchaseBy)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{"code": 500, "message": "导出失败: " + err.Error()})
 		return
@@ -933,6 +938,29 @@ func RollbackPickup(c *gin.Context) {
 		"code":    200,
 		"message": "回滚成功",
 	})
+}
+
+// BatchDashboardGotoResolve 批量处理提链结果为 cursor dashboard 的卡密：仅掉订阅(-1)回滚已售并标记订阅状态 -2、检查成功
+func BatchDashboardGotoResolve(c *gin.Context) {
+	var req struct {
+		Category string `json:"category" binding:"required"`
+		IDs      []int  `json:"ids" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusOK, gin.H{"code": 400, "message": "参数错误: " + err.Error()})
+		return
+	}
+	tableName := model.GetTableNameByCategory(req.Category)
+	if !model.CheckTableExists(tableName) {
+		c.JSON(http.StatusOK, gin.H{"code": 404, "message": "该卡密类别不存在"})
+		return
+	}
+	success, errMsgs := model.BatchDashboardGotoAfterResolve(tableName, req.IDs)
+	msg := fmt.Sprintf("已处理 %d 条（dashboard 回滚+标记）", success)
+	if len(errMsgs) > 0 {
+		msg += "；" + strings.Join(errMsgs, "；")
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 200, "message": msg, "data": success})
 }
 
 // EnableOnDemandSpendHandler 为指定卡密开启按需付费

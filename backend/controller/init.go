@@ -188,10 +188,18 @@ func InitializeSystem(c *gin.Context) {
 		return
 	}
 
-	// 创建管理员账号（前端已MD5加密）
+	// 对前端传来的MD5密码再做bcrypt哈希后存储
+	hashedPass, err := hashPassword(req.AdminPass)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"code":    500,
+			"message": "密码加密失败",
+		})
+		return
+	}
 	admin := model.Admin{
 		Username: req.AdminUser,
-		Password: req.AdminPass, // 前端传过来已经是MD5加密的
+		Password: hashedPass,
 		Email:    req.AdminEmail,
 		Status:   1,
 	}
