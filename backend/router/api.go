@@ -102,6 +102,22 @@ func SetApiRouter(router *gin.Engine) {
 			adminGroup.GET("/settings/ai", controller.GetAdminAISettings)
 			adminGroup.PUT("/settings/ai", controller.UpdateAdminAISettings)
 			adminGroup.POST("/ai/translate", controller.AdminAITranslate)
+
+			// GPT卡密管理（供应商卡密）
+			adminGroup.GET("/gpt-cards/suppliers", controller.GetSuppliers)             // 获取供应商列表
+			adminGroup.GET("/gpt-cards", controller.GetGptCardList)                   // 获取卡密列表
+			adminGroup.POST("/gpt-cards/batch-import", controller.BatchImportGptCards) // 批量导入
+			adminGroup.POST("/gpt-cards/batch-check", controller.BatchCheckGptCards)   // 批量检查
+			adminGroup.PUT("/gpt-cards/:id", controller.UpdateGptCard)                // 更新卡密
+			adminGroup.DELETE("/gpt-cards/:id", controller.DeleteGptCard)             // 删除卡密
+			adminGroup.POST("/gpt-cards/batch-delete", controller.BatchDeleteGptCards) // 批量删除
+
+			// GPT-CDK管理（自建CDK）
+			adminGroup.GET("/gpt-cdk", controller.GetGptCdkList)                      // 获取CDK列表
+			adminGroup.POST("/gpt-cdk/batch-generate", controller.BatchGenerateGptCdk) // 批量生成
+			adminGroup.PUT("/gpt-cdk/:id", controller.UpdateGptCdk)                   // 更新CDK
+			adminGroup.DELETE("/gpt-cdk/:id", controller.DeleteGptCdkSingle)          // 删除CDK
+			adminGroup.POST("/gpt-cdk/batch-delete", controller.BatchDeleteGptCdks)   // 批量删除
 		}
 
 		// 用户认证相关（无需认证）
@@ -133,5 +149,10 @@ func SetApiRouter(router *gin.Engine) {
 		apiRouter.POST("/cdk/verify", controller.VerifyCard)
 		apiRouter.POST("/cdk/top-up", controller.TopUp)
 		apiRouter.POST("/cdk/query-task-status", controller.QueryTaskStatus)
+
+		// GPT充值流程（公开，无需认证）
+		apiRouter.POST("/topup/verify-cdk", controller.VerifyCdk)
+		apiRouter.POST("/topup/start", controller.StartTopup)
+		apiRouter.GET("/topup/task/:task_id", controller.GetTopupTaskStatus)
 	}
 }

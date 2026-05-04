@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, nextTick, h, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { 
   NButton, 
   NDropdown, 
@@ -8,6 +9,8 @@ import {
   NModal 
 } from 'naive-ui'
 import '@/styles/custom.css'
+
+const router = useRouter()
 
 // Use flag SVGs from public directory
 const cnFlag = '/flags/CN.svg'
@@ -178,7 +181,7 @@ const t = computed(() => langDict[currentLang.value])
             </n-button>
           </div>
           <nav class="flex gap-2 items-center justify-center">
-            <a href="https://www.ow520.com/" class="nav-link" target="_blank">
+            <a class="nav-link cursor-pointer" @click="router.push('/topup')">
               {{ t.hero_btn }}
             </a>
             <a href="#features" class="nav-link">
@@ -232,9 +235,7 @@ const t = computed(() => langDict[currentLang.value])
             type="primary" 
             size="large"
             class="bg-white text-black font-semibold px-8 py-3 rounded-full shadow-lg hover:shadow-2xl hover:scale-105 transition-all text-lg hover:bg-black hover:text-white"
-            tag="a"
-            href="https://www.ow520.com/"
-            target="_blank"
+            @click="router.push('/topup')"
           >
             {{ t.hero_btn }}
           </n-button>

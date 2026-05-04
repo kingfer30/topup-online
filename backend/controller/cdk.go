@@ -1,22 +1,17 @@
 package controller
 
 import (
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	redis "github.com/kingfer30/topup-online/config/cache"
 	"github.com/kingfer30/topup-online/constants"
-	"github.com/kingfer30/topup-online/utils/logger"
-	"github.com/kingfer30/topup-online/utils/request"
+	"github.com/kingfer30/topup-online/supplier"
 )
 
-var cdkBaseUrl = "https://kkk.ow800.com"
-
-// 验证卡密
+// 验证卡密（委托给供应商驱动，默认使用三川）
 func VerifyCard(c *gin.Context) {
 	param := constants.CDKVerifyRequest{}
 	if err := c.ShouldBindJSON(&param); err != nil {
@@ -27,40 +22,16 @@ func VerifyCard(c *gin.Context) {
 		return
 	}
 
-	url := fmt.Sprintf("%s/api/cards/verify", cdkBaseUrl)
-	err, resp := request.Curl(url, "POST", param)
-	if err != nil {
-		c.JSON(http.StatusOK, gin.H{
-			"success": false,
-			"message": "request fail: " + err.Error(),
-			"data":    "",
-		})
-		return
-	}
-	defer resp.Body.Close()
-
-	bodyByte, _ := io.ReadAll(resp.Body)
-	logger.SysLogf("url: %s. body: %s", url, string(bodyByte))
-
-	var result map[string]interface{}
-	if err = json.Unmarshal(bodyByte, &result); err != nil {
-		c.JSON(http.StatusOK, gin.H{
-			"success": false,
-			"message": "response unmarshal fail: " + err.Error(),
-			"data":    "",
-		})
+	drv, ok := supplier.Get("三川")
+	if !ok {
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": "supplier not found"})
 		return
 	}
 
-	success, _ := result["success"].(bool)
-	if !success {
-		msg := ""
-		if m, ok := result["message"].(string); ok {
-			msg = m
-		}
+	if err := drv.VerifyCard(param.CardInfo); err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
-			"message": "card verify failed: " + msg,
+			"message": err.Error(),
 			"data":    "",
 		})
 		return
@@ -69,11 +40,10 @@ func VerifyCard(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "success",
-		"data":    result["data"],
 	})
 }
 
-// 验证卡密并充值
+// 验证卡密并充值（委托给供应商驱动）
 func TopUp(c *gin.Context) {
 	param := constants.CDKTopupRequest{}
 	if err := c.ShouldBindJSON(&param); err != nil {
@@ -88,8 +58,36 @@ func TopUp(c *gin.Context) {
 	lockKey := fmt.Sprintf("Thread:%s", param.UserEmail)
 	if count, serr := redis.Exists(lockKey); serr != nil || count == 0 {
 		if ok, err := redis.SetNx(lockKey, "1", time.Duration(constants.GetCacheFrequency())*time.Second); ok || err == nil {
-			status, data := doTopUp(param)
-			c.JSON(status, data)
+			drv, ok := supplier.Get("三川")
+			if !ok {
+				c.JSON(http.StatusOK, gin.H{"success": false, "message": "supplier not found"})
+				return
+			}
+			result, err := drv.TopUp(supplier.TopupParam{
+				CardInfo:     param.CardInfo,
+				UserEmail:    param.UserEmail,
+				UserGptToken: param.UserGptToken,
+				FullAuthData: param.FullAuthData,
+				ProductId:    param.ProductId,
+			})
+			if err != nil {
+				c.JSON(http.StatusOK, gin.H{
+					"success": false,
+					"message": err.Error(),
+					"data":    "",
+				})
+				return
+			}
+			c.JSON(http.StatusOK, gin.H{
+				"success": true,
+				"message": "success",
+				"data": gin.H{
+					"taskId":       result.TaskId,
+					"processing":   result.Processing,
+					"needsPolling": result.NeedsPolling,
+					"message":      result.Message,
+				},
+			})
 			return
 		}
 	}
@@ -100,60 +98,7 @@ func TopUp(c *gin.Context) {
 	})
 }
 
-// 执行充值请求
-func doTopUp(param constants.CDKTopupRequest) (int, gin.H) {
-	url := fmt.Sprintf("%s/api/cards/verify-gpt", cdkBaseUrl)
-	err, resp := request.Curl(url, "POST", param)
-	if err != nil {
-		return http.StatusOK, gin.H{
-			"success": false,
-			"message": "request fail: " + err.Error(),
-			"data":    "",
-		}
-	}
-	defer resp.Body.Close()
-
-	bodyByte, _ := io.ReadAll(resp.Body)
-	logger.SysLogf("url: %s. body: %s", url, string(bodyByte))
-
-	var resData constants.CDKTopupResponse
-	if err = json.Unmarshal(bodyByte, &resData); err != nil {
-		return http.StatusOK, gin.H{
-			"success": false,
-			"message": "response unmarshal fail: " + err.Error(),
-			"data":    "",
-		}
-	}
-
-	if !resData.Success {
-		return http.StatusOK, gin.H{
-			"success": false,
-			"message": "topup failed: " + resData.Data.Message,
-			"data":    "",
-		}
-	}
-
-	if resData.Data.TaskId == "" {
-		return http.StatusOK, gin.H{
-			"success": false,
-			"message": "topup failed: task not created",
-			"data":    "",
-		}
-	}
-
-	return http.StatusOK, gin.H{
-		"success": true,
-		"message": "success",
-		"data": gin.H{
-			"taskId":       resData.Data.TaskId,
-			"processing":   resData.Data.Processing,
-			"needsPolling": resData.Data.NeedsPolling,
-			"message":      resData.Data.Message,
-		},
-	}
-}
-
-// 查询充值任务状态
+// 查询充值任务状态（委托给供应商驱动）
 func QueryTaskStatus(c *gin.Context) {
 	param := constants.CDKQueryTaskRequest{}
 	if err := c.ShouldBindJSON(&param); err != nil {
@@ -164,60 +109,45 @@ func QueryTaskStatus(c *gin.Context) {
 		return
 	}
 
-	url := fmt.Sprintf("%s/api/recharge/query-task-status", cdkBaseUrl)
-	err, resp := request.Curl(url, "POST", param)
+	drv, ok := supplier.Get("三川")
+	if !ok {
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": "supplier not found"})
+		return
+	}
+
+	result, err := drv.QueryTaskStatus(param.TaskId, param.ProductId, param.CardInfo)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
-			"message": "request fail: " + err.Error(),
-			"data":    "",
-		})
-		return
-	}
-	defer resp.Body.Close()
-
-	bodyByte, _ := io.ReadAll(resp.Body)
-	logger.SysLogf("url: %s. body: %s", url, string(bodyByte))
-
-	var resData constants.CDKQueryTaskResponse
-	if err = json.Unmarshal(bodyByte, &resData); err != nil {
-		c.JSON(http.StatusOK, gin.H{
-			"success": false,
-			"message": "response unmarshal fail: " + err.Error(),
+			"message": err.Error(),
 			"data":    "",
 		})
 		return
 	}
 
-	switch resData.Data.Status {
+	switch result.Status {
 	case "success":
 		c.JSON(http.StatusOK, gin.H{
 			"success": true,
-			"message": resData.Data.Message,
-			"data": gin.H{
-				"status": "success",
-			},
+			"message": result.Message,
+			"data":    gin.H{"status": "success"},
 		})
 	case "processing":
 		c.JSON(http.StatusOK, gin.H{
 			"success": true,
-			"message": resData.Data.Message,
-			"data": gin.H{
-				"status": "processing",
-			},
+			"message": result.Message,
+			"data":    gin.H{"status": "processing"},
 		})
 	case "failed":
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
-			"message": resData.Data.Message,
-			"data": gin.H{
-				"status": "failed",
-			},
+			"message": result.Message,
+			"data":    gin.H{"status": "failed"},
 		})
 	default:
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
-			"message": "unknown task status: " + resData.Data.Status,
+			"message": "unknown task status: " + result.Status,
 			"data":    "",
 		})
 	}

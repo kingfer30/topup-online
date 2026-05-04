@@ -1,5 +1,55 @@
 package model
 
+// EnsureGptMenus 幂等插入 GPT卡密 和 GPT-CDK 菜单
+func EnsureGptMenus() error {
+	if DB == nil {
+		return nil
+	}
+
+	tx := DB.Begin()
+	if tx.Error != nil {
+		return tx.Error
+	}
+
+	menus := []Menu{
+		{
+			ParentId: 0,
+			Title:    "GPT卡密",
+			Key:      "gpt-cards",
+			Path:     "/admin/gpt-cards",
+			Icon:     "🃏",
+			Sort:     8,
+			Status:   1,
+			IsDelete: -1,
+		},
+		{
+			ParentId: 0,
+			Title:    "GPT-CDK",
+			Key:      "gpt-cdk",
+			Path:     "/admin/gpt-cdk",
+			Icon:     "🔑",
+			Sort:     9,
+			Status:   1,
+			IsDelete: -1,
+		},
+	}
+
+	for _, m := range menus {
+		var existing Menu
+		err := tx.Where("`key` = ? AND is_delete = ?", m.Key, -1).First(&existing).Error
+		if err != nil {
+			// 不存在则创建
+			if err := tx.Create(&m).Error; err != nil {
+				tx.Rollback()
+				return err
+			}
+		}
+		// 已存在则跳过
+	}
+
+	return tx.Commit().Error
+}
+
 // EnsureAIMenuPlacement 确保「AI翻译」位于顶级菜单，排序在「用户管理」之前（用于已初始化数据库升级）
 func EnsureAIMenuPlacement() error {
 	if DB == nil {

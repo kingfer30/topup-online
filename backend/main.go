@@ -13,6 +13,7 @@ import (
 	"github.com/kingfer30/topup-online/model"
 	"github.com/kingfer30/topup-online/router"
 	"github.com/kingfer30/topup-online/scheduler"
+	_ "github.com/kingfer30/topup-online/supplier/sanchuan" // 注册三川供应商
 	"github.com/kingfer30/topup-online/utils/client"
 	"github.com/kingfer30/topup-online/utils/logger"
 )
@@ -55,6 +56,9 @@ func main() {
 
 		if err := model.EnsureAIMenuPlacement(); err != nil {
 			logger.SysLog("EnsureAIMenuPlacement: " + err.Error())
+		}
+		if err := model.EnsureGptMenus(); err != nil {
+			logger.SysLog("EnsureGptMenus: " + err.Error())
 		}
 
 		// 启动镜像卡密 Token 定时获取任务（每 30 分钟执行一次）

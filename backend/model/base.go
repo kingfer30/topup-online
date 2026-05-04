@@ -74,6 +74,15 @@ func migrateDB() error {
 	if err = DB.AutoMigrate(&DigisellerPrice{}); err != nil {
 		return err
 	}
+	if err = DB.AutoMigrate(&GptCard{}); err != nil {
+		return err
+	}
+	if err = DB.AutoMigrate(&GptCdk{}); err != nil {
+		return err
+	}
+	if err = DB.AutoMigrate(&GptTopupTask{}); err != nil {
+		return err
+	}
 	// 对所有 cards_* 动态表执行新增列迁移
 	if err = MigrateCardTableColumns(); err != nil {
 		return err

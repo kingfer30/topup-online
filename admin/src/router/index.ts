@@ -97,6 +97,18 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/AiTranslate.vue'),
         meta: { title: 'AI翻译', requiresAuth: true },
       },
+      {
+        path: 'gpt-cards',
+        name: 'GptCards',
+        component: () => import('@/views/GptCards.vue'),
+        meta: { title: 'GPT卡密', requiresAuth: true },
+      },
+      {
+        path: 'gpt-cdk',
+        name: 'GptCdk',
+        component: () => import('@/views/GptCdk.vue'),
+        meta: { title: 'GPT-CDK', requiresAuth: true },
+      },
     ],
   },
 ]

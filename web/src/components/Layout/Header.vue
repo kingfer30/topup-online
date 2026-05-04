@@ -63,7 +63,7 @@ const navItems = [
 ]
 
 const handleAction = () => {
-  console.log('开始充值')
+  router.push('/topup')
 }
 
 const handleMenuSelect = (key: string) => {

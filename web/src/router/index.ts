@@ -12,6 +12,11 @@ const routes: RouteRecordRaw[] = [
     name: 'About',
     component: () => import('@/views/About.vue'),
   },
+  {
+    path: '/topup',
+    name: 'Topup',
+    component: () => import('@/views/Topup.vue'),
+  },
 ]
 
 const router = createRouter({
