@@ -1069,6 +1069,8 @@ const statusOptions = [
 const subscriptionTypeOptions = [
   { label: 'Pro', value: 'pro' },
   { label: 'Pro+', value: 'pro_plus' },
+  { label: 'Pro x5', value: 'pro_x5' },
+  { label: 'Pro x20', value: 'pro_x20' },
   { label: 'Ultra', value: 'ultra' },
   { label: 'Go', value: 'go' },
   { label: 'Plus', value: 'plus' },
