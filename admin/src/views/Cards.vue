@@ -4,7 +4,7 @@
       <template #header-extra>
         <n-space>
           <n-button v-if="cardType === 'all'" type="warning" :disabled="checkedRowKeys.length === 0"
-            @click="showUpgradeModal = true">
+            @click="handleOpenUpgradeModal">
             <template #icon><span>⬆️</span></template>
             更新为成品 {{ checkedRowKeys.length > 0 ? `(${checkedRowKeys.length})` : '' }}
           </n-button>
@@ -22,12 +22,12 @@
             <template #icon><span>📦</span></template>
             我要取货
           </n-button>
-          <n-button v-if="cardType === 'unsold'" type="warning" :disabled="checkedRowKeys.length === 0"
-            @click="handleOpenBatchPickup">
+          <n-button v-if="cardType === 'unsold' || cardType === 'all'" type="warning"
+            :disabled="checkedRowKeys.length === 0" @click="handleOpenBatchPickup">
             <template #icon><span>🚚</span></template>
             批量取货 {{ checkedRowKeys.length > 0 ? `(${checkedRowKeys.length})` : '' }}
           </n-button>
-          <n-button v-if="cardType === 'unsold' || cardType === 'sold'" type="info"
+          <n-button v-if="cardType === 'all' || cardType === 'unsold' || cardType === 'sold'" type="info"
             :disabled="checkedRowKeys.length === 0" :loading="batchCheckLoading" @click="handleBatchCheck">
             <template #icon><span>🔍</span></template>
             批量检查 {{ checkedRowKeys.length > 0 ? `(${checkedRowKeys.length})` : '' }}
@@ -62,7 +62,7 @@
             </template>
             批量导入
           </n-button>
-          <n-button @click="showExportModal = true">
+          <n-button @click="handleOpenExportModal">
             <template #icon><span>📤</span></template>
             导出
           </n-button>
@@ -72,7 +72,14 @@
       <!-- 搜索栏 -->
       <n-space vertical :size="16">
         <n-space>
-          <n-input v-model:value="searchKeyword" placeholder="搜索账号/邮箱" clearable style="width: 300px" />
+          <n-input
+            v-model:value="searchAccountsText"
+            type="textarea"
+            placeholder="搜索账号，每行一个"
+            clearable
+            :rows="3"
+            style="width: 300px"
+          />
           <n-select v-if="cardType === 'unsold' || cardType === 'sold'" v-model:value="searchSubscriptionType"
             :options="[{ label: '全部类型', value: '' }, ...subscriptionTypeOptions]" placeholder="订阅类型" clearable
             style="width: 150px" />
@@ -104,6 +111,14 @@
             { label: '未冻结', value: -1 },
             { label: '已冻结', value: 1 },
           ]" placeholder="冻结状态" style="width: 150px" />
+          <n-date-picker
+            v-if="cardType === 'all'"
+            v-model:value="searchFreezeTime"
+            type="date"
+            clearable
+            style="width: 180px"
+            placeholder="冻结时间"
+          />
           <n-date-picker
             v-if="cardType === 'sold' || cardType === 'unsold'"
             v-model:value="searchPurchaseDate"
@@ -198,6 +213,10 @@
             <n-input v-model:value="formData['2fa']" placeholder="请输入2FA" />
           </n-form-item-gi>
 
+          <n-form-item-gi :span="2" label="Client ID" path="client_id">
+            <n-input v-model:value="formData.client_id" placeholder="请输入 Client ID" />
+          </n-form-item-gi>
+
           <n-form-item-gi :span="2" label="Token" path="token">
             <n-input v-model:value="formData.token" type="textarea" placeholder="请输入Token" :rows="3" />
           </n-form-item-gi>
@@ -219,14 +238,19 @@
       @positive-click="handleBatchUpgrade" style="width: 600px">
       <n-form label-placement="left" label-width="120px" style="margin-top: 20px">
         <n-grid :cols="2" :x-gap="24" :y-gap="12">
-          <n-form-item-gi label="订阅类型">
+          <n-form-item-gi label="订阅类型" required>
             <n-select v-model:value="upgradeForm.subscription_type" :options="subscriptionTypeOptions"
-              placeholder="选择或输入订阅类型" filterable tag clearable />
+              placeholder="请选择订阅类型" filterable />
           </n-form-item-gi>
 
           <n-form-item-gi label="订阅时间">
             <n-date-picker v-model:value="upgradeForm.subscription_time" type="datetime" placeholder="默认为当前时间"
               style="width: 100%" clearable />
+          </n-form-item-gi>
+
+          <n-form-item-gi label="订阅剩余天数">
+            <n-input-number v-model:value="upgradeForm.subscription_remaining_days" :min="0" placeholder="默认30天"
+              style="width: 100%" />
           </n-form-item-gi>
 
           <n-form-item-gi label="购买价格(追加)">
@@ -275,13 +299,15 @@
 
         <n-divider style="margin: 0" />
 
-        <!-- 快速预设 -->
+        <!-- 快速预设（与复制/批量取货格式对应） -->
         <div>
           <div style="font-size: 12px; color: #888; margin-bottom: 8px">快速预设</div>
           <n-space>
             <n-button size="small" @click="applyExportPreset('digiseller')">Digiseller格式</n-button>
+            <n-button size="small" @click="applyExportPreset('digiseller_auto')">Digiseller自动发货</n-button>
             <n-button size="small" @click="applyExportPreset('domestic')">国内格式</n-button>
             <n-button size="small" @click="applyExportPreset('reverse')">逆向格式</n-button>
+            <n-button size="small" @click="applyExportPreset('code_method')">接码方式</n-button>
             <n-button size="small" @click="applyExportPreset('all')">全部字段</n-button>
             <n-button size="small" type="error" @click="applyExportPreset('clear')">清空</n-button>
           </n-space>
@@ -398,13 +424,28 @@
                 style="width: 100%" />
             </n-form-item-gi>
 
+            <n-form-item-gi label="订阅类型">
+              <n-input-number v-model:value="batchConfig.field_mapping.subscription_type" :min="0" placeholder="0=不导入"
+                style="width: 100%" />
+            </n-form-item-gi>
+
             <n-form-item-gi label="订阅时间">
               <n-input-number v-model:value="batchConfig.field_mapping.subscription_time" :min="0" placeholder="0=不导入"
                 style="width: 100%" />
             </n-form-item-gi>
 
+            <n-form-item-gi label="订阅过期时间">
+              <n-input-number v-model:value="batchConfig.field_mapping.subscription_expired_time" :min="0"
+                placeholder="0=不导入" style="width: 100%" />
+            </n-form-item-gi>
+
             <n-form-item-gi label="Token">
               <n-input-number v-model:value="batchConfig.field_mapping.token" :min="0" placeholder="0=不导入"
+                style="width: 100%" />
+            </n-form-item-gi>
+
+            <n-form-item-gi label="Client ID">
+              <n-input-number v-model:value="batchConfig.field_mapping.client_id" :min="0" placeholder="0=不导入"
                 style="width: 100%" />
             </n-form-item-gi>
 
@@ -472,8 +513,10 @@
             <n-radio-group v-model:value="batchPickupForm.format">
               <n-space>
                 <n-radio value="digiseller">Digiseller</n-radio>
+                <n-radio value="digiseller_auto">Digiseller自动发货</n-radio>
                 <n-radio value="domestic">国内格式</n-radio>
                 <n-radio value="reverse">逆向格式</n-radio>
+                <n-radio value="code_method">接码方式</n-radio>
               </n-space>
             </n-radio-group>
           </n-form-item>
@@ -596,6 +639,11 @@
           <n-form-item-gi label="订阅时间">
             <n-date-picker v-model:value="upgradeForm.subscription_time" type="datetime" placeholder="默认为当前时间"
               style="width: 100%" clearable />
+          </n-form-item-gi>
+
+          <n-form-item-gi label="订阅剩余天数">
+            <n-input-number v-model:value="upgradeForm.subscription_remaining_days" :min="0" placeholder="默认30天"
+              style="width: 100%" />
           </n-form-item-gi>
 
           <n-form-item-gi label="购买价格(追加)">
@@ -775,11 +823,12 @@ mail-pass: ${card.mail_password || ''}
 mail-login: ${card.mail_url || ''}`
   } else if (pickupForm.value.format === 'reverse') {
     // 逆向格式
-    return `${card.account}----${card.token || ''}`
+    return `账号----token
+${card.account}----${card.token || ''}`
   } else {
     // 国内订阅格式
-    return `账号----密码----邮箱密码
-${card.account}----${card.password || ''}----${card.mail_password || ''}`
+    return `账号----密码----邮箱密码----token
+${card.account}----${card.password || ''}----${card.mail_password || ''}----${card.token || ''}`
   }
 })
 
@@ -790,15 +839,16 @@ const showBatchModal = ref(false)
 const isEdit = ref(false)
 const cardList = ref<Card[]>([])
 const formRef = ref<FormInst | null>(null)
-const searchKeyword = ref('')
+const searchAccountsText = ref('')
 const searchSubscriptionType = ref('')
 const searchSubscriptionStatus = ref(0)
 const searchSellTo = ref('')
 const searchPurchaseBy = ref('')
 const searchIsCheck = ref(0)
 const searchFreezeStatus = ref(0)
-// 购买日期筛选（n-date-picker 返回毫秒）
+// 购买日期 / 冻结时间筛选（n-date-picker 返回毫秒）
 const searchPurchaseDate = ref<number | null>(null)
+const searchFreezeTime = ref<number | null>(null)
 const batchCheckLoading = ref(false)
 const batchOnDemandLoading = ref(false)
 const batchImportText = ref('')
@@ -810,7 +860,13 @@ const checkedRowKeys = ref<number[]>([])
 const showExportModal = ref(false)
 const exportLoading = ref(false)
 const exportMode = ref<'selected' | 'filter'>('filter')
-const exportSelectedFields = ref<string[]>(['account', 'password', 'mail_password'])
+const exportSelectedFields = ref<string[]>(['account', 'code_method'])
+
+// 打开导出面板：有勾选时默认「导出勾选记录」
+const handleOpenExportModal = () => {
+  exportMode.value = checkedRowKeys.value.length > 0 ? 'selected' : 'filter'
+  showExportModal.value = true
+}
 
 // 跨页勾选数据积累：key=id，val=Card 完整数据
 const selectedCardsMap = ref<Map<number, Card>>(new Map())
@@ -840,6 +896,7 @@ const selectedCardsForExport = computed(() =>
 // 所有可导出字段定义（有序）
 const exportFieldOptions = [
   { label: '账号', value: 'account' },
+  { label: '接码方式', value: 'code_method' },
   { label: '密码', value: 'password' },
   { label: '邮箱密码', value: 'mail_password' },
   { label: '邮箱地址', value: 'mail_url' },
@@ -857,28 +914,40 @@ const exportFieldOptions = [
   { label: '出售订单号', value: 'sell_order_no' },
   { label: 'API Key', value: 'api_key' },
   { label: 'Token', value: 'token' },
+  { label: 'Client ID', value: 'client_id' },
   { label: '2FA', value: '2fa' },
   { label: '备注', value: 'remark' },
 ]
 
-// 格式预览：将选中字段的中文标签用 ---- 拼接
+// 格式预览：将选中字段的中文标签用 ---- 拼接（接码方式展开为三段）
 const exportPreview = computed(() =>
   exportSelectedFields.value
-    .map(v => exportFieldOptions.find(o => o.value === v)?.label ?? v)
+    .map(v => {
+      if (v === 'code_method') return '接码链接----账号----邮箱密码'
+      return exportFieldOptions.find(o => o.value === v)?.label ?? v
+    })
     .join('----')
 )
 
-// 快速预设
+// 快速预设（与列表复制 / 批量取货格式对应）
 const applyExportPreset = (preset: string) => {
   switch (preset) {
     case 'digiseller':
+    case 'digiseller_auto':
+      // Digiseller / Digiseller自动发货：账号----密码----邮箱密码----邮箱地址
       exportSelectedFields.value = ['account', 'password', 'mail_password', 'mail_url']
       break
     case 'domestic':
-      exportSelectedFields.value = ['account', 'password', 'mail_password']
+      // 国内格式：账号----密码----邮箱密码----token
+      exportSelectedFields.value = ['account', 'password', 'mail_password', 'token']
       break
     case 'reverse':
+      // 逆向格式：账号----token
       exportSelectedFields.value = ['account', 'token']
+      break
+    case 'code_method':
+      // 接码方式：账号----接码链接----账号----邮箱密码
+      exportSelectedFields.value = ['account', 'code_method']
       break
     case 'all':
       exportSelectedFields.value = exportFieldOptions.map(o => o.value)
@@ -894,6 +963,7 @@ const showUpgradeModal = ref(false)
 const upgradeForm = ref({
   subscription_type: '',
   subscription_time: Date.now() as number | undefined,   // 毫秒（n-date-picker）
+  subscription_remaining_days: 30 as number | undefined,
   purchase_price: undefined as number | undefined,
   purchase_from: '支付宝',
   purchase_date: Date.now() as number | undefined,       // 毫秒（n-date-picker）
@@ -912,7 +982,7 @@ const rechargeForm = ref({
 // 批量取货弹窗
 const showBatchPickupModal = ref(false)
 const batchPickupForm = ref({
-  format: 'digiseller' as 'digiseller' | 'domestic' | 'reverse',
+  format: 'digiseller' as 'digiseller' | 'digiseller_auto' | 'domestic' | 'reverse' | 'code_method',
   sell_price: 20 as number | undefined,
   sell_to: 'Digiseller',
 })
@@ -988,14 +1058,17 @@ const batchConfig = ref({
   sell_status: 1,
   subscription_status: 1,
   account_type: 2,
-  code_link: 'https://www.xckj.site/easy-mailbox/frontend/',
+  code_link: 'https://tool.toolsvip.cc/easy-mailbox/frontend',
   remark: '',
   field_mapping: {
     account: 1,
     password: 2,
     mail_password: 3,
+    subscription_type: 0,
     subscription_time: 0,
+    subscription_expired_time: 0,
     token: 0,
+    client_id: 0,
     api_key: 0,
     '2fa': 0,
   },
@@ -1007,7 +1080,7 @@ const pagination = ref<PaginationProps>({
   pageSize: 20,
   itemCount: 0,
   showSizePicker: true,
-  pageSizes: [10, 20, 50, 100],
+  pageSizes: [10, 20, 50, 100, 500, 1000],
 })
 
 // 表单数据
@@ -1028,6 +1101,7 @@ const formData = ref<CardRequest>({
   api_key: '',
   '2fa': '',
   token: '',
+  client_id: '',
   mail_url: '',
   remark: '',
 })
@@ -1061,14 +1135,18 @@ const accountTypeOptions = [
 ]
 
 const statusOptions = [
+  { label: '封禁', value: -2 },
   { label: '正常', value: 1 },
   { label: '禁用', value: 2 },
 ]
 
 // 订阅类型选项（支持手动输入）
 const subscriptionTypeOptions = [
+  { label: 'Free', value: 'free' },
   { label: 'Pro', value: 'pro' },
   { label: 'Pro+', value: 'pro_plus' },
+  { label: 'Pro 100刀', value: 'pro_x5' },
+  { label: 'Pro 200刀', value: 'pro_x20' },
   { label: 'Ultra', value: 'ultra' },
   { label: 'Go', value: 'go' },
   { label: 'Plus', value: 'plus' },
@@ -1094,6 +1172,7 @@ const mailUrlOptions = [
 ]
 
 const codeLinkOptions = [
+  { label: 'https://tool.toolsvip.cc/easy-mailbox/frontend', value: 'https://tool.toolsvip.cc/easy-mailbox/frontend' },
   { label: 'https://www.xckj.site/easy-mailbox/frontend/', value: 'https://www.xckj.site/easy-mailbox/frontend/' },
   { label: 'https://ms.lqqq.cc/web/', value: 'https://ms.lqqq.cc/web/' },
   { label: 'https://emails.520952.xyz/', value: 'https://emails.520952.xyz/' },
@@ -1131,6 +1210,38 @@ const formatTimestamp = (ts?: number | null): string => {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
 }
 
+/** 根据订阅类型推导订阅状态与账号类型 */
+const resolveSubscriptionMeta = (subscriptionType?: string) => {
+  const type = (subscriptionType || '').trim()
+  if (!type) {
+    return {
+      subscription_type: undefined as string | undefined,
+      subscription_status: batchConfig.value.subscription_status,
+      account_type: batchConfig.value.account_type,
+    }
+  }
+  const isFree = type.toLowerCase() === 'free'
+  return {
+    subscription_type: type,
+    subscription_status: isFree ? 2 : 1,
+    account_type: isFree ? 1 : 2,
+  }
+}
+
+/** 批量导入时解析时间：支持 Unix 秒/毫秒、YYYY-MM-DD HH:mm:ss */
+const parseImportTimestamp = (raw: string): number | undefined => {
+  const s = raw.trim()
+  if (!s) return undefined
+  if (/^\d+$/.test(s)) {
+    const n = Number(s)
+    if (s.length >= 13) return Math.floor(n / 1000)
+    return n
+  }
+  const d = new Date(s.replace(' ', 'T'))
+  if (!Number.isNaN(d.getTime())) return Math.floor(d.getTime() / 1000)
+  return undefined
+}
+
 // 格式化 time.Time JSON（RFC3339 / 常见格式）为可读时间
 const formatDateTimeString = (val?: string | null): string => {
   if (!val) return '—'
@@ -1144,6 +1255,38 @@ const formatYYYYMMDD = (ms: number) => {
   const d = new Date(ms)
   const pad = (n: number) => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+
+// 解析多行账号搜索文本（按行分隔，去重）
+const parseSearchAccounts = (text: string): string[] => {
+  const seen = new Set<string>()
+  const accounts: string[] = []
+  for (const line of text.split(/\r?\n/)) {
+    const account = line.trim()
+    if (!account || seen.has(account)) continue
+    seen.add(account)
+    accounts.push(account)
+  }
+  return accounts
+}
+
+const buildCardQueryParams = () => {
+  const purchaseDateParam =
+    searchPurchaseDate.value != null ? formatYYYYMMDD(searchPurchaseDate.value) : ''
+  const accounts = parseSearchAccounts(searchAccountsText.value)
+  return {
+    category: category.value,
+    type: cardType.value,
+    ...(accounts.length > 0 ? { accounts: accounts.join('\n') } : {}),
+    ...(searchSubscriptionType.value ? { subscription_type: searchSubscriptionType.value } : {}),
+    ...(searchSubscriptionStatus.value !== 0 ? { subscription_status: searchSubscriptionStatus.value } : {}),
+    ...(searchSellTo.value.trim() ? { sell_to: searchSellTo.value.trim() } : {}),
+    ...(searchPurchaseBy.value.trim() ? { purchase_by: searchPurchaseBy.value.trim() } : {}),
+    ...(searchIsCheck.value !== 0 ? { is_check: searchIsCheck.value } : {}),
+    ...(purchaseDateParam ? { purchase_date: purchaseDateParam } : {}),
+    ...(searchFreezeStatus.value !== 0 ? { freeze_status: searchFreezeStatus.value } : {}),
+    ...(searchFreezeTime.value != null ? { freeze_time: formatYYYYMMDD(searchFreezeTime.value) } : {}),
+  }
 }
 
 // 表格列定义（computed，根据列表类型展示不同列）
@@ -1272,12 +1415,34 @@ const columns = computed<DataTableColumns<Card>>(() => {
       width: 170,
       render: (row: Card) => formatDateTimeString(row.created_at),
     }] as DataTableColumns<Card> : []),
+    // 普号列表：冻结时间、冻结备注
+    ...(isAll ? [
+      {
+        title: '冻结时间',
+        key: 'freeze_time',
+        width: 170,
+        render: (row: Card) => formatTimestamp(row.freeze_time),
+      },
+      {
+        title: '冻结备注',
+        key: 'freeze_remark',
+        width: 160,
+        render: (row: Card) => row.freeze_remark || '—',
+      },
+    ] as DataTableColumns<Card> : []),
     // 未售/已售：购买时间（用 purchase_date）
     ...(!isAll ? [{
       title: '购买时间',
       key: 'purchase_date',
       width: 170,
       render: (row: Card) => formatTimestamp(row.purchase_date),
+    }] as DataTableColumns<Card> : []),
+    // 未售列表：订阅到期时间
+    ...(isUnsold ? [{
+      title: '订阅到期时间',
+      key: 'subscription_expired_time',
+      width: 170,
+      render: (row: Card) => formatTimestamp(row.subscription_expired_time),
     }] as DataTableColumns<Card> : []),
     // 未售/已售：订阅额度（美元）
     ...((isUnsold || isSold) ? [{
@@ -1323,8 +1488,10 @@ const columns = computed<DataTableColumns<Card>>(() => {
   // 复制格式选项
   const copyOptions = [
     { label: 'Digiseller格式', key: 'digiseller' },
+    { label: 'Digiseller自动发货', key: 'digiseller_auto' },
     { label: '国内格式', key: 'domestic' },
     { label: '逆向格式', key: 'reverse' },
+    { label: '接码方式', key: 'code_method' },
   ]
 
   // 操作列始终放最后
@@ -1471,21 +1638,10 @@ const loadCards = async () => {
 
   loading.value = true
   try {
-    const purchaseDateParam =
-      searchPurchaseDate.value != null ? formatYYYYMMDD(searchPurchaseDate.value) : ''
     const params = {
-      category: category.value,
-      type: cardType.value,
+      ...buildCardQueryParams(),
       page: pagination.value.page,
       page_size: pagination.value.pageSize,
-      keyword: searchKeyword.value,
-      ...(searchSubscriptionType.value ? { subscription_type: searchSubscriptionType.value } : {}),
-      ...(searchSubscriptionStatus.value !== 0 ? { subscription_status: searchSubscriptionStatus.value } : {}),
-      ...(searchSellTo.value.trim() ? { sell_to: searchSellTo.value.trim() } : {}),
-      ...(searchPurchaseBy.value.trim() ? { purchase_by: searchPurchaseBy.value.trim() } : {}),
-      ...(searchIsCheck.value !== 0 ? { is_check: searchIsCheck.value } : {}),
-      ...(purchaseDateParam ? { purchase_date: purchaseDateParam } : {}),
-      ...(searchFreezeStatus.value !== 0 ? { freeze_status: searchFreezeStatus.value } : {}),
     }
     console.log('  📤 请求参数:', params)
 
@@ -1718,6 +1874,7 @@ const handleGotoProSuccess = () => {
   upgradeForm.value = {
     subscription_type: gotoProSubscriptionType.value,
     subscription_time: Date.now(),
+    subscription_remaining_days: 30,
     purchase_price: undefined,
     purchase_from: '支付宝',
     purchase_date: Date.now(),
@@ -1727,6 +1884,12 @@ const handleGotoProSuccess = () => {
 
 // 支付成功确认：单卡升级为成品
 const handleGotoProSuccessSubmit = async () => {
+  const subscriptionType = (upgradeForm.value.subscription_type || gotoProSubscriptionType.value || '').trim()
+  if (!subscriptionType) {
+    message.warning('请选择订阅类型')
+    return false
+  }
+
   try {
     const now = Math.floor(Date.now() / 1000)
     const subscriptionTime = upgradeForm.value.subscription_time
@@ -1739,8 +1902,9 @@ const handleGotoProSuccessSubmit = async () => {
     const response = await batchUpgradeToProduct({
       category: category.value,
       ids: [gotoProCardId.value],
-      subscription_type: upgradeForm.value.subscription_type || undefined,
+      subscription_type: subscriptionType,
       subscription_time: subscriptionTime,
+      subscription_remaining_days: upgradeForm.value.subscription_remaining_days,
       purchase_price: upgradeForm.value.purchase_price,
       purchase_from: upgradeForm.value.purchase_from || undefined,
       purchase_date: purchaseDate,
@@ -1787,7 +1951,7 @@ const handleGotoProFailSubmit = async () => {
 
 // 重置
 const handleReset = () => {
-  searchKeyword.value = ''
+  searchAccountsText.value = ''
   searchSubscriptionType.value = ''
   searchSubscriptionStatus.value = 0
   searchSellTo.value = ''
@@ -1795,6 +1959,7 @@ const handleReset = () => {
   searchIsCheck.value = 0
   searchPurchaseDate.value = null
   searchFreezeStatus.value = 0
+  searchFreezeTime.value = null
   pagination.value.page = 1
   loadCards()
 }
@@ -1863,6 +2028,7 @@ const handleAdd = () => {
     api_key: '',
     '2fa': '',
     token: '',
+    client_id: '',
     mail_url: '',
     remark: '',
     code_link: '',
@@ -1891,6 +2057,7 @@ const handleEdit = (card: Card) => {
     api_key: card.api_key || '',
     '2fa': card['2fa'] || '',
     token: card.token || '',
+    client_id: card.client_id || '',
     mail_url: card.mail_url || '',
     remark: card.remark || '',
     code_link: card.code_link || '',
@@ -2028,16 +2195,21 @@ const handleSubmit = async () => {
   }
 }
 
-// 复制卡密信息到剪贴板
+// 复制卡密信息到剪贴板（---- 分隔格式带标题行）
 const handleCopy = async (card: Card, format: string) => {
   let text = ''
   if (format === 'digiseller') {
     text = `account: ${card.account}\npass: ${card.password || ''}\nmail-pass: ${card.mail_password || ''}\n\nmail-login: ${card.mail_url || ''}`
+  } else if (format === 'digiseller_auto') {
+    text = `account: ${card.account}<br>pass: ${card.password || ''}<br>mail-pass: ${card.mail_password || ''}<br>mail-login: ${card.mail_url || ''}<br>Если вам удобно, не могли бы вы оставить нам хороший отзыв? https://ibb.co/tTgSNRLP`
   } else if (format === 'reverse') {
-    text = `${card.account}----${card.token || ''}`
+    text = `账号----token\n${card.account}----${card.token || ''}`
+  } else if (format === 'code_method') {
+    // 接码方式：标题 账号----接码方式；数据 账号----接码链接----账号----邮箱密码
+    text = `账号----接码方式\n${card.account}----${card.code_link || ''}----${card.account}----${card.mail_password || ''}`
   } else {
     // 国内格式
-    text = `${card.account}----${card.password || ''}----${card.mail_password || ''}`
+    text = `账号----密码----邮箱密码----token\n${card.account}----${card.password || ''}----${card.mail_password || ''}----${card.token || ''}`
   }
   try {
     await navigator.clipboard.writeText(text)
@@ -2050,6 +2222,9 @@ const handleCopy = async (card: Card, format: string) => {
 // 获取卡密某字段的可读文本值
 const getFieldValue = (card: Card, field: string): string => {
   switch (field) {
+    case 'code_method':
+      // 接码方式：接码链接----账号----邮箱密码
+      return `${card.code_link || ''}----${card.account || ''}----${card.mail_password || ''}`
     case 'subscription_time':
     case 'subscription_expired_time':
     case 'purchase_date':
@@ -2062,7 +2237,9 @@ const getFieldValue = (card: Card, field: string): string => {
     case 'account_type':
       return card.account_type === 1 ? '普号' : '成品'
     case 'status':
-      return card.status === 1 ? '正常' : '禁用'
+      if (card.status === -2) return '封禁'
+      if (card.status === 2) return '禁用'
+      return '正常'
     default:
       return String((card as unknown as Record<string, unknown>)[field] ?? '')
   }
@@ -2106,20 +2283,7 @@ const handleExport = async () => {
   // 筛选条件全量导出：请求后端
   exportLoading.value = true
   try {
-    const purchaseDateParam =
-      searchPurchaseDate.value != null ? formatYYYYMMDD(searchPurchaseDate.value) : ''
-    const response = await exportCards({
-      category: category.value,
-      type: cardType.value,
-      keyword: searchKeyword.value,
-      ...(searchSubscriptionType.value ? { subscription_type: searchSubscriptionType.value } : {}),
-      ...(searchSubscriptionStatus.value !== 0 ? { subscription_status: searchSubscriptionStatus.value } : {}),
-      ...(searchSellTo.value.trim() ? { sell_to: searchSellTo.value.trim() } : {}),
-      ...(searchPurchaseBy.value.trim() ? { purchase_by: searchPurchaseBy.value.trim() } : {}),
-      ...(searchIsCheck.value !== 0 ? { is_check: searchIsCheck.value } : {}),
-      ...(purchaseDateParam ? { purchase_date: purchaseDateParam } : {}),
-      ...(searchFreezeStatus.value !== 0 ? { freeze_status: searchFreezeStatus.value } : {}),
-    })
+    const response = await exportCards(buildCardQueryParams())
 
     if (response.code === 200) {
       doDownload(response.data)
@@ -2137,10 +2301,29 @@ const handleExport = async () => {
   }
 }
 
+// 打开批量升级为成品弹窗（重置表单，避免沿用上次的订阅类型）
+const handleOpenUpgradeModal = () => {
+  upgradeForm.value = {
+    subscription_type: 'pro',
+    subscription_time: Date.now(),
+    subscription_remaining_days: 30,
+    purchase_price: undefined,
+    purchase_from: '支付宝',
+    purchase_date: Date.now(),
+  }
+  showUpgradeModal.value = true
+}
+
 // 批量升级为成品
 const handleBatchUpgrade = async () => {
   if (checkedRowKeys.value.length === 0) {
     message.warning('请先勾选要升级的记录')
+    return false
+  }
+
+  const subscriptionType = (upgradeForm.value.subscription_type || '').trim()
+  if (!subscriptionType) {
+    message.warning('请选择订阅类型')
     return false
   }
 
@@ -2156,8 +2339,9 @@ const handleBatchUpgrade = async () => {
     const response = await batchUpgradeToProduct({
       category: category.value,
       ids: checkedRowKeys.value as number[],
-      subscription_type: upgradeForm.value.subscription_type || undefined,
+      subscription_type: subscriptionType,
       subscription_time: subscriptionTime,
+      subscription_remaining_days: upgradeForm.value.subscription_remaining_days,
       purchase_price: upgradeForm.value.purchase_price,
       purchase_from: upgradeForm.value.purchase_from || undefined,
       purchase_date: purchaseDate,
@@ -2171,6 +2355,7 @@ const handleBatchUpgrade = async () => {
       upgradeForm.value = {
         subscription_type: '',
         subscription_time: Date.now(),
+        subscription_remaining_days: 30,
         purchase_price: undefined,
         purchase_from: '支付宝',
         purchase_date: Date.now(),
@@ -2202,7 +2387,7 @@ const handleBatchImport = () => {
     sell_status: 1,
     subscription_status: 1,
     account_type: 2,
-    code_link: 'https://www.xckj.site/easy-mailbox/frontend/',
+    code_link: 'https://tool.toolsvip.cc/easy-mailbox/frontend',
     remark: '',
     field_mapping: currentMapping,
   }
@@ -2259,38 +2444,48 @@ const handleBatchSubmit = async () => {
       let subscriptionTime: number | undefined = undefined
       if (mapping.subscription_time > 0) {
         if (parts[mapping.subscription_time - 1]) {
-          const timeValue = parts[mapping.subscription_time - 1]
-          subscriptionTime = parseInt(timeValue) || currentTimestamp
+          subscriptionTime = parseImportTimestamp(parts[mapping.subscription_time - 1]) ?? currentTimestamp
         } else {
           subscriptionTime = currentTimestamp
         }
       }
 
-      // Token：从数据中读取（如果配置了位置）
+      // 订阅过期时间：优先从行数据读取，否则用公共「订阅剩余天数」推算
+      let rowSubscriptionExpiredTime: number | undefined = undefined
+      if (mapping.subscription_expired_time > 0 && parts[mapping.subscription_expired_time - 1]) {
+        rowSubscriptionExpiredTime = parseImportTimestamp(parts[mapping.subscription_expired_time - 1])
+      }
+
       const token = mapping.token > 0 && parts[mapping.token - 1] ? parts[mapping.token - 1] : ''
-
-      // API Key：从数据中读取（如果配置了位置）
+      const clientId = mapping.client_id > 0 && parts[mapping.client_id - 1] ? parts[mapping.client_id - 1] : ''
       const apiKey = mapping.api_key > 0 && parts[mapping.api_key - 1] ? parts[mapping.api_key - 1] : ''
-
-      // 2FA：从数据中读取（如果配置了位置）
       const twoFA = mapping['2fa'] > 0 && parts[mapping['2fa'] - 1] ? parts[mapping['2fa'] - 1] : ''
+
+      let rowSubscriptionType: string | undefined
+      if (mapping.subscription_type > 0 && parts[mapping.subscription_type - 1]) {
+        rowSubscriptionType = parts[mapping.subscription_type - 1]
+      }
+      const subscriptionMeta = resolveSubscriptionMeta(
+        rowSubscriptionType || batchConfig.value.subscription_type || undefined
+      )
 
       const cardData: CardRequest = {
         account,
         password: password || undefined,
         mail_password: mailPassword || undefined,
-        subscription_status: batchConfig.value.subscription_status,
-        subscription_type: batchConfig.value.subscription_type || undefined,
+        subscription_status: subscriptionMeta.subscription_status,
+        subscription_type: subscriptionMeta.subscription_type,
         subscription_time: subscriptionTime,
-        subscription_expired_time: subscriptionExpiredTime,
+        subscription_expired_time: rowSubscriptionExpiredTime ?? subscriptionExpiredTime,
         purchase_date: purchaseDate,
         purchase_price: batchConfig.value.purchase_price,
         purchase_from: batchConfig.value.purchase_from || undefined,
         purchase_by: batchConfig.value.purchase_by || undefined,
         sell_status: batchConfig.value.sell_status,
-        account_type: batchConfig.value.account_type,
+        account_type: subscriptionMeta.account_type,
         status: 1,
         token: token || undefined,
+        client_id: clientId || undefined,
         api_key: apiKey || undefined,
         '2fa': twoFA || undefined,
         mail_url: batchConfig.value.mail_url || undefined,
@@ -2429,16 +2624,34 @@ const handleBatchPickup = async () => {
           return `Пожалуйста, войдите в систему, используя код подтверждения, отправленный на электронную почту:\n\n${card.account}\n\nmail-login: ${card.mail_url || ''}\n\nПожалуйста, выполните следующие шаги заново:\n1. Введите аккаунт: ${card.account}\n2. Нажмите «Далее»\n3. Нажмите кнопку: «Email sign-in code»`
         }
         return `account: ${card.account}\npass: ${card.password || ''}\nmail-pass: ${card.mail_password || ''}\n\nmail-login: ${card.mail_url || ''}`
+      } else if (fmt === 'digiseller_auto') {
+        return `account: ${card.account}<br>pass: ${card.password || ''}<br>mail-pass: ${card.mail_password || ''}<br>mail-login: ${card.mail_url || ''}<br>Если вам удобно, не могли бы вы оставить нам хороший отзыв? https://ibb.co/tTgSNRLP`
       } else if (fmt === 'reverse') {
-        debugger
         return `${card.account}----${card.token || ''}`
+      } else if (fmt === 'code_method') {
+        // 接码方式：账号----接码链接----账号----邮箱密码
+        return `${card.account}----${card.code_link || ''}----${card.account}----${card.mail_password || ''}`
       } else {
-        return `${card.account}----${card.password || ''}----${card.mail_password || ''}`
+        return `${card.account}----${card.password || ''}----${card.mail_password || ''}----${card.token || ''}`
       }
     })
 
+    // ---- 分隔格式：标题行 + 数据行；Digiseller 多行格式用空行分隔
+    let clipboardText = ''
+    if (fmt === 'domestic') {
+      clipboardText = '账号----密码----邮箱密码----token\n' + lines.join('\n')
+    } else if (fmt === 'reverse') {
+      clipboardText = '账号----token\n' + lines.join('\n')
+    } else if (fmt === 'code_method') {
+      clipboardText = '账号----接码方式\n' + lines.join('\n')
+    } else if (fmt === 'digiseller_auto') {
+      clipboardText = lines.join('\n')
+    } else {
+      clipboardText = lines.join('\n\n')
+    }
+
     try {
-      await navigator.clipboard.writeText(lines.join('\n\n'))
+      await navigator.clipboard.writeText(clipboardText)
       message.success(`批量取货完成，已复制 ${ids.length} 条卡密信息到剪贴板`)
     } catch {
       message.success(`批量取货完成（${response.data} 条），剪贴板复制失败请手动复制`)
@@ -2658,9 +2871,9 @@ watch(
       console.log('  category:', oldCategory, '->', newCategory)
       console.log('  type:', oldType, '->', newType)
 
-      // 重置分页和搜索条件
+      // 重置分页、搜索条件和勾选状态
       pagination.value.page = 1
-      searchKeyword.value = ''
+      searchAccountsText.value = ''
       searchSubscriptionType.value = ''
       searchSubscriptionStatus.value = 0
       searchSellTo.value = ''
@@ -2668,6 +2881,9 @@ watch(
       searchIsCheck.value = 0
       searchPurchaseDate.value = null
       searchFreezeStatus.value = 0
+      searchFreezeTime.value = null
+      checkedRowKeys.value = []
+      selectedCardsMap.value.clear()
 
       // 重新加载数据
       loadCards()

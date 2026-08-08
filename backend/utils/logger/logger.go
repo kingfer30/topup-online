@@ -19,16 +19,20 @@ var setupLogOnce sync.Once
 
 func SetupLogger() {
 	setupLogOnce.Do(func() {
-		if LogDir != "" {
-			var logPath string
-			logPath = filepath.Join(LogDir, fmt.Sprintf("oneapi-%s.log", time.Now().Format("20060102")))
-			fd, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-			if err != nil {
-				log.Fatal("failed to open log file")
-			}
-			gin.DefaultWriter = io.MultiWriter(os.Stdout, fd)
-			gin.DefaultErrorWriter = io.MultiWriter(os.Stderr, fd)
+		if LogDir == "" {
+			return
 		}
+		if err := os.MkdirAll(LogDir, 0755); err != nil {
+			log.Fatalf("failed to create log dir %s: %v", LogDir, err)
+		}
+		logPath := filepath.Join(LogDir, fmt.Sprintf("guo-depot-%s.log", time.Now().Format("20060102")))
+		fd, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		if err != nil {
+			log.Fatalf("failed to open log file %s: %v", logPath, err)
+		}
+		// 同时写 stdout/stderr 与文件，保证 docker logs 与落盘内容一致
+		gin.DefaultWriter = io.MultiWriter(os.Stdout, fd)
+		gin.DefaultErrorWriter = io.MultiWriter(os.Stderr, fd)
 	})
 }
 

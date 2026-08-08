@@ -28,6 +28,7 @@ export interface Card {
   api_key?: string
   token?: string
   '2fa'?: string
+  client_id?: string
   mail_url?: string
   remark?: string
   code_link?: string
@@ -44,7 +45,8 @@ export interface CardListParams {
   type?: string // all/unsold/sold
   page?: number
   page_size?: number
-  keyword?: string
+  keyword?: string // 兼容旧接口
+  accounts?: string // 多行/逗号分隔的账号列表
   subscription_type?: string
   subscription_status?: number // 已售列表订阅状态过滤
   sell_to?: string              // 已售列表：出售对方（模糊）
@@ -56,6 +58,7 @@ export interface CardListParams {
   purchase_date?: string
   subscription_time?: string   // 订阅时间精确查询（保留兼容）
   freeze_status?: number       // 冻结状态过滤 -1未冻结 1已冻结（仅普号列表）
+  freeze_time?: string         // 冻结时间筛选 YYYY-MM-DD（仅普号列表，按当天范围）
 }
 
 // 卡密列表响应
@@ -89,6 +92,7 @@ export interface CardRequest {
   api_key?: string
   token?: string
   '2fa'?: string
+  client_id?: string
   mail_url?: string
   remark?: string
   code_link?: string
@@ -228,6 +232,7 @@ export interface BatchUpgradeRequest {
   ids: number[]
   subscription_type?: string
   subscription_time?: number   // Unix 秒
+  subscription_remaining_days?: number // 订阅剩余天数，用于计算过期时间
   purchase_price?: number      // 追加金额
   purchase_from?: string
   purchase_date?: number       // Unix 秒

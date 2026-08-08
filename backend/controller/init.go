@@ -179,6 +179,7 @@ func InitializeSystem(c *gin.Context) {
 		&model.MirrorCard{},
 		&model.Menu{},
 		&model.SalesTalk{},
+		&model.AdConfig{},
 	)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
@@ -374,8 +375,25 @@ func seedDefaultMenus(db *gorm.DB) error {
 		return fmt.Errorf("创建镜像管理子菜单失败: %w", err)
 	}
 
-	// 7. 系统设置
-	systemMenu := &model.Menu{ParentId: 0, Title: "系统设置", Key: "system", Icon: "⚙️", Sort: 7}
+	// 7. GPT业务（父级 + 充值与链接 / GPT卡密 / GPT-CDK）
+	gptRoot := &model.Menu{ParentId: 0, Title: "GPT业务", Key: "gpt-business-root", Icon: "🤖", Sort: 7}
+	if err := createMenu(gptRoot); err != nil {
+		return fmt.Errorf("创建GPT业务菜单失败: %w", err)
+	}
+	gptChildren := []*model.Menu{
+		{ParentId: gptRoot.Id, Title: "充值与链接", Key: "gpt-business", Path: "/admin/gpt-business", Sort: 1},
+		{ParentId: gptRoot.Id, Title: "GPT卡密", Key: "gpt-cards", Path: "/admin/gpt-cards", Icon: "🃏", Sort: 2},
+		{ParentId: gptRoot.Id, Title: "GPT-CDK", Key: "gpt-cdk", Path: "/admin/gpt-cdk", Icon: "🔑", Sort: 3},
+		{ParentId: gptRoot.Id, Title: "广告配置", Key: "ad-configs", Path: "/admin/ad-configs", Icon: "📢", Sort: 5},
+	}
+	for _, child := range gptChildren {
+		if err := createMenu(child); err != nil {
+			return fmt.Errorf("创建GPT业务子菜单失败: %w", err)
+		}
+	}
+
+	// 8. 系统设置
+	systemMenu := &model.Menu{ParentId: 0, Title: "系统设置", Key: "system", Icon: "⚙️", Sort: 8}
 	if err := createMenu(systemMenu); err != nil {
 		return fmt.Errorf("创建系统设置菜单失败: %w", err)
 	}

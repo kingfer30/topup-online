@@ -37,9 +37,21 @@ type CardRequest struct {
 	ApiKey                  string   `json:"api_key"`
 	Token                   string   `json:"token"`
 	TwoFA                   string   `json:"2fa"`
+	ClientId                string   `json:"client_id"`
 	MailUrl                 string   `json:"mail_url"`
 	Remark                  string   `json:"remark"`
 	CodeLink                string   `json:"code_link"`
+}
+
+// parseAccountsFromQuery 解析账号搜索参数（accounts 优先，兼容 keyword）
+func parseAccountsFromQuery(c *gin.Context) []string {
+	if raw := strings.TrimSpace(c.Query("accounts")); raw != "" {
+		return model.ParseAccountSearchList(raw)
+	}
+	if kw := strings.TrimSpace(c.Query("keyword")); kw != "" {
+		return model.ParseAccountSearchList(kw)
+	}
+	return nil
 }
 
 // GetCardList 获取卡密列表
@@ -56,12 +68,13 @@ func GetCardList(c *gin.Context) {
 	cardType := c.DefaultQuery("type", "all")
 	pageStr := c.DefaultQuery("page", "1")
 	pageSizeStr := c.DefaultQuery("page_size", "20")
-	keyword := c.Query("keyword")
+	accounts := parseAccountsFromQuery(c)
 	subscriptionType := c.Query("subscription_type")
 	subscriptionStatusStr := c.DefaultQuery("subscription_status", "0")
 	isCheckStr := c.DefaultQuery("is_check", "0")
 	purchaseDateStr := c.Query("purchase_date")
 	freezeStatusStr := c.DefaultQuery("freeze_status", "0")
+	freezeTimeStr := c.Query("freeze_time")
 	sellTo := strings.TrimSpace(c.Query("sell_to"))
 	purchaseBy := strings.TrimSpace(c.Query("purchase_by"))
 
@@ -71,25 +84,29 @@ func GetCardList(c *gin.Context) {
 	isCheck, _ := strconv.Atoi(isCheckStr)
 	freezeStatus, _ := strconv.Atoi(freezeStatusStr)
 
-	// 将购买时间输入转换为 Unix 时间戳：
-	// - 纯数字（Unix 秒/毫秒）：取该时间所在“当天”(UTC+8)的零点
-	// - 日期字符串（如 "2026-03-05" 或 "2026-03-05 10:40:19"）：按 UTC+8（北京时间）解析，取当天零点
-	var purchaseDate int64
+	// 将日期输入转换为当天零点 Unix 时间戳（UTC+8）
 	cst := time.FixedZone("CST", 8*3600)
-	if purchaseDateStr != "" {
-		if ts, err := strconv.ParseInt(purchaseDateStr, 10, 64); err == nil {
-			// 支持毫秒
+	parseDayStart := func(dateStr string) int64 {
+		if dateStr == "" {
+			return 0
+		}
+		if ts, err := strconv.ParseInt(dateStr, 10, 64); err == nil {
 			if ts > 1e12 {
 				ts = ts / 1000
 			}
 			t := time.Unix(ts, 0).In(cst)
-			purchaseDate = time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, cst).Unix()
-		} else if t, err := time.ParseInLocation("2006-01-02", purchaseDateStr, cst); err == nil {
-			purchaseDate = time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, cst).Unix()
-		} else if t, err := time.ParseInLocation("2006-01-02 15:04:05", purchaseDateStr, cst); err == nil {
-			purchaseDate = time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, cst).Unix()
+			return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, cst).Unix()
 		}
+		if t, err := time.ParseInLocation("2006-01-02", dateStr, cst); err == nil {
+			return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, cst).Unix()
+		}
+		if t, err := time.ParseInLocation("2006-01-02 15:04:05", dateStr, cst); err == nil {
+			return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, cst).Unix()
+		}
+		return 0
 	}
+	purchaseDate := parseDayStart(purchaseDateStr)
+	freezeTime := parseDayStart(freezeTimeStr)
 	if page < 1 {
 		page = 1
 	}
@@ -110,7 +127,7 @@ func GetCardList(c *gin.Context) {
 	}
 
 	// 查询卡密列表
-	cards, total, err := model.GetCardList(tableName, cardType, page, pageSize, keyword, subscriptionType, subscriptionStatus, isCheck, purchaseDate, freezeStatus, sellTo, purchaseBy)
+	cards, total, err := model.GetCardList(tableName, cardType, page, pageSize, accounts, subscriptionType, subscriptionStatus, isCheck, purchaseDate, freezeStatus, freezeTime, sellTo, purchaseBy)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"code":    500,
@@ -267,6 +284,7 @@ func CreateCard(c *gin.Context) {
 		ApiKey:                  req.ApiKey,
 		Token:                   req.Token,
 		TwoFA:                   req.TwoFA,
+		ClientId:                req.ClientId,
 		MailUrl:                 req.MailUrl,
 		Remark:                  req.Remark,
 		CodeLink:                req.CodeLink,
@@ -364,6 +382,7 @@ func UpdateCard(c *gin.Context) {
 		ApiKey:                  req.ApiKey,
 		Token:                   req.Token,
 		TwoFA:                   req.TwoFA,
+		ClientId:                req.ClientId,
 		MailUrl:                 req.MailUrl,
 		Remark:                  req.Remark,
 		CodeLink:                req.CodeLink,
@@ -483,6 +502,7 @@ func BatchImportCards(c *gin.Context) {
 			ApiKey:                  cardReq.ApiKey,
 			Token:                   cardReq.Token,
 			TwoFA:                   cardReq.TwoFA,
+			ClientId:                cardReq.ClientId,
 			MailUrl:                 cardReq.MailUrl,
 			Remark:                  cardReq.Remark,
 			CodeLink:                cardReq.CodeLink,
@@ -798,33 +818,41 @@ func ExportCards(c *gin.Context) {
 	}
 
 	cardType := c.DefaultQuery("type", "all")
-	keyword := c.Query("keyword")
+	accounts := parseAccountsFromQuery(c)
 	subscriptionType := c.Query("subscription_type")
 	subscriptionStatusStr := c.DefaultQuery("subscription_status", "0")
 	isCheckStr := c.DefaultQuery("is_check", "0")
 	purchaseDateStr := c.Query("purchase_date")
 	exportFreezeStatus, _ := strconv.Atoi(c.DefaultQuery("freeze_status", "0"))
+	freezeTimeStr := c.Query("freeze_time")
 	sellTo := strings.TrimSpace(c.Query("sell_to"))
 	purchaseBy := strings.TrimSpace(c.Query("purchase_by"))
 	subscriptionStatus, _ := strconv.Atoi(subscriptionStatusStr)
 	isCheck, _ := strconv.Atoi(isCheckStr)
 
-	// purchase_date 同 GetCardList：统一解析到当天零点（UTC+8）
-	var purchaseDate int64
+	// purchase_date / freeze_time：统一解析到当天零点（UTC+8）
 	cst := time.FixedZone("CST", 8*3600)
-	if purchaseDateStr != "" {
-		if ts, err := strconv.ParseInt(purchaseDateStr, 10, 64); err == nil {
+	parseDayStart := func(dateStr string) int64 {
+		if dateStr == "" {
+			return 0
+		}
+		if ts, err := strconv.ParseInt(dateStr, 10, 64); err == nil {
 			if ts > 1e12 {
 				ts = ts / 1000
 			}
 			t := time.Unix(ts, 0).In(cst)
-			purchaseDate = time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, cst).Unix()
-		} else if t, err := time.ParseInLocation("2006-01-02", purchaseDateStr, cst); err == nil {
-			purchaseDate = time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, cst).Unix()
-		} else if t, err := time.ParseInLocation("2006-01-02 15:04:05", purchaseDateStr, cst); err == nil {
-			purchaseDate = time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, cst).Unix()
+			return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, cst).Unix()
 		}
+		if t, err := time.ParseInLocation("2006-01-02", dateStr, cst); err == nil {
+			return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, cst).Unix()
+		}
+		if t, err := time.ParseInLocation("2006-01-02 15:04:05", dateStr, cst); err == nil {
+			return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, cst).Unix()
+		}
+		return 0
 	}
+	purchaseDate := parseDayStart(purchaseDateStr)
+	freezeTime := parseDayStart(freezeTimeStr)
 
 	tableName := model.GetTableNameByCategory(category)
 	if !model.CheckTableExists(tableName) {
@@ -832,7 +860,7 @@ func ExportCards(c *gin.Context) {
 		return
 	}
 
-	cards, err := model.GetAllCardsForExport(tableName, cardType, keyword, subscriptionType, subscriptionStatus, isCheck, purchaseDate, exportFreezeStatus, sellTo, purchaseBy)
+	cards, err := model.GetAllCardsForExport(tableName, cardType, accounts, subscriptionType, subscriptionStatus, isCheck, purchaseDate, exportFreezeStatus, freezeTime, sellTo, purchaseBy)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{"code": 500, "message": "导出失败: " + err.Error()})
 		return
@@ -848,13 +876,14 @@ func ExportCards(c *gin.Context) {
 // BatchUpgradeToProduct 批量将普号升级为成品
 func BatchUpgradeToProduct(c *gin.Context) {
 	var req struct {
-		Category         string   `json:"category" binding:"required"`
-		IDs              []int    `json:"ids" binding:"required"`
-		SubscriptionType string   `json:"subscription_type"`
-		SubscriptionTime *int64   `json:"subscription_time"`
-		PurchasePrice    *float64 `json:"purchase_price"`
-		PurchaseFrom     string   `json:"purchase_from"`
-		PurchaseDate     *int64   `json:"purchase_date"`
+		Category                  string   `json:"category" binding:"required"`
+		IDs                       []int    `json:"ids" binding:"required"`
+		SubscriptionType          string   `json:"subscription_type"`
+		SubscriptionTime          *int64   `json:"subscription_time"`
+		SubscriptionRemainingDays *int     `json:"subscription_remaining_days"`
+		PurchasePrice             *float64 `json:"purchase_price"`
+		PurchaseFrom              string   `json:"purchase_from"`
+		PurchaseDate              *int64   `json:"purchase_date"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -875,13 +904,23 @@ func BatchUpgradeToProduct(c *gin.Context) {
 		return
 	}
 
+	subscriptionType := strings.TrimSpace(req.SubscriptionType)
+	if subscriptionType == "" {
+		c.JSON(http.StatusOK, gin.H{
+			"code":    400,
+			"message": "请选择订阅类型",
+		})
+		return
+	}
+
 	affected, err := model.BatchUpgradeToProduct(tableName, model.BatchUpgradeRequest{
-		IDs:              req.IDs,
-		SubscriptionType: req.SubscriptionType,
-		SubscriptionTime: req.SubscriptionTime,
-		PurchasePrice:    req.PurchasePrice,
-		PurchaseFrom:     req.PurchaseFrom,
-		PurchaseDate:     req.PurchaseDate,
+		IDs:                       req.IDs,
+		SubscriptionType:          subscriptionType,
+		SubscriptionTime:          req.SubscriptionTime,
+		SubscriptionRemainingDays: req.SubscriptionRemainingDays,
+		PurchasePrice:             req.PurchasePrice,
+		PurchaseFrom:              req.PurchaseFrom,
+		PurchaseDate:              req.PurchaseDate,
 	})
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{

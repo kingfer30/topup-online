@@ -20,6 +20,17 @@ func SetApiRouter(router *gin.Engine) {
 		apiRouter.POST("/admin/login", controller.AdminLogin)
 		apiRouter.POST("/admin/force-relogin", controller.ForceReLogin) // 强制所有 token 失效，要求重新登录
 
+		// GPT RT 许可证验证/消耗/预占（公开，无需认证）
+		apiRouter.POST("/gpt-rt-license/verify", controller.VerifyGptRtLicense)
+		apiRouter.POST("/gpt-rt-license/consume", controller.ConsumeGptRtLicense)
+		apiRouter.POST("/gpt-rt-license/reserve", controller.ReserveGptRtLicense)
+		apiRouter.POST("/gpt-rt-license/confirm", controller.ConfirmGptRtLicense)
+		apiRouter.POST("/gpt-rt-license/release", controller.ReleaseGptRtLicense)
+
+		// 广告（公开，无需认证）
+		apiRouter.GET("/ads/active", controller.GetActiveAds)
+		apiRouter.POST("/ads/click", controller.ClickAd)
+
 		// 管理员相关（需要认证）
 		adminGroup := apiRouter.Group("/admin")
 		adminGroup.Use(middleware.AdminAuth())
@@ -29,9 +40,9 @@ func SetApiRouter(router *gin.Engine) {
 			adminGroup.POST("/change-password", controller.ChangePassword)
 
 			// 登录设备管理
-			adminGroup.GET("/sessions", controller.GetAdminSessions)          // 获取已登录设备列表
-			adminGroup.DELETE("/sessions/:uuid", controller.KickSession)      // 踢出指定设备
-			adminGroup.DELETE("/sessions", controller.KickAllSessions)        // 踢出所有设备（含自己）
+			adminGroup.GET("/sessions", controller.GetAdminSessions)     // 获取已登录设备列表
+			adminGroup.DELETE("/sessions/:uuid", controller.KickSession) // 踢出指定设备
+			adminGroup.DELETE("/sessions", controller.KickAllSessions)   // 踢出所有设备（含自己）
 
 			// 用户管理接口（管理员专用）
 			adminGroup.GET("/users", controller.GetUserList)       // 获取用户列表
@@ -62,28 +73,28 @@ func SetApiRouter(router *gin.Engine) {
 			adminGroup.GET("/dashboard/stats", controller.GetDashboardStats) // 按卡密类型统计今日销售
 
 			// 卡密管理接口（管理员专用）
-			adminGroup.GET("/cards", controller.GetCardList)                                          // 获取卡密列表
-			adminGroup.GET("/cards/:id", controller.GetCardById)                                      // 获取卡密详情
-			adminGroup.POST("/cards", controller.CreateCard)                                          // 创建卡密
-			adminGroup.PUT("/cards/:id", controller.UpdateCard)                                       // 更新卡密
-			adminGroup.DELETE("/cards/:id", controller.DeleteCard)                                    // 删除卡密
-			adminGroup.POST("/cards/batch-import", controller.BatchImportCards)                       // 批量导入卡密
-			adminGroup.GET("/cards/unsold-subscription-types", controller.GetUnsoldSubscriptionTypes) // 获取未售订阅类型
-			adminGroup.POST("/cards/pickup", controller.PickupCard)                                   // 取货
-			adminGroup.POST("/cards/complete-pickup", controller.CompletePickup)                      // 完成取货
-			adminGroup.POST("/cards/rollback-pickup", controller.RollbackPickup)                      // 回滚取货（发货中→未出售）
-			adminGroup.POST("/cards/rollback-sold", controller.RollbackSoldCard)                      // 回滚已售（已出售→未出售）
+			adminGroup.GET("/cards", controller.GetCardList)                                             // 获取卡密列表
+			adminGroup.GET("/cards/:id", controller.GetCardById)                                         // 获取卡密详情
+			adminGroup.POST("/cards", controller.CreateCard)                                             // 创建卡密
+			adminGroup.PUT("/cards/:id", controller.UpdateCard)                                          // 更新卡密
+			adminGroup.DELETE("/cards/:id", controller.DeleteCard)                                       // 删除卡密
+			adminGroup.POST("/cards/batch-import", controller.BatchImportCards)                          // 批量导入卡密
+			adminGroup.GET("/cards/unsold-subscription-types", controller.GetUnsoldSubscriptionTypes)    // 获取未售订阅类型
+			adminGroup.POST("/cards/pickup", controller.PickupCard)                                      // 取货
+			adminGroup.POST("/cards/complete-pickup", controller.CompletePickup)                         // 完成取货
+			adminGroup.POST("/cards/rollback-pickup", controller.RollbackPickup)                         // 回滚取货（发货中→未出售）
+			adminGroup.POST("/cards/rollback-sold", controller.RollbackSoldCard)                         // 回滚已售（已出售→未出售）
 			adminGroup.POST("/cards/batch-dashboard-goto-resolve", controller.BatchDashboardGotoResolve) // 提链 dashboard 批量回滚并标记 -2
-			adminGroup.POST("/cards/batch-upgrade", controller.BatchUpgradeToProduct)                 // 批量升级为成品
-			adminGroup.POST("/cards/batch-pickup", controller.BatchPickup)                            // 批量取货
-			adminGroup.GET("/cards/export", controller.ExportCards)                                   // 导出卡密
-			adminGroup.POST("/cards/batch-check", controller.BatchCheckCards)                         // 批量检查订阅状态
-			adminGroup.POST("/cards/enable-on-demand", controller.EnableOnDemandSpendHandler)               // 开启按需付费
-			adminGroup.POST("/cards/batch-enable-on-demand", controller.BatchEnableOnDemandSpendHandler)   // 批量开启按需付费
-			adminGroup.POST("/cards/update-remark", controller.UpdateCardRemark)                      // 单独更新备注
-			adminGroup.POST("/cards/goto-pro", controller.GotoPro)                                   // 提链：获取 Cursor Pro 付款链接
-			adminGroup.POST("/cards/batch-freeze", controller.BatchFreezeCards)                     // 批量冻结/解冻普号
-			adminGroup.POST("/cards/batch-delete", controller.BatchDeleteCards)                     // 批量删除（status=-1）
+			adminGroup.POST("/cards/batch-upgrade", controller.BatchUpgradeToProduct)                    // 批量升级为成品
+			adminGroup.POST("/cards/batch-pickup", controller.BatchPickup)                               // 批量取货
+			adminGroup.GET("/cards/export", controller.ExportCards)                                      // 导出卡密
+			adminGroup.POST("/cards/batch-check", controller.BatchCheckCards)                            // 批量检查订阅状态
+			adminGroup.POST("/cards/enable-on-demand", controller.EnableOnDemandSpendHandler)            // 开启按需付费
+			adminGroup.POST("/cards/batch-enable-on-demand", controller.BatchEnableOnDemandSpendHandler) // 批量开启按需付费
+			adminGroup.POST("/cards/update-remark", controller.UpdateCardRemark)                         // 单独更新备注
+			adminGroup.POST("/cards/goto-pro", controller.GotoPro)                                       // 提链：获取 Cursor Pro 付款链接
+			adminGroup.POST("/cards/batch-freeze", controller.BatchFreezeCards)                          // 批量冻结/解冻普号
+			adminGroup.POST("/cards/batch-delete", controller.BatchDeleteCards)                          // 批量删除（status=-1）
 
 			// 话术管理接口（管理员专用）
 			adminGroup.GET("/sales-talks", controller.GetSalesTalkList)                   // 获取话术列表
@@ -94,9 +105,9 @@ func SetApiRouter(router *gin.Engine) {
 			adminGroup.POST("/sales-talks/batch-tag", controller.BatchUpdateSalesTalkTag) // 批量更新标签
 
 			// Digiseller 对接接口（管理员专用）
-			adminGroup.GET("/digiseller/check-code/:unique_code", controller.CheckUniqueCode)  // 查询唯一码支付信息
-			adminGroup.GET("/digiseller/prices", controller.GetDigisellerPrices)               // 获取订阅类型售价配置
-			adminGroup.POST("/digiseller/prices", controller.UpsertDigisellerPrice)            // 新增或更新订阅类型售价
+			adminGroup.GET("/digiseller/check-code/:unique_code", controller.CheckUniqueCode) // 查询唯一码支付信息
+			adminGroup.GET("/digiseller/prices", controller.GetDigisellerPrices)              // 获取订阅类型售价配置
+			adminGroup.POST("/digiseller/prices", controller.UpsertDigisellerPrice)           // 新增或更新订阅类型售价
 
 			// AI 模型设置与翻译（管理员专用）
 			adminGroup.GET("/settings/ai", controller.GetAdminAISettings)
@@ -104,20 +115,61 @@ func SetApiRouter(router *gin.Engine) {
 			adminGroup.POST("/ai/translate", controller.AdminAITranslate)
 
 			// GPT卡密管理（供应商卡密）
-			adminGroup.GET("/gpt-cards/suppliers", controller.GetSuppliers)             // 获取供应商列表
-			adminGroup.GET("/gpt-cards", controller.GetGptCardList)                   // 获取卡密列表
+			adminGroup.GET("/gpt-cards/suppliers", controller.GetSuppliers)            // 获取供应商列表
+			adminGroup.GET("/gpt-cards", controller.GetGptCardList)                    // 获取卡密列表
 			adminGroup.POST("/gpt-cards/batch-import", controller.BatchImportGptCards) // 批量导入
 			adminGroup.POST("/gpt-cards/batch-check", controller.BatchCheckGptCards)   // 批量检查
-			adminGroup.PUT("/gpt-cards/:id", controller.UpdateGptCard)                // 更新卡密
-			adminGroup.DELETE("/gpt-cards/:id", controller.DeleteGptCard)             // 删除卡密
+			adminGroup.PUT("/gpt-cards/:id", controller.UpdateGptCard)                 // 更新卡密
+			adminGroup.DELETE("/gpt-cards/:id", controller.DeleteGptCard)              // 删除卡密
 			adminGroup.POST("/gpt-cards/batch-delete", controller.BatchDeleteGptCards) // 批量删除
 
 			// GPT-CDK管理（自建CDK）
-			adminGroup.GET("/gpt-cdk", controller.GetGptCdkList)                      // 获取CDK列表
+			adminGroup.GET("/gpt-cdk", controller.GetGptCdkList)                       // 获取CDK列表
 			adminGroup.POST("/gpt-cdk/batch-generate", controller.BatchGenerateGptCdk) // 批量生成
-			adminGroup.PUT("/gpt-cdk/:id", controller.UpdateGptCdk)                   // 更新CDK
-			adminGroup.DELETE("/gpt-cdk/:id", controller.DeleteGptCdkSingle)          // 删除CDK
-			adminGroup.POST("/gpt-cdk/batch-delete", controller.BatchDeleteGptCdks)   // 批量删除
+			adminGroup.PUT("/gpt-cdk/:id", controller.UpdateGptCdk)                    // 更新CDK
+			adminGroup.DELETE("/gpt-cdk/:id", controller.DeleteGptCdkSingle)           // 删除CDK
+			adminGroup.POST("/gpt-cdk/batch-delete", controller.BatchDeleteGptCdks)    // 批量删除
+
+			// Outlook OAuth 取件
+			adminGroup.POST("/outlook-oauth/fetch", controller.OutlookOauthFetch)
+			adminGroup.POST("/outlook-oauth/detail", controller.OutlookFetchDetail)
+
+			// 微软邮箱库存
+			adminGroup.GET("/microsoft-mails", controller.GetMicrosoftMailList)
+			adminGroup.GET("/microsoft-mails/export", controller.ExportMicrosoftMails)
+			adminGroup.GET("/microsoft-mails/:id", controller.GetMicrosoftMailById)
+			adminGroup.POST("/microsoft-mails", controller.CreateMicrosoftMail)
+			adminGroup.PUT("/microsoft-mails/:id", controller.UpdateMicrosoftMail)
+			adminGroup.DELETE("/microsoft-mails/:id", controller.DeleteMicrosoftMail)
+			adminGroup.POST("/microsoft-mails/batch-import", controller.BatchImportMicrosoftMails)
+			adminGroup.POST("/microsoft-mails/pickup", controller.PickupMicrosoftMail)
+			adminGroup.POST("/microsoft-mails/complete-pickup", controller.CompleteMicrosoftMailPickup)
+			adminGroup.POST("/microsoft-mails/rollback-pickup", controller.RollbackMicrosoftMailPickup)
+			adminGroup.POST("/microsoft-mails/rollback-sold", controller.RollbackMicrosoftMailSold)
+			adminGroup.POST("/microsoft-mails/batch-pickup", controller.BatchPickupMicrosoftMails)
+			adminGroup.POST("/microsoft-mails/batch-check", controller.BatchCheckMicrosoftMails)
+			adminGroup.POST("/microsoft-mails/batch-delete", controller.BatchDeleteMicrosoftMails)
+			adminGroup.POST("/microsoft-mails/update-remark", controller.UpdateMicrosoftMailRemark)
+
+			// Web 邮箱取件
+			adminGroup.POST("/webmail/lqqq/fetch", controller.LqqqFetch)
+			adminGroup.POST("/webmail/lqqq/detail", controller.LqqqDetail)
+			adminGroup.POST("/webmail/toolsvip/fetch", controller.ToolsvipFetch)
+
+			// GPT RT 许可证管理
+			adminGroup.GET("/gpt-rt-licenses", controller.ListGptRtLicenses)
+			adminGroup.GET("/gpt-rt-licenses/:id/devices", controller.ListGptRtLicenseDevices)
+			adminGroup.POST("/gpt-rt-licenses", controller.CreateGptRtLicense)
+			adminGroup.PUT("/gpt-rt-licenses/:id", controller.UpdateGptRtLicense)
+			adminGroup.DELETE("/gpt-rt-licenses/:id", controller.DeleteGptRtLicense)
+
+			// 广告配置
+			adminGroup.GET("/ad-configs", controller.GetAdConfigList)
+			adminGroup.GET("/ad-configs/:id", controller.GetAdConfigById)
+			adminGroup.POST("/ad-configs", controller.CreateAdConfig)
+			adminGroup.PUT("/ad-configs/:id", controller.UpdateAdConfig)
+			adminGroup.DELETE("/ad-configs/:id", controller.DeleteAdConfig)
+			adminGroup.POST("/upload/ad-image", controller.UploadAdImage)
 		}
 
 		// 用户认证相关（无需认证）

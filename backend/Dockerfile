@@ -36,10 +36,12 @@ COPY --from=builder /app/db.sql ./db.sql
 
 # 创建数据目录，用于存放 .initialized、.env 等持久化文件
 # Docker 部署时将此目录映射到宿主机即可保持初始化状态
-RUN mkdir -p /app/data
+# /app/logs 可挂载到宿主机保存运行日志（配合 LOG_DIR=/app/logs）
+RUN mkdir -p /app/data /app/logs
 
 # 设置数据目录环境变量
 ENV DATA_DIR=/app/data
+ENV LOG_DIR=/app/logs
 
 # 暴露端口（默认 8080）
 EXPOSE 8080

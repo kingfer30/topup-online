@@ -109,6 +109,48 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/GptCdk.vue'),
         meta: { title: 'GPT-CDK', requiresAuth: true },
       },
+      {
+        path: 'gpt-business',
+        name: 'GptBusiness',
+        component: () => import('@/views/GptBusiness.vue'),
+        meta: { title: '充值与链接', requiresAuth: true },
+      },
+      {
+        path: 'gpt-rt-licenses',
+        name: 'GptRtLicenses',
+        component: () => import('@/views/GptRtLicenses.vue'),
+        meta: { title: 'GPT RT 许可证', requiresAuth: true },
+      },
+      {
+        path: 'ad-configs',
+        name: 'AdConfigs',
+        component: () => import('@/views/AdConfigs.vue'),
+        meta: { title: '广告配置', requiresAuth: true },
+      },
+      {
+        path: 'outlook-oauth-fetch',
+        name: 'OutlookOauthFetch',
+        component: () => import('@/views/OutlookOauthFetch.vue'),
+        meta: { title: 'Oauth取件', requiresAuth: true },
+      },
+      {
+        path: 'microsoft-mails',
+        name: 'MicrosoftMails',
+        component: () => import('@/views/MicrosoftMails.vue'),
+        meta: { title: '微软邮箱', requiresAuth: true },
+      },
+      {
+        path: 'lqqq-fetch',
+        name: 'LqqqFetch',
+        component: () => import('@/views/LqqqFetch.vue'),
+        meta: { title: 'lqqq取件', requiresAuth: true },
+      },
+      {
+        path: 'toolsvip-fetch',
+        name: 'ToolsvipFetch',
+        component: () => import('@/views/ToolsvipFetch.vue'),
+        meta: { title: 'toolsvip取件', requiresAuth: true },
+      },
     ],
   },
 ]

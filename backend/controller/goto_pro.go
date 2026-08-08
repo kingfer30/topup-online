@@ -29,8 +29,12 @@ func GotoPro(c *gin.Context) {
 		return
 	}
 
-	// 拆分 token：格式为 user_xxx::JWT
-	parts := strings.SplitN(req.Token, "::", 2)
+	// 拆分 token：格式为 user_xxx::JWT（分隔符可能被 URL 编码为 %3A%3A）
+	token := req.Token
+	if decoded, err := url.QueryUnescape(token); err == nil {
+		token = decoded
+	}
+	parts := strings.SplitN(token, "::", 2)
 	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"code":    400,
@@ -39,7 +43,7 @@ func GotoPro(c *gin.Context) {
 		return
 	}
 	workosID := parts[0]
-	sessionToken := req.Token
+	sessionToken := token
 
 	// 创建带 cookie jar 的 HTTP 客户端
 	jar, _ := cookiejar.New(nil)

@@ -35,6 +35,10 @@ func init() {
 }
 
 func main() {
+	// LOG_DIR 非空时同时落盘；Docker 可挂载到宿主机如 /mnt/logs/depot
+	if logDir := os.Getenv("LOG_DIR"); logDir != "" {
+		logger.LogDir = logDir
+	}
 	logger.SetupLogger()
 
 	// 检查是否已初始化，如果已初始化则连接数据库
@@ -57,8 +61,17 @@ func main() {
 		if err := model.EnsureAIMenuPlacement(); err != nil {
 			logger.SysLog("EnsureAIMenuPlacement: " + err.Error())
 		}
-		if err := model.EnsureGptMenus(); err != nil {
-			logger.SysLog("EnsureGptMenus: " + err.Error())
+		if err := model.EnsureGptBusinessMenu(); err != nil {
+			logger.SysLog("EnsureGptBusinessMenu: " + err.Error())
+		}
+		if err := model.EnsureOutlookMenu(); err != nil {
+			logger.SysLog("EnsureOutlookMenu: " + err.Error())
+		}
+		if err := model.EnsureWebMailMenus(); err != nil {
+			logger.SysLog("EnsureWebMailMenus: " + err.Error())
+		}
+		if err := model.EnsureMicrosoftMailMenus(); err != nil {
+			logger.SysLog("EnsureMicrosoftMailMenus: " + err.Error())
 		}
 
 		// 启动镜像卡密 Token 定时获取任务（每 30 分钟执行一次）
@@ -79,6 +92,14 @@ func main() {
 			cardCheckScheduler := scheduler.NewCardCheckScheduler(1440)
 			cardCheckScheduler.Start()
 			logger.SysLog("Card Check Scheduler started successfully")
+		}
+
+		// 启动微软邮箱 refresh_token 保活检查（每 60 分钟扫一次到期记录，成功后续期 15 天）
+		if os.Getenv("MS_MAIL_CHECK_DISABLE") != "true" {
+			logger.SysLog("Starting MicrosoftMail Check Scheduler...")
+			msMailCheckScheduler := scheduler.NewMicrosoftMailCheckScheduler(60)
+			msMailCheckScheduler.Start()
+			logger.SysLog("MicrosoftMail Check Scheduler started successfully")
 		}
 	} else {
 		logger.SysLog("System not initialized yet, waiting for initialization...")

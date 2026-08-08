@@ -389,7 +389,7 @@ const handleTestEmail = () => {
 }
 
 // 所有订阅类型
-const allSubscriptionTypes = ['pro', 'pro_plus', 'ultra', 'go', 'plus', 'team']
+const allSubscriptionTypes = ['free', 'pro', 'pro_plus', 'pro_x5', 'pro_x20', 'ultra', 'go', 'plus', 'team']
 
 interface DigisellerPriceRow {
   subscription_type: string
