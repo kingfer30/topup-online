@@ -3,11 +3,14 @@ package controller
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -226,6 +229,176 @@ func GotoPro(c *gin.Context) {
 			"code":    500,
 			"message": "未获取到付款链接，响应为空",
 		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    200,
+		"message": "成功",
+		"data":    link,
+	})
+}
+
+const halfPriceCheckoutBase = "https://cursor.120.hk"
+
+type HalfPriceCheckoutRequest struct {
+	UID   string `json:"uid" binding:"required"`
+	Token string `json:"token" binding:"required"`
+	Tier  string `json:"tier" binding:"required"`
+}
+
+type halfPriceAPIResp struct {
+	Status   string `json:"status"`
+	Message  string `json:"message"`
+	URL      string `json:"url"`
+	Email    string `json:"email"`
+	BillUsed int    `json:"bill_used"`
+	BillMax  int    `json:"bill_max"`
+}
+
+func normalizeWorkosCookie(raw string) string {
+	token := strings.TrimSpace(raw)
+	if decoded, err := url.QueryUnescape(token); err == nil && decoded != "" {
+		token = decoded
+	}
+	const key = "WorkosCursorSessionToken="
+	if idx := strings.Index(token, key); idx >= 0 {
+		token = token[idx+len(key):]
+		if i := strings.Index(token, ";"); i >= 0 {
+			token = token[:i]
+		}
+	}
+	token = strings.Trim(token, "\"' \t")
+	return key + token
+}
+
+func postHalfPriceForm(client *http.Client, apiPath string, fields map[string]string) (*halfPriceAPIResp, error) {
+	var buf bytes.Buffer
+	writer := multipart.NewWriter(&buf)
+	for k, v := range fields {
+		if err := writer.WriteField(k, v); err != nil {
+			return nil, err
+		}
+	}
+	if err := writer.Close(); err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, halfPriceCheckoutBase+apiPath, &buf)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	req.Header.Set("Accept", "application/json, text/plain, */*")
+	req.Header.Set("Origin", halfPriceCheckoutBase)
+	req.Header.Set("Referer", halfPriceCheckoutBase+"/?uid="+url.QueryEscape(fields["uid"]))
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var data halfPriceAPIResp
+	if err := json.Unmarshal(body, &data); err != nil {
+		preview := strings.TrimSpace(string(body))
+		if len(preview) > 200 {
+			preview = preview[:200]
+		}
+		return nil, fmt.Errorf("解析活动接口响应失败: %s", preview)
+	}
+	return &data, nil
+}
+
+// HalfPriceCheckout 走半价活动页预检 + 开单，返回官方支付链接
+func HalfPriceCheckout(c *gin.Context) {
+	var req HalfPriceCheckoutRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusOK, gin.H{"code": 400, "message": "参数错误: " + err.Error()})
+		return
+	}
+
+	uid := strings.TrimSpace(req.UID)
+	tier := strings.TrimSpace(req.Tier)
+	if uid == "" {
+		c.JSON(http.StatusOK, gin.H{"code": 400, "message": "请输入 uid"})
+		return
+	}
+	switch tier {
+	case "pro", "pro_plus", "ultra":
+	default:
+		c.JSON(http.StatusOK, gin.H{"code": 400, "message": "套餐仅支持 pro / pro_plus / ultra"})
+		return
+	}
+
+	cookie := normalizeWorkosCookie(req.Token)
+	if strings.TrimPrefix(cookie, "WorkosCursorSessionToken=") == "" {
+		c.JSON(http.StatusOK, gin.H{"code": 400, "message": "token 为空或格式不正确"})
+		return
+	}
+
+	client := &http.Client{Timeout: 90 * time.Second}
+
+	pre, err := postHalfPriceForm(client, "/api/precheck", map[string]string{
+		"uid":    uid,
+		"cookie": cookie,
+	})
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"code": 500, "message": "预检请求失败: " + err.Error()})
+		return
+	}
+	switch pre.Status {
+	case "blocked":
+		email := strings.TrimSpace(pre.Email)
+		msg := "该号无资格"
+		if email != "" {
+			msg = email + " 已被标记为无资格账号，请更换账号后再试"
+		}
+		c.JSON(http.StatusOK, gin.H{"code": 400, "message": msg})
+		return
+	case "limit":
+		email := strings.TrimSpace(pre.Email)
+		msg := fmt.Sprintf("邮箱开单已达上限 %d/%d，请更换账号", pre.BillUsed, pre.BillMax)
+		if email != "" {
+			msg = fmt.Sprintf("%s 已开单 %d/%d 次，请更换账号", email, pre.BillUsed, pre.BillMax)
+		}
+		c.JSON(http.StatusOK, gin.H{"code": 400, "message": msg})
+		return
+	case "success":
+	default:
+		msg := strings.TrimSpace(pre.Message)
+		if msg == "" {
+			msg = "预检未通过，请稍后再试"
+		}
+		c.JSON(http.StatusOK, gin.H{"code": 400, "message": msg})
+		return
+	}
+
+	result, err := postHalfPriceForm(client, "/api/checkout", map[string]string{
+		"uid":    uid,
+		"cookie": cookie,
+		"tier":   tier,
+	})
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"code": 500, "message": "开单请求失败: " + err.Error()})
+		return
+	}
+	if result.Status != "success" {
+		msg := strings.TrimSpace(result.Message)
+		if msg == "" {
+			msg = "申请暂未通过，请稍后再试"
+		}
+		c.JSON(http.StatusOK, gin.H{"code": 400, "message": msg})
+		return
+	}
+	link := strings.TrimSpace(result.URL)
+	if link == "" {
+		c.JSON(http.StatusOK, gin.H{"code": 500, "message": "后台已成功但未返回支付地址"})
 		return
 	}
 

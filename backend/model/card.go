@@ -3,6 +3,7 @@ package model
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"strings"
 	"time"
 
@@ -53,6 +54,23 @@ type AccountCard struct {
 	CreatedAt               time.Time      `json:"created_at"`
 	UpdatedAt               time.Time      `json:"updated_at"`
 	DeletedAt               gorm.DeletedAt `json:"deleted_at" gorm:"index"`
+}
+
+// DecodeStoredToken 将库中 URL 编码的 token 还原，例如 user%3A%3AeyJhb -> user::eyJhb
+func DecodeStoredToken(token string) string {
+	if token == "" {
+		return token
+	}
+	decoded, err := url.PathUnescape(token)
+	if err != nil || decoded == "" {
+		return token
+	}
+	return decoded
+}
+
+func (c *AccountCard) AfterFind(_ *gorm.DB) error {
+	c.Token = DecodeStoredToken(c.Token)
+	return nil
 }
 
 // ParseAccountSearchList 解析账号搜索列表（换行/逗号分隔，去重）

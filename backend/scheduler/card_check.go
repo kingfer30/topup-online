@@ -201,10 +201,10 @@ func (s *CardCheckScheduler) checkCards() {
 		logger.SysLog(fmt.Sprintf("表 %s 找到 %d 条待检查卡密", tableName, len(cards)))
 
 		for _, card := range cards {
-			// 按表名分流：cards_chatgpt* 走 ChatGPT 检查，其余走 Cursor（workos_id）检查
+			// 按表名分流：cards_chatgpt* 走 ChatGPT 检查，其余走 Cursor（workos_id） 检查
 			if err := CheckSingleCard(tableName, card); err != nil {
 				logger.SysError(fmt.Sprintf("表 %s 卡密 [ID:%d, Account:%s] 检查失败: %v",
-+					tableName, card.Id, card.Account, err))
+					tableName, card.Id, card.Account, err))
 				if strings.Contains(err.Error(), "提取 workos_id") {
 					totalSkip++
 				} else {

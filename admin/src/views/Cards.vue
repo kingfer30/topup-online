@@ -318,9 +318,9 @@
         <!-- 字段选择 -->
         <div>
           <div style="font-size: 12px; color: #888; margin-bottom: 8px">
-            选择导出字段（顺序即为列顺序，分隔符固定为 ----）
+            {{ exportFormatHint }}
           </div>
-          <n-checkbox-group v-model:value="exportSelectedFields">
+          <n-checkbox-group :value="exportSelectedFields" @update:value="handleExportFieldsUpdate">
             <n-grid :cols="5" :x-gap="8" :y-gap="8">
               <n-gi v-for="field in exportFieldOptions" :key="field.value">
                 <n-checkbox :value="field.value" :label="field.label" />
@@ -626,6 +626,26 @@
       </template>
     </n-modal>
 
+    <!-- 半价提链：填写 uid 与套餐 -->
+    <n-modal v-model:show="showHalfPriceModal" title="半价提链" preset="dialog" positive-text="下一步"
+      negative-text="取消" :positive-button-props="{ loading: halfPriceLoading, disabled: halfPriceLoading }"
+      @positive-click="handleHalfPriceNext" style="width: 480px">
+      <n-form label-placement="left" label-width="90px" style="margin-top: 20px">
+        <n-form-item label="UID" required>
+          <n-input v-model:value="halfPriceForm.uid" placeholder="请输入活动页 uid" />
+        </n-form-item>
+        <n-form-item label="选择套餐" required>
+          <n-radio-group v-model:value="halfPriceForm.tier">
+            <n-space>
+              <n-radio value="pro">Pro 半价注册</n-radio>
+              <n-radio value="pro_plus">Pro Plus 半价注册</n-radio>
+              <n-radio value="ultra">Ultra 半价注册</n-radio>
+            </n-space>
+          </n-radio-group>
+        </n-form-item>
+      </n-form>
+    </n-modal>
+
     <!-- 提链-支付成功：单卡升级成品弹窗 -->
     <n-modal v-model:show="showGotoProSuccessModal" title="支付成功 - 更新为成品" preset="dialog" positive-text="确认更新"
       negative-text="取消" @positive-click="handleGotoProSuccessSubmit" style="width: 600px">
@@ -760,6 +780,7 @@ import {
   batchDashboardGotoResolve,
   batchEnableOnDemandSpend,
   gotoProUpgrade,
+  halfPriceCheckout,
   updateCardRemark,
   batchFreezeCards,
   batchDeleteCards,
@@ -796,6 +817,29 @@ const pageTitle = computed(() => {
   return title
 })
 
+// 仅 cards_cursor 才带出 session-token / Auto-Login 说明字段
+const isCursorCategory = computed(() => category.value === 'cursor')
+const CURSOR_AUTO_LOGIN_URL = 'https://docs.aiguoguo199.com/doc-9320337'
+
+const sessionTokenField = (card: Card, sep: string): string => {
+  if (!isCursorCategory.value) return ''
+  const token = (card.token || '').trim()
+  return token ? `${sep}session-token: ${token}` : ''
+}
+
+const cursorAutoLoginField = (sep: string): string => {
+  if (!isCursorCategory.value) return ''
+  return `${sep}Account restrictions triggering SMS verification have been frequent recently; logging in via token is strongly recommended. Please refer to the following: ${CURSOR_AUTO_LOGIN_URL}`
+}
+
+const formatDigiseller = (card: Card): string => {
+  return `account: ${card.account}\npass: ${card.password || ''}\nmail-pass: ${card.mail_password || ''}${sessionTokenField(card, '\n')}\n\nmail-login: ${card.mail_url || ''}${cursorAutoLoginField('\n')}`
+}
+
+const formatDigisellerAuto = (card: Card): string => {
+  return `account: ${card.account}<br>pass: ${card.password || ''}<br>mail-pass: ${card.mail_password || ''}${sessionTokenField(card, '<br>')}<br>mail-login: ${card.mail_url || ''}${cursorAutoLoginField('<br>')}<br>Если вам удобно, не могли бы вы оставить нам хороший отзыв? https://ibb.co/tTgSNRLP<br>Подписывайтесь на наш канал, чтобы получать больше выгодных предложений: https://t.me/AI_GUO_GUO`
+}
+
 // 取货卡密信息格式化
 const pickupCardInfo = computed(() => {
   if (!pickedCard.value) return ''
@@ -816,11 +860,7 @@ mail-login: ${card.mail_url || ''}
 3. Нажмите кнопку: «Email sign-in code»`
     }
     // 常规 digiseller 订阅格式
-    return `account: ${card.account}
-pass: ${card.password || ''}
-mail-pass: ${card.mail_password || ''}
-
-mail-login: ${card.mail_url || ''}`
+    return formatDigiseller(card)
   } else if (pickupForm.value.format === 'reverse') {
     // 逆向格式
     return `账号----token
@@ -861,6 +901,8 @@ const showExportModal = ref(false)
 const exportLoading = ref(false)
 const exportMode = ref<'selected' | 'filter'>('filter')
 const exportSelectedFields = ref<string[]>(['account', 'code_method'])
+// 导出格式：digiseller / digiseller_auto 走与复制相同的多行格式，其余走 ---- 字段拼接
+const exportFormatMode = ref<'fields' | 'digiseller' | 'digiseller_auto'>('fields')
 
 // 打开导出面板：有勾选时默认「导出勾选记录」
 const handleOpenExportModal = () => {
@@ -919,40 +961,71 @@ const exportFieldOptions = [
   { label: '备注', value: 'remark' },
 ]
 
-// 格式预览：将选中字段的中文标签用 ---- 拼接（接码方式展开为三段）
-const exportPreview = computed(() =>
-  exportSelectedFields.value
+const exportFormatHint = computed(() => {
+  if (exportFormatMode.value === 'fields') {
+    return '选择导出字段（顺序即为列顺序，分隔符固定为 ----）'
+  }
+  return isCursorCategory.value
+    ? '当前为 Digiseller 专用格式（cards_cursor 有 token 时带出 session-token，并附加 Auto-Login）'
+    : '当前为 Digiseller 专用格式'
+})
+
+// 格式预览：Digiseller 预设显示实际导出模板，其余为 ---- 字段拼接
+const exportPreview = computed(() => {
+  const cursorHint = isCursorCategory.value ? ' / session-token（有 token 才带出）' : ''
+  const autoLoginHint = isCursorCategory.value ? ' / Auto-Login' : ''
+  if (exportFormatMode.value === 'digiseller') {
+    return `account / pass / mail-pass${cursorHint} / mail-login${autoLoginHint}`
+  }
+  if (exportFormatMode.value === 'digiseller_auto') {
+    const autoCursor = isCursorCategory.value ? '<br>session-token（有 token 才带出）' : ''
+    const autoLogin = isCursorCategory.value ? '<br>Auto-Login' : ''
+    return `account<br>pass<br>mail-pass${autoCursor}<br>mail-login${autoLogin}<br>评价引导<br>频道订阅`
+  }
+  return exportSelectedFields.value
     .map(v => {
       if (v === 'code_method') return '接码链接----账号----邮箱密码'
       return exportFieldOptions.find(o => o.value === v)?.label ?? v
     })
     .join('----')
-)
+})
+
+const handleExportFieldsUpdate = (val: Array<string | number>) => {
+  exportSelectedFields.value = val.map(String)
+  exportFormatMode.value = 'fields'
+}
 
 // 快速预设（与列表复制 / 批量取货格式对应）
 const applyExportPreset = (preset: string) => {
   switch (preset) {
     case 'digiseller':
     case 'digiseller_auto':
-      // Digiseller / Digiseller自动发货：账号----密码----邮箱密码----邮箱地址
-      exportSelectedFields.value = ['account', 'password', 'mail_password', 'mail_url']
+      exportFormatMode.value = preset
+      exportSelectedFields.value = isCursorCategory.value
+        ? ['account', 'password', 'mail_password', 'token', 'mail_url']
+        : ['account', 'password', 'mail_password', 'mail_url']
       break
     case 'domestic':
       // 国内格式：账号----密码----邮箱密码----token
+      exportFormatMode.value = 'fields'
       exportSelectedFields.value = ['account', 'password', 'mail_password', 'token']
       break
     case 'reverse':
       // 逆向格式：账号----token
+      exportFormatMode.value = 'fields'
       exportSelectedFields.value = ['account', 'token']
       break
     case 'code_method':
       // 接码方式：账号----接码链接----账号----邮箱密码
+      exportFormatMode.value = 'fields'
       exportSelectedFields.value = ['account', 'code_method']
       break
     case 'all':
+      exportFormatMode.value = 'fields'
       exportSelectedFields.value = exportFieldOptions.map(o => o.value)
       break
     case 'clear':
+      exportFormatMode.value = 'fields'
       exportSelectedFields.value = []
       break
   }
@@ -1004,6 +1077,14 @@ const gotoProSubscriptionType = ref('')
 const showGotoProSuccessModal = ref(false)
 const showGotoProFailModal = ref(false)
 const gotoProFailRemark = ref('')
+const showHalfPriceModal = ref(false)
+const halfPriceLoading = ref(false)
+const halfPriceCard = ref<Card | null>(null)
+const halfPriceForm = ref({
+  uid: '',
+  tier: 'pro' as 'pro' | 'pro_plus' | 'ultra',
+})
+const HALF_PRICE_UID_COOKIE = 'cursor_half_price_uid'
 
 // 已售列表：批量提链结果弹窗
 const showBatchGotoProModal = ref(false)
@@ -1576,9 +1657,17 @@ const columns = computed<DataTableColumns<Card>>(() => {
             NDropdown,
             {
               trigger: 'click',
-              options: gotoProTypeOptions.map(opt => ({ label: opt.label, key: opt.value })),
+              options: [
+                { label: '半价提链', key: 'half_price' },
+                ...gotoProTypeOptions.map(opt => ({ label: opt.label, key: opt.value })),
+              ],
               onSelect: (key: string) => {
-                if (!isFrozen) handleGotoProWithType(row, key)
+                if (isFrozen) return
+                if (key === 'half_price') {
+                  handleOpenHalfPrice(row)
+                  return
+                }
+                handleGotoProWithType(row, key)
               },
               disabled: isFrozen,
             },
@@ -1855,6 +1944,65 @@ const handleGotoProWithType = async (row: Card, subscriptionType: string) => {
   } catch (error: any) {
     message.error(error.response?.data?.message || '获取付款链接失败')
   } finally {
+    gotoProLoading.value[row.id] = false
+  }
+}
+
+const readCookie = (name: string): string => {
+  const match = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'))
+  return match ? decodeURIComponent(match[1]) : ''
+}
+
+const writeCookie = (name: string, value: string) => {
+  document.cookie = `${name}=${encodeURIComponent(value)}; path=/; max-age=31536000`
+}
+
+const handleOpenHalfPrice = (row: Card) => {
+  if (!row.token) return
+  halfPriceCard.value = row
+  halfPriceForm.value = {
+    uid: readCookie(HALF_PRICE_UID_COOKIE),
+    tier: 'pro',
+  }
+  showHalfPriceModal.value = true
+}
+
+const handleHalfPriceNext = async () => {
+  const row = halfPriceCard.value
+  const uid = halfPriceForm.value.uid.trim()
+  if (!row?.token) {
+    message.error('当前卡密没有 Token')
+    return false
+  }
+  if (!uid) {
+    message.warning('请输入 uid')
+    return false
+  }
+
+  writeCookie(HALF_PRICE_UID_COOKIE, uid)
+  halfPriceLoading.value = true
+  gotoProLoading.value[row.id] = true
+  try {
+    const response = await halfPriceCheckout({
+      uid,
+      token: row.token,
+      tier: halfPriceForm.value.tier,
+    })
+    if (response.code === 200 && response.data) {
+      gotoProCardId.value = row.id
+      gotoProSubscriptionType.value = halfPriceForm.value.tier
+      gotoProLink.value = response.data
+      showHalfPriceModal.value = false
+      showGotoProModal.value = true
+      return true
+    }
+    message.error(response.message || '半价提链失败')
+    return false
+  } catch (error: any) {
+    message.error(error.response?.data?.message || '半价提链失败')
+    return false
+  } finally {
+    halfPriceLoading.value = false
     gotoProLoading.value[row.id] = false
   }
 }
@@ -2199,9 +2347,9 @@ const handleSubmit = async () => {
 const handleCopy = async (card: Card, format: string) => {
   let text = ''
   if (format === 'digiseller') {
-    text = `account: ${card.account}\npass: ${card.password || ''}\nmail-pass: ${card.mail_password || ''}\n\nmail-login: ${card.mail_url || ''}`
+    text = formatDigiseller(card)
   } else if (format === 'digiseller_auto') {
-    text = `account: ${card.account}<br>pass: ${card.password || ''}<br>mail-pass: ${card.mail_password || ''}<br>mail-login: ${card.mail_url || ''}<br>Если вам удобно, не могли бы вы оставить нам хороший отзыв? https://ibb.co/tTgSNRLP`
+    text = formatDigisellerAuto(card)
   } else if (format === 'reverse') {
     text = `账号----token\n${card.account}----${card.token || ''}`
   } else if (format === 'code_method') {
@@ -2247,10 +2395,17 @@ const getFieldValue = (card: Card, field: string): string => {
 
 // 生成并下载导出文件
 const doDownload = (cards: Card[]) => {
-  const lines = cards.map(card =>
-    exportSelectedFields.value.map(f => getFieldValue(card, f)).join('----')
-  )
-  const content = lines.join('\n')
+  let content = ''
+  if (exportFormatMode.value === 'digiseller') {
+    content = cards.map(formatDigiseller).join('\n\n')
+  } else if (exportFormatMode.value === 'digiseller_auto') {
+    content = cards.map(formatDigisellerAuto).join('\n')
+  } else {
+    const lines = cards.map(card =>
+      exportSelectedFields.value.map(f => getFieldValue(card, f)).join('----')
+    )
+    content = lines.join('\n')
+  }
   const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
@@ -2623,9 +2778,9 @@ const handleBatchPickup = async () => {
         if (!card.password && !card.mail_password) {
           return `Пожалуйста, войдите в систему, используя код подтверждения, отправленный на электронную почту:\n\n${card.account}\n\nmail-login: ${card.mail_url || ''}\n\nПожалуйста, выполните следующие шаги заново:\n1. Введите аккаунт: ${card.account}\n2. Нажмите «Далее»\n3. Нажмите кнопку: «Email sign-in code»`
         }
-        return `account: ${card.account}\npass: ${card.password || ''}\nmail-pass: ${card.mail_password || ''}\n\nmail-login: ${card.mail_url || ''}`
+        return formatDigiseller(card)
       } else if (fmt === 'digiseller_auto') {
-        return `account: ${card.account}<br>pass: ${card.password || ''}<br>mail-pass: ${card.mail_password || ''}<br>mail-login: ${card.mail_url || ''}<br>Если вам удобно, не могли бы вы оставить нам хороший отзыв? https://ibb.co/tTgSNRLP`
+        return formatDigisellerAuto(card)
       } else if (fmt === 'reverse') {
         return `${card.account}----${card.token || ''}`
       } else if (fmt === 'code_method') {

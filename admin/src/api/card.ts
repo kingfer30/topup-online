@@ -287,6 +287,14 @@ export const gotoProUpgrade = (token: string, subscriptionType: string): Promise
   return http.post('/admin/cards/goto-pro', { token, subscription_type: subscriptionType }) as Promise<ApiResponse<string>>
 }
 
+export const halfPriceCheckout = (data: {
+  uid: string
+  token: string
+  tier: string
+}): Promise<ApiResponse<string>> => {
+  return http.post('/admin/cards/half-price-checkout', data) as Promise<ApiResponse<string>>
+}
+
 // 单独更新卡密备注
 export const updateCardRemark = (category: string, id: number, remark: string): Promise<ApiResponse> => {
   return http.post('/admin/cards/update-remark', { category, id, remark }) as Promise<ApiResponse>
