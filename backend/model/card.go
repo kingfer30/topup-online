@@ -48,6 +48,8 @@ type AccountCard struct {
 	MailUrl                 string         `json:"mail_url" gorm:"type:varchar(50);comment:邮箱地址"`
 	Remark                  string         `json:"remark" gorm:"type:varchar(100);comment:备注"`
 	CodeLink                string         `json:"code_link" gorm:"type:varchar(300);comment:接码链接"`
+	Phone                   string         `json:"phone" gorm:"type:varchar(30);comment:手机号"`
+	PhoneLink               string         `json:"phone_link" gorm:"type:varchar(300);comment:手机号接码地址"`
 	FreezeStatus            int            `json:"freeze_status" gorm:"type:tinyint(2);default:-1;comment:冻结状态 -1未冻结 1已冻结"`
 	FreezeTime              *int64         `json:"freeze_time" gorm:"type:bigint(20);comment:冻结时间"`
 	FreezeRemark            string         `json:"freeze_remark" gorm:"type:varchar(200);comment:冻结备注"`
@@ -318,8 +320,6 @@ func UpdateCard(tableName string, id int, card *AccountCard) error {
 	}
 
 	card.Id = id
-	// 只更新编辑表单中实际可编辑的字段，避免把 purchase_date/subscription_time
-	// 等表单未涉及的时间字段误写为 NULL（GORM map 更新会写入 nil 值）
 	updates := map[string]interface{}{
 		"account":             card.Account,
 		"password":            card.Password,
@@ -341,6 +341,14 @@ func UpdateCard(tableName string, id int, card *AccountCard) error {
 		"mail_url":            card.MailUrl,
 		"remark":              card.Remark,
 		"code_link":           card.CodeLink,
+		"phone":               card.Phone,
+		"phone_link":          card.PhoneLink,
+		"subscription_time":   card.SubscriptionTime,
+		"subscription_expired_time": card.SubscriptionExpiredTime,
+		"subscription_credits": card.SubscriptionCredits,
+		"purchase_date":       card.PurchaseDate,
+		"sell_date":           card.SellDate,
+		"sell_order_no":       card.SellOrderNo,
 	}
 	return DB.Table(tableName).Where("id = ?", id).Updates(updates).Error
 }
@@ -829,6 +837,8 @@ func MigrateCardTableColumns() error {
 		{"is_check", "tinyint(2) NOT NULL DEFAULT -1 COMMENT '检查状态 -1未检查 1检查成功 2检查失败'"},
 		{"check_time", "bigint(20) NULL COMMENT '检查时间'"},
 		{"code_link", "varchar(300) NULL COMMENT '接码链接'"},
+		{"phone", "varchar(30) NULL COMMENT '手机号'"},
+		{"phone_link", "varchar(300) NULL COMMENT '手机号接码地址'"},
 		{"freeze_status", "tinyint(2) NOT NULL DEFAULT -1 COMMENT '冻结状态 -1未冻结 1已冻结'"},
 		{"freeze_time", "bigint(20) NULL COMMENT '冻结时间'"},
 		{"freeze_remark", "varchar(200) NULL COMMENT '冻结备注'"},

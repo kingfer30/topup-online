@@ -41,6 +41,9 @@ type CardRequest struct {
 	MailUrl                 string   `json:"mail_url"`
 	Remark                  string   `json:"remark"`
 	CodeLink                string   `json:"code_link"`
+	Phone                   string   `json:"phone"`
+	PhoneLink               string   `json:"phone_link"`
+	SubscriptionCredits     *float64 `json:"subscription_credits"`
 }
 
 // parseAccountsFromQuery 解析账号搜索参数（accounts 优先，兼容 keyword）
@@ -288,6 +291,9 @@ func CreateCard(c *gin.Context) {
 		MailUrl:                 req.MailUrl,
 		Remark:                  req.Remark,
 		CodeLink:                req.CodeLink,
+		Phone:                   req.Phone,
+		PhoneLink:               req.PhoneLink,
+		SubscriptionCredits:     req.SubscriptionCredits,
 	}
 
 	// 设置默认值
@@ -386,6 +392,9 @@ func UpdateCard(c *gin.Context) {
 		MailUrl:                 req.MailUrl,
 		Remark:                  req.Remark,
 		CodeLink:                req.CodeLink,
+		Phone:                   req.Phone,
+		PhoneLink:               req.PhoneLink,
+		SubscriptionCredits:     req.SubscriptionCredits,
 	}
 
 	if err := model.UpdateCard(tableName, id, card); err != nil {
@@ -506,6 +515,9 @@ func BatchImportCards(c *gin.Context) {
 			MailUrl:                 cardReq.MailUrl,
 			Remark:                  cardReq.Remark,
 			CodeLink:                cardReq.CodeLink,
+			Phone:                   cardReq.Phone,
+			PhoneLink:               cardReq.PhoneLink,
+			SubscriptionCredits:     cardReq.SubscriptionCredits,
 		}
 
 		// 设置默认值
@@ -752,6 +764,49 @@ func BatchCheckCards(c *gin.Context) {
 		"code":    200,
 		"message": fmt.Sprintf("已提交 %d 张卡密检查任务，正在后台执行", len(cards)),
 		"data":    len(cards),
+	})
+}
+
+// PollCardSubscription 只查询当前订阅类型，不改卡密状态
+func PollCardSubscription(c *gin.Context) {
+	var req struct {
+		Category string `json:"category" binding:"required"`
+		ID       int    `json:"id" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusOK, gin.H{"code": 400, "message": "参数错误: " + err.Error()})
+		return
+	}
+
+	tableName := model.GetTableNameByCategory(req.Category)
+	if !model.CheckTableExists(tableName) {
+		c.JSON(http.StatusOK, gin.H{"code": 404, "message": "该卡密类别不存在"})
+		return
+	}
+
+	card, err := model.GetCardById(tableName, req.ID)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"code": 500, "message": "查询卡密失败: " + err.Error()})
+		return
+	}
+	if card.Token == "" {
+		c.JSON(http.StatusOK, gin.H{"code": 400, "message": "该卡密没有 Token"})
+		return
+	}
+
+	membership, err := scheduler.PeekCursorMembership(card.Token)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"code": 500, "message": "查询订阅失败: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    200,
+		"message": "成功",
+		"data": gin.H{
+			"subscription_type": membership,
+			"subscribed":        scheduler.IsPaidMembership(membership),
+		},
 	})
 }
 

@@ -295,6 +295,8 @@ CREATE TABLE IF NOT EXISTS ` + "`" + tableName + "`" + ` (
   ` + "`mail_url`" + ` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '邮箱地址',
   ` + "`remark`" + ` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '备注',
   ` + "`code_link`" + ` varchar(300) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '接码链接',
+  ` + "`phone`" + ` varchar(30) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '手机号',
+  ` + "`phone_link`" + ` varchar(300) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '手机号接码地址',
   ` + "`freeze_status`" + ` tinyint(2) NOT NULL DEFAULT -1 COMMENT '冻结状态 -1未冻结 1已冻结',
   ` + "`freeze_time`" + ` bigint(20) DEFAULT NULL COMMENT '冻结时间',
   ` + "`freeze_remark`" + ` varchar(200) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '冻结备注',

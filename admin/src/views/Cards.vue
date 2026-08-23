@@ -197,6 +197,35 @@
             <n-input v-model:value="formData.sell_to" placeholder="请输入出售对方" />
           </n-form-item-gi>
 
+          <n-form-item-gi label="出售订单号" path="sell_order_no">
+            <n-input v-model:value="formData.sell_order_no" placeholder="请输入出售订单号" />
+          </n-form-item-gi>
+
+          <n-form-item-gi label="订阅时间" path="subscription_time">
+            <n-date-picker v-model:value="formData.subscription_time" type="datetime" placeholder="订阅时间"
+              style="width: 100%" clearable />
+          </n-form-item-gi>
+
+          <n-form-item-gi label="订阅过期时间" path="subscription_expired_time">
+            <n-date-picker v-model:value="formData.subscription_expired_time" type="datetime" placeholder="订阅过期时间"
+              style="width: 100%" clearable />
+          </n-form-item-gi>
+
+          <n-form-item-gi label="订阅额度" path="subscription_credits">
+            <n-input-number v-model:value="formData.subscription_credits" :min="0" :precision="2" placeholder="订阅额度"
+              style="width: 100%" />
+          </n-form-item-gi>
+
+          <n-form-item-gi label="购买时间" path="purchase_date">
+            <n-date-picker v-model:value="formData.purchase_date" type="datetime" placeholder="购买时间"
+              style="width: 100%" clearable />
+          </n-form-item-gi>
+
+          <n-form-item-gi label="出售时间" path="sell_date">
+            <n-date-picker v-model:value="formData.sell_date" type="datetime" placeholder="出售时间"
+              style="width: 100%" clearable />
+          </n-form-item-gi>
+
           <n-form-item-gi label="账号类型" path="account_type">
             <n-select v-model:value="formData.account_type" :options="accountTypeOptions" />
           </n-form-item-gi>
@@ -224,6 +253,14 @@
           <n-form-item-gi :span="2" label="接码链接" path="code_link">
             <n-select v-model:value="formData.code_link" :options="codeLinkOptions" placeholder="选择或输入接码链接"
               filterable tag clearable />
+          </n-form-item-gi>
+
+          <n-form-item-gi :span="2" label="手机号" path="phone">
+            <n-input v-model:value="formData.phone" placeholder="请输入手机号" />
+          </n-form-item-gi>
+
+          <n-form-item-gi :span="2" label="短信接码地址" path="phone_link">
+            <n-input v-model:value="formData.phone_link" placeholder="请输入手机号接码地址" />
           </n-form-item-gi>
 
           <n-form-item-gi :span="2" label="备注" path="remark">
@@ -397,6 +434,10 @@
                 filterable tag clearable />
             </n-form-item-gi>
 
+            <n-form-item-gi label="短信接码地址">
+              <n-input v-model:value="batchConfig.phone_link" placeholder="批量默认手机号接码地址（选填）" />
+            </n-form-item-gi>
+
             <n-form-item-gi label="备注">
               <n-input v-model:value="batchConfig.remark" placeholder="批量备注（选填）" />
             </n-form-item-gi>
@@ -456,6 +497,16 @@
 
             <n-form-item-gi label="2FA">
               <n-input-number v-model:value="batchConfig.field_mapping['2fa']" :min="0" placeholder="0=不导入"
+                style="width: 100%" />
+            </n-form-item-gi>
+
+            <n-form-item-gi label="手机号">
+              <n-input-number v-model:value="batchConfig.field_mapping.phone" :min="0" placeholder="0=不导入"
+                style="width: 100%" />
+            </n-form-item-gi>
+
+            <n-form-item-gi label="短信接码地址">
+              <n-input-number v-model:value="batchConfig.field_mapping.phone_link" :min="0" placeholder="0=不导入"
                 style="width: 100%" />
             </n-form-item-gi>
           </n-grid>
@@ -610,18 +661,35 @@
     </n-modal>
 
     <!-- 提链结果弹窗 -->
-    <n-modal v-model:show="showGotoProModal" title="提链成功 - 付款链接" preset="card" style="width: 580px">
+    <n-modal v-model:show="showGotoProModal" :title="`提链成功 - ${gotoProAccount || '付款链接'}`" preset="card" style="width: 640px">
       <n-space vertical :size="12">
-        <n-alert type="success">付款链接已生成，请选择后续操作</n-alert>
-        <n-input :value="gotoProLink" readonly type="textarea" :rows="3"
+        <n-alert type="success">付款链接已生成，正在自动提交 USD + Alipay 账单</n-alert>
+        <n-input v-model:value="gotoProLink" type="textarea" :rows="3" placeholder="粘贴或覆盖 Stripe 结账链接"
           style="font-size: 12px; word-break: break-all" />
+        <n-button size="small" @click="handleCopyGotoProLink">复制结账链接</n-button>
+
+        <n-alert v-if="stripeAlipayLoading" type="info">正在填写账单并生成支付宝付款页…</n-alert>
+        <n-alert v-else-if="stripeAlipayError" type="error">{{ stripeAlipayError }}</n-alert>
+        <n-button v-if="stripeAlipayError" size="small" type="warning" :loading="stripeAlipayLoading" @click="runStripeAlipay(gotoProLink)">重试自动提交</n-button>
+        <n-alert v-else-if="stripeAlipayPopupBlocked" type="warning">
+          已提交 Alipay（{{ stripeAlipayAmountText }}）。浏览器拦截了弹窗，请点击下方按钮打开付款页。
+        </n-alert>
+        <n-alert v-else-if="stripeAlipayUrl" type="success">
+          已提交 Alipay（{{ stripeAlipayAmountText }}）。付款页已在独立窗口打开，请直接扫码。
+        </n-alert>
+        <n-input v-if="stripeAlipayUrl" :value="stripeAlipayUrl" readonly type="textarea" :rows="2"
+          style="font-size: 12px; word-break: break-all" />
+        <n-space v-if="stripeAlipayUrl">
+          <n-button size="small" @click="handleCopyStripeAlipay">复制链接</n-button>
+          <n-button size="small" type="primary" @click="handleOpenStripeAlipay">打开支付宝付款页</n-button>
+        </n-space>
+        <n-alert v-if="stripePollStatus" :type="stripePollStatusType">{{ stripePollStatus }}</n-alert>
       </n-space>
       <template #footer>
         <n-space justify="end">
           <n-button @click="showGotoProModal = false">关闭</n-button>
-          <n-button @click="handleCopyGotoProLink">复制链接</n-button>
-          <n-button type="error" @click="handleGotoProFail">支付失败</n-button>
           <n-button type="success" @click="handleGotoProSuccess">支付成功</n-button>
+          <n-button type="error" @click="handleGotoProFail">支付失败</n-button>
         </n-space>
       </template>
     </n-modal>
@@ -632,7 +700,11 @@
       @positive-click="handleHalfPriceNext" style="width: 480px">
       <n-form label-placement="left" label-width="90px" style="margin-top: 20px">
         <n-form-item label="UID" required>
-          <n-input v-model:value="halfPriceForm.uid" placeholder="请输入活动页 uid" />
+          <n-input v-model:value="halfPriceForm.uid" placeholder="请输入活动页 uid"
+            @blur="loadHalfPriceQuota(halfPriceForm.uid)" />
+        </n-form-item>
+        <n-form-item label="当前余量">
+          <span>{{ halfPriceQuota || '—' }}</span>
         </n-form-item>
         <n-form-item label="选择套餐" required>
           <n-radio-group v-model:value="halfPriceForm.tier">
@@ -731,7 +803,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, h, onMounted, watch } from 'vue'
+import { ref, computed, h, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import {
   NCard,
@@ -780,7 +852,10 @@ import {
   batchDashboardGotoResolve,
   batchEnableOnDemandSpend,
   gotoProUpgrade,
+  submitStripeAlipay,
+  pollCardSubscription,
   halfPriceCheckout,
+  getHalfPriceQuota,
   updateCardRemark,
   batchFreezeCards,
   batchDeleteCards,
@@ -832,12 +907,36 @@ const cursorAutoLoginField = (sep: string): string => {
   return `${sep}Account restrictions triggering SMS verification have been frequent recently; logging in via token is strongly recommended. Please refer to the following: ${CURSOR_AUTO_LOGIN_URL}`
 }
 
+const hasPhoneReceive = (card: Card): boolean => {
+  return !!(card.phone || '').trim() && !!(card.phone_link || '').trim()
+}
+
+const phoneFields = (card: Card, sep: string): string => {
+  if (!hasPhoneReceive(card)) return ''
+  return `${sep}phone: ${(card.phone || '').trim()}${sep}phone-login: ${(card.phone_link || '').trim()}`
+}
+
+const phoneDashSuffix = (card: Card): string => {
+  if (!hasPhoneReceive(card)) return ''
+  return `----${(card.phone || '').trim()}----${(card.phone_link || '').trim()}`
+}
+
+const phoneDashTitle = (card: Card): string => {
+  return hasPhoneReceive(card) ? '----手机号----短信接码地址' : ''
+}
+
+// 国内格式固定追加两列（空值也占位）
+const domesticPhoneTitle = '----手机号----短信接码地址'
+const domesticPhoneSuffix = (card: Card): string => {
+  return `----${(card.phone || '').trim()}----${(card.phone_link || '').trim()}`
+}
+
 const formatDigiseller = (card: Card): string => {
-  return `account: ${card.account}\npass: ${card.password || ''}\nmail-pass: ${card.mail_password || ''}${sessionTokenField(card, '\n')}\n\nmail-login: ${card.mail_url || ''}${cursorAutoLoginField('\n')}`
+  return `account: ${card.account}\npass: ${card.password || ''}\nmail-pass: ${card.mail_password || ''}${sessionTokenField(card, '\n')}\n\nmail-login: ${card.mail_url || ''}${cursorAutoLoginField('\n')}${phoneFields(card, '\n')}`
 }
 
 const formatDigisellerAuto = (card: Card): string => {
-  return `account: ${card.account}<br>pass: ${card.password || ''}<br>mail-pass: ${card.mail_password || ''}${sessionTokenField(card, '<br>')}<br>mail-login: ${card.mail_url || ''}${cursorAutoLoginField('<br>')}<br>Если вам удобно, не могли бы вы оставить нам хороший отзыв? https://ibb.co/tTgSNRLP<br>Подписывайтесь на наш канал, чтобы получать больше выгодных предложений: https://t.me/AI_GUO_GUO`
+  return `account: ${card.account}<br>pass: ${card.password || ''}<br>mail-pass: ${card.mail_password || ''}${sessionTokenField(card, '<br>')}<br>mail-login: ${card.mail_url || ''}${cursorAutoLoginField('<br>')}${phoneFields(card, '<br>')}<br>Если вам удобно, не могли бы вы оставить нам хороший отзыв? https://ibb.co/tTgSNRLP<br>Подписывайтесь на наш канал, чтобы получать больше выгодных предложений: https://t.me/AI_GUO_GUO`
 }
 
 // 取货卡密信息格式化
@@ -852,7 +951,7 @@ const pickupCardInfo = computed(() => {
 
 ${card.account}
 
-mail-login: ${card.mail_url || ''}
+mail-login: ${card.mail_url || ''}${phoneFields(card, '\n')}
 
 Пожалуйста, выполните следующие шаги заново:
 1. Введите аккаунт: ${card.account}
@@ -863,12 +962,12 @@ mail-login: ${card.mail_url || ''}
     return formatDigiseller(card)
   } else if (pickupForm.value.format === 'reverse') {
     // 逆向格式
-    return `账号----token
-${card.account}----${card.token || ''}`
+    return `账号----token${phoneDashTitle(card)}
+${card.account}----${card.token || ''}${phoneDashSuffix(card)}`
   } else {
-    // 国内订阅格式
-    return `账号----密码----邮箱密码----token
-${card.account}----${card.password || ''}----${card.mail_password || ''}----${card.token || ''}`
+    // 国内订阅格式：账号----密码----邮箱密码----token----手机号----短信接码地址
+    return `账号----密码----邮箱密码----token${domesticPhoneTitle}
+${card.account}----${card.password || ''}----${card.mail_password || ''}----${card.token || ''}${domesticPhoneSuffix(card)}`
   }
 })
 
@@ -958,6 +1057,8 @@ const exportFieldOptions = [
   { label: 'Token', value: 'token' },
   { label: 'Client ID', value: 'client_id' },
   { label: '2FA', value: '2fa' },
+  { label: '手机号', value: 'phone' },
+  { label: '短信接码地址', value: 'phone_link' },
   { label: '备注', value: 'remark' },
 ]
 
@@ -975,12 +1076,12 @@ const exportPreview = computed(() => {
   const cursorHint = isCursorCategory.value ? ' / session-token（有 token 才带出）' : ''
   const autoLoginHint = isCursorCategory.value ? ' / Auto-Login' : ''
   if (exportFormatMode.value === 'digiseller') {
-    return `account / pass / mail-pass${cursorHint} / mail-login${autoLoginHint}`
+    return `account / pass / mail-pass${cursorHint} / mail-login${autoLoginHint} / phone / phone-login（有则带出）`
   }
   if (exportFormatMode.value === 'digiseller_auto') {
     const autoCursor = isCursorCategory.value ? '<br>session-token（有 token 才带出）' : ''
     const autoLogin = isCursorCategory.value ? '<br>Auto-Login' : ''
-    return `account<br>pass<br>mail-pass${autoCursor}<br>mail-login${autoLogin}<br>评价引导<br>频道订阅`
+    return `account<br>pass<br>mail-pass${autoCursor}<br>mail-login${autoLogin}<br>phone / phone-login（有则带出）<br>评价引导<br>频道订阅`
   }
   return exportSelectedFields.value
     .map(v => {
@@ -1006,9 +1107,9 @@ const applyExportPreset = (preset: string) => {
         : ['account', 'password', 'mail_password', 'mail_url']
       break
     case 'domestic':
-      // 国内格式：账号----密码----邮箱密码----token
+      // 国内格式：账号----密码----邮箱密码----token----手机号----短信接码地址
       exportFormatMode.value = 'fields'
-      exportSelectedFields.value = ['account', 'password', 'mail_password', 'token']
+      exportSelectedFields.value = ['account', 'password', 'mail_password', 'token', 'phone', 'phone_link']
       break
     case 'reverse':
       // 逆向格式：账号----token
@@ -1073,10 +1174,20 @@ const gotoProLoading = ref<Record<number, boolean>>({})
 const showGotoProModal = ref(false)
 const gotoProLink = ref('')
 const gotoProCardId = ref<number>(0)
+const gotoProAccount = ref('')
 const gotoProSubscriptionType = ref('')
 const showGotoProSuccessModal = ref(false)
 const showGotoProFailModal = ref(false)
 const gotoProFailRemark = ref('')
+const stripeAlipayLoading = ref(false)
+const stripeAlipayUrl = ref('')
+const stripeAlipayAmountText = ref('')
+const stripeAlipayError = ref('')
+const stripeAlipayPopupBlocked = ref(false)
+const stripeAlipaySigned = ref(false)
+const stripeAlipayCompleted = ref(false)
+const stripePollStatus = ref('')
+const stripePollStatusType = ref<'default' | 'info' | 'success' | 'warning' | 'error'>('info')
 const showHalfPriceModal = ref(false)
 const halfPriceLoading = ref(false)
 const halfPriceCard = ref<Card | null>(null)
@@ -1085,6 +1196,7 @@ const halfPriceForm = ref({
   tier: 'pro' as 'pro' | 'pro_plus' | 'ultra',
 })
 const HALF_PRICE_UID_COOKIE = 'cursor_half_price_uid'
+const halfPriceQuota = ref('')
 
 // 已售列表：批量提链结果弹窗
 const showBatchGotoProModal = ref(false)
@@ -1140,6 +1252,7 @@ const batchConfig = ref({
   subscription_status: 1,
   account_type: 2,
   code_link: 'https://tool.toolsvip.cc/easy-mailbox/frontend',
+  phone_link: '',
   remark: '',
   field_mapping: {
     account: 1,
@@ -1152,6 +1265,8 @@ const batchConfig = ref({
     client_id: 0,
     api_key: 0,
     '2fa': 0,
+    phone: 0,
+    phone_link: 0,
   },
 })
 
@@ -1185,6 +1300,15 @@ const formData = ref<CardRequest>({
   client_id: '',
   mail_url: '',
   remark: '',
+  code_link: '',
+  phone: '',
+  phone_link: '',
+  sell_order_no: '',
+  subscription_credits: undefined as number | undefined,
+  subscription_time: undefined as number | undefined,
+  subscription_expired_time: undefined as number | undefined,
+  purchase_date: undefined as number | undefined,
+  sell_date: undefined as number | undefined,
 })
 
 // 当前编辑的卡密ID
@@ -1688,20 +1812,40 @@ const columns = computed<DataTableColumns<Card>>(() => {
         )
       }
 
-      // 所有列表中，code_link 存在时显示"接码"按钮
-      if (row.code_link) {
+      // 所有列表中，邮件接码或短信接码有地址时显示下拉
+      if (row.code_link || row.phone_link) {
         buttons.push(
           h(
-            NButton,
+            NDropdown,
             {
-              size: 'small',
-              type: 'info',
-              onClick: () => {
-                const url = `${row.code_link}/${row.account}----${row.mail_password || ''}`
-                window.open(url, '_blank')
+              trigger: 'click',
+              options: [
+                { label: '邮件接码', key: 'mail', disabled: !row.code_link },
+                { label: '短信接码', key: 'sms', disabled: !row.phone_link },
+              ],
+              onSelect: (key: string) => {
+                if (key === 'mail') {
+                  if (!row.code_link) {
+                    message.warning('未配置邮件接码链接')
+                    return
+                  }
+                  window.open(`${row.code_link}/${row.account}----${row.mail_password || ''}`, '_blank')
+                  return
+                }
+                if (!row.phone_link) {
+                  message.warning('未配置短信接码地址')
+                  return
+                }
+                window.open(row.phone_link, '_blank')
               },
             },
-            { default: () => '接码' }
+            {
+              default: () => h(
+                NButton,
+                { size: 'small', type: 'info' },
+                { default: () => '接码' }
+              ),
+            }
           )
         )
       }
@@ -1935,9 +2079,11 @@ const handleGotoProWithType = async (row: Card, subscriptionType: string) => {
     const response = await gotoProUpgrade(row.token, subscriptionType)
     if (response.code === 200 && response.data) {
       gotoProCardId.value = row.id
+      gotoProAccount.value = row.account || ''
       gotoProSubscriptionType.value = subscriptionType
       gotoProLink.value = response.data
       showGotoProModal.value = true
+      runStripeAlipay(response.data)
     } else {
       message.error(response.message || '获取付款链接失败')
     }
@@ -1965,7 +2111,36 @@ const handleOpenHalfPrice = (row: Card) => {
     tier: 'pro',
   }
   showHalfPriceModal.value = true
+  loadHalfPriceQuota(halfPriceForm.value.uid)
 }
+
+const loadHalfPriceQuota = async (uid: string) => {
+  const id = uid.trim()
+  if (!id) {
+    halfPriceQuota.value = ''
+    return
+  }
+  try {
+    const res = await getHalfPriceQuota(id)
+    if (res.code === 200 && res.data) {
+      halfPriceQuota.value = res.data
+    } else {
+      halfPriceQuota.value = ''
+    }
+  } catch {
+    // 余量读取失败不影响提链
+  }
+}
+
+let halfPriceQuotaTimer: ReturnType<typeof setTimeout> | null = null
+watch(
+  () => halfPriceForm.value.uid,
+  (uid) => {
+    if (!showHalfPriceModal.value) return
+    if (halfPriceQuotaTimer) clearTimeout(halfPriceQuotaTimer)
+    halfPriceQuotaTimer = setTimeout(() => loadHalfPriceQuota(uid), 400)
+  }
+)
 
 const handleHalfPriceNext = async () => {
   const row = halfPriceCard.value
@@ -1990,10 +2165,12 @@ const handleHalfPriceNext = async () => {
     })
     if (response.code === 200 && response.data) {
       gotoProCardId.value = row.id
+      gotoProAccount.value = row.account || ''
       gotoProSubscriptionType.value = halfPriceForm.value.tier
       gotoProLink.value = response.data
       showHalfPriceModal.value = false
       showGotoProModal.value = true
+      runStripeAlipay(response.data)
       return true
     }
     message.error(response.message || '半价提链失败')
@@ -2016,8 +2193,170 @@ const handleCopyGotoProLink = async () => {
   }
 }
 
+const handleCopyStripeAlipay = async () => {
+  try {
+    await navigator.clipboard.writeText(stripeAlipayUrl.value)
+    message.success('已复制支付宝付款链接')
+  } catch {
+    message.error('复制失败，请手动复制')
+  }
+}
+
+const ALIPAY_PAY_WINDOW = 'stripe_alipay_pay'
+let stripeAlipayWindow: Window | null = null
+
+const closeAlipayPayWindow = () => {
+  if (stripeAlipayWindow && !stripeAlipayWindow.closed) {
+    stripeAlipayWindow.close()
+  }
+  stripeAlipayWindow = null
+}
+
+const openAlipayPayWindow = (url: string) => {
+  if (!url) return
+  if (stripeAlipayWindow && !stripeAlipayWindow.closed) {
+    stripeAlipayWindow.location.replace(url)
+    stripeAlipayWindow.focus()
+    stripeAlipayPopupBlocked.value = false
+    return
+  }
+  stripeAlipayWindow = window.open(url, ALIPAY_PAY_WINDOW, 'popup=yes,width=480,height=760,left=80,top=80')
+  stripeAlipayPopupBlocked.value = !stripeAlipayWindow
+  if (!stripeAlipayWindow) {
+    message.warning('浏览器拦截了弹窗，请点击「打开支付宝付款页」')
+  }
+}
+
+const runStripeAlipay = async (link: string) => {
+  const checkoutUrl = (link || '').trim()
+  stopSubscriptionPoll()
+  if (!checkoutUrl.includes('checkout.stripe.com')) {
+    stripeAlipayError.value = '当前不是 Stripe 结账链接，已跳过自动提交'
+    stripeAlipayUrl.value = ''
+    stripeAlipayAmountText.value = ''
+    stripeAlipayPopupBlocked.value = false
+    return
+  }
+  stripeAlipayLoading.value = true
+  stripeAlipayUrl.value = ''
+  stripeAlipayAmountText.value = ''
+  stripeAlipayError.value = ''
+  stripeAlipayPopupBlocked.value = false
+  stripeAlipaySigned.value = false
+  stripeAlipayCompleted.value = false
+  stripePollStatus.value = ''
+  try {
+    const response = await submitStripeAlipay(checkoutUrl)
+    if (response.code === 200 && response.data?.alipay_url) {
+      stripeAlipayUrl.value = response.data.alipay_url
+      openAlipayPayWindow(response.data.alipay_url)
+      const amount = (response.data.amount || 0) / 100
+      const currency = (response.data.currency || 'usd').toUpperCase()
+      stripeAlipayAmountText.value = `${currency} ${amount.toFixed(2)}`
+      message.success('Alipay 已提交，请在弹出窗口扫码')
+      startSubscriptionPoll()
+      return
+    }
+    stripeAlipayError.value = response.message || '自动提交 Alipay 失败'
+  } catch (error: any) {
+    stripeAlipayError.value = error.response?.data?.message || '自动提交 Alipay 失败'
+  } finally {
+    stripeAlipayLoading.value = false
+  }
+}
+
+const handleOpenStripeAlipay = () => {
+  if (!stripeAlipayUrl.value) return
+  openAlipayPayWindow(stripeAlipayUrl.value)
+}
+
+let subscriptionPollTimer: ReturnType<typeof setInterval> | null = null
+let subscriptionWaitTimer: ReturnType<typeof setInterval> | null = null
+let subscriptionWaitSeconds = 0
+let subscriptionWaitMembership = 'free'
+
+const stopSubscriptionPoll = () => {
+  if (subscriptionPollTimer) {
+    clearInterval(subscriptionPollTimer)
+    subscriptionPollTimer = null
+  }
+  if (subscriptionWaitTimer) {
+    clearInterval(subscriptionWaitTimer)
+    subscriptionWaitTimer = null
+  }
+}
+
+const renderWaitStatus = (failed = false) => {
+  if (stripeAlipayCompleted.value) {
+    stripePollStatusType.value = 'success'
+    stripePollStatus.value = `授权已完成，等待订阅生效… ${subscriptionWaitSeconds} 秒`
+    return
+  }
+  if (stripeAlipaySigned.value) {
+    stripePollStatusType.value = 'info'
+    stripePollStatus.value = `授权已确认，正在完成支付… ${subscriptionWaitSeconds} 秒`
+    return
+  }
+  stripePollStatusType.value = failed ? 'warning' : 'info'
+  stripePollStatus.value = failed
+    ? `等待付款中 ${subscriptionWaitSeconds} 秒，查询失败，继续等待…`
+    : `等待付款中 ${subscriptionWaitSeconds} 秒，当前：${subscriptionWaitMembership}`
+}
+
+const startSubscriptionPoll = () => {
+  stopSubscriptionPoll()
+  if (!gotoProCardId.value) return
+  subscriptionWaitSeconds = 0
+  subscriptionWaitMembership = 'free'
+  renderWaitStatus()
+  subscriptionWaitTimer = setInterval(() => {
+    if (!showGotoProModal.value) {
+      stopSubscriptionPoll()
+      return
+    }
+    subscriptionWaitSeconds += 1
+    renderWaitStatus()
+  }, 1000)
+  subscriptionPollTimer = setInterval(async () => {
+    if (!showGotoProModal.value) {
+      stopSubscriptionPoll()
+      return
+    }
+    try {
+      const res = await pollCardSubscription(category.value, gotoProCardId.value)
+      if (res.code === 200 && res.data?.subscribed) {
+        stopSubscriptionPoll()
+        const subType = (res.data.subscription_type || '').trim()
+        if (subType) {
+          gotoProSubscriptionType.value = subType
+        }
+        stripePollStatusType.value = 'success'
+        stripePollStatus.value = `已检测到订阅 ${subType || '已付费'}，正在自动确认支付成功`
+        message.success(`检测到订阅 ${subType || ''}，已自动确认支付成功`)
+        closeAlipayPayWindow()
+        handleGotoProSuccess()
+        return
+      }
+      subscriptionWaitMembership = res.data?.subscription_type || 'free'
+      renderWaitStatus()
+    } catch {
+      renderWaitStatus(true)
+    }
+  }, 5000)
+}
+
+watch(showGotoProModal, (show) => {
+  if (!show) stopSubscriptionPoll()
+})
+
+onUnmounted(() => {
+  stopSubscriptionPoll()
+})
+
 // 支付成功：关闭提链弹窗，打开升级成品弹窗
 const handleGotoProSuccess = () => {
+  stopSubscriptionPoll()
+  closeAlipayPayWindow()
   showGotoProModal.value = false
   upgradeForm.value = {
     subscription_type: gotoProSubscriptionType.value,
@@ -2074,6 +2413,8 @@ const handleGotoProSuccessSubmit = async () => {
 
 // 支付失败：关闭提链弹窗，打开备注弹窗
 const handleGotoProFail = () => {
+  stopSubscriptionPoll()
+  closeAlipayPayWindow()
   showGotoProModal.value = false
   gotoProFailRemark.value = ''
   showGotoProFailModal.value = true
@@ -2180,6 +2521,14 @@ const handleAdd = () => {
     mail_url: '',
     remark: '',
     code_link: '',
+    phone: '',
+    phone_link: '',
+    sell_order_no: '',
+    subscription_credits: undefined,
+    subscription_time: undefined,
+    subscription_expired_time: undefined,
+    purchase_date: undefined,
+    sell_date: undefined,
   }
   showModal.value = true
 }
@@ -2209,6 +2558,14 @@ const handleEdit = (card: Card) => {
     mail_url: card.mail_url || '',
     remark: card.remark || '',
     code_link: card.code_link || '',
+    phone: card.phone || '',
+    phone_link: card.phone_link || '',
+    sell_order_no: card.sell_order_no || '',
+    subscription_credits: card.subscription_credits,
+    subscription_time: card.subscription_time ? card.subscription_time * 1000 : undefined,
+    subscription_expired_time: card.subscription_expired_time ? card.subscription_expired_time * 1000 : undefined,
+    purchase_date: card.purchase_date ? card.purchase_date * 1000 : undefined,
+    sell_date: card.sell_date ? card.sell_date * 1000 : undefined,
   }
   showModal.value = true
 }
@@ -2308,14 +2665,24 @@ const handleRollback = (card: Card) => {
 }
 
 // 提交表单
+const toUnixSec = (ms?: number | null) => (ms ? Math.floor(ms / 1000) : undefined)
+
 const handleSubmit = async () => {
   // 验证表单
   await formRef.value?.validate()
 
+  const payload: CardRequest = {
+    ...formData.value,
+    subscription_time: toUnixSec(formData.value.subscription_time),
+    subscription_expired_time: toUnixSec(formData.value.subscription_expired_time),
+    purchase_date: toUnixSec(formData.value.purchase_date),
+    sell_date: toUnixSec(formData.value.sell_date),
+  }
+
   try {
     if (isEdit.value) {
       // 更新卡密
-      const response = await updateCard(category.value, currentEditId.value, formData.value)
+      const response = await updateCard(category.value, currentEditId.value, payload)
       if (response.code === 200) {
         message.success('更新成功')
         showModal.value = false
@@ -2326,7 +2693,7 @@ const handleSubmit = async () => {
       }
     } else {
       // 创建卡密
-      const response = await createCard(category.value, formData.value)
+      const response = await createCard(category.value, payload)
       if (response.code === 200) {
         message.success('创建成功')
         showModal.value = false
@@ -2351,13 +2718,13 @@ const handleCopy = async (card: Card, format: string) => {
   } else if (format === 'digiseller_auto') {
     text = formatDigisellerAuto(card)
   } else if (format === 'reverse') {
-    text = `账号----token\n${card.account}----${card.token || ''}`
+    text = `账号----token${phoneDashTitle(card)}\n${card.account}----${card.token || ''}${phoneDashSuffix(card)}`
   } else if (format === 'code_method') {
     // 接码方式：标题 账号----接码方式；数据 账号----接码链接----账号----邮箱密码
-    text = `账号----接码方式\n${card.account}----${card.code_link || ''}----${card.account}----${card.mail_password || ''}`
+    text = `账号----接码方式${phoneDashTitle(card)}\n${card.account}----${card.code_link || ''}----${card.account}----${card.mail_password || ''}${phoneDashSuffix(card)}`
   } else {
-    // 国内格式
-    text = `账号----密码----邮箱密码----token\n${card.account}----${card.password || ''}----${card.mail_password || ''}----${card.token || ''}`
+    // 国内格式：账号----密码----邮箱密码----token----手机号----短信接码地址
+    text = `账号----密码----邮箱密码----token${domesticPhoneTitle}\n${card.account}----${card.password || ''}----${card.mail_password || ''}----${card.token || ''}${domesticPhoneSuffix(card)}`
   }
   try {
     await navigator.clipboard.writeText(text)
@@ -2401,9 +2768,9 @@ const doDownload = (cards: Card[]) => {
   } else if (exportFormatMode.value === 'digiseller_auto') {
     content = cards.map(formatDigisellerAuto).join('\n')
   } else {
-    const lines = cards.map(card =>
-      exportSelectedFields.value.map(f => getFieldValue(card, f)).join('----')
-    )
+    const lines = cards.map(card => {
+      return exportSelectedFields.value.map(f => getFieldValue(card, f)).join('----')
+    })
     content = lines.join('\n')
   }
   const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
@@ -2543,6 +2910,7 @@ const handleBatchImport = () => {
     subscription_status: 1,
     account_type: 2,
     code_link: 'https://tool.toolsvip.cc/easy-mailbox/frontend',
+    phone_link: '',
     remark: '',
     field_mapping: currentMapping,
   }
@@ -2615,6 +2983,10 @@ const handleBatchSubmit = async () => {
       const clientId = mapping.client_id > 0 && parts[mapping.client_id - 1] ? parts[mapping.client_id - 1] : ''
       const apiKey = mapping.api_key > 0 && parts[mapping.api_key - 1] ? parts[mapping.api_key - 1] : ''
       const twoFA = mapping['2fa'] > 0 && parts[mapping['2fa'] - 1] ? parts[mapping['2fa'] - 1] : ''
+      const phone = mapping.phone > 0 && parts[mapping.phone - 1] ? parts[mapping.phone - 1] : ''
+      const phoneLink = mapping.phone_link > 0 && parts[mapping.phone_link - 1]
+        ? parts[mapping.phone_link - 1]
+        : (batchConfig.value.phone_link || '')
 
       let rowSubscriptionType: string | undefined
       if (mapping.subscription_type > 0 && parts[mapping.subscription_type - 1]) {
@@ -2645,6 +3017,8 @@ const handleBatchSubmit = async () => {
         '2fa': twoFA || undefined,
         mail_url: batchConfig.value.mail_url || undefined,
         code_link: batchConfig.value.code_link || undefined,
+        phone: phone || undefined,
+        phone_link: phoneLink || undefined,
         remark: batchConfig.value.remark || undefined,
       }
 
@@ -2776,29 +3150,30 @@ const handleBatchPickup = async () => {
     const lines = cards.map(card => {
       if (fmt === 'digiseller') {
         if (!card.password && !card.mail_password) {
-          return `Пожалуйста, войдите в систему, используя код подтверждения, отправленный на электронную почту:\n\n${card.account}\n\nmail-login: ${card.mail_url || ''}\n\nПожалуйста, выполните следующие шаги заново:\n1. Введите аккаунт: ${card.account}\n2. Нажмите «Далее»\n3. Нажмите кнопку: «Email sign-in code»`
+          return `Пожалуйста, войдите в систему, используя код подтверждения, отправленный на электронную почту:\n\n${card.account}\n\nmail-login: ${card.mail_url || ''}${phoneFields(card, '\n')}\n\nПожалуйста, выполните следующие шаги заново:\n1. Введите аккаунт: ${card.account}\n2. Нажмите «Далее»\n3. Нажмите кнопку: «Email sign-in code»`
         }
         return formatDigiseller(card)
       } else if (fmt === 'digiseller_auto') {
         return formatDigisellerAuto(card)
       } else if (fmt === 'reverse') {
-        return `${card.account}----${card.token || ''}`
+        return `${card.account}----${card.token || ''}${phoneDashSuffix(card)}`
       } else if (fmt === 'code_method') {
         // 接码方式：账号----接码链接----账号----邮箱密码
-        return `${card.account}----${card.code_link || ''}----${card.account}----${card.mail_password || ''}`
+        return `${card.account}----${card.code_link || ''}----${card.account}----${card.mail_password || ''}${phoneDashSuffix(card)}`
       } else {
-        return `${card.account}----${card.password || ''}----${card.mail_password || ''}----${card.token || ''}`
+        return `${card.account}----${card.password || ''}----${card.mail_password || ''}----${card.token || ''}${domesticPhoneSuffix(card)}`
       }
     })
 
     // ---- 分隔格式：标题行 + 数据行；Digiseller 多行格式用空行分隔
+    const phoneTitle = cards.some(hasPhoneReceive) ? '----手机号----短信接码地址' : ''
     let clipboardText = ''
     if (fmt === 'domestic') {
-      clipboardText = '账号----密码----邮箱密码----token\n' + lines.join('\n')
+      clipboardText = `账号----密码----邮箱密码----token${domesticPhoneTitle}\n` + lines.join('\n')
     } else if (fmt === 'reverse') {
-      clipboardText = '账号----token\n' + lines.join('\n')
+      clipboardText = `账号----token${phoneTitle}\n` + lines.join('\n')
     } else if (fmt === 'code_method') {
-      clipboardText = '账号----接码方式\n' + lines.join('\n')
+      clipboardText = `账号----接码方式${phoneTitle}\n` + lines.join('\n')
     } else if (fmt === 'digiseller_auto') {
       clipboardText = lines.join('\n')
     } else {

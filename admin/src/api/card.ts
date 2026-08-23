@@ -32,6 +32,8 @@ export interface Card {
   mail_url?: string
   remark?: string
   code_link?: string
+  phone?: string
+  phone_link?: string
   freeze_status?: number
   freeze_time?: number
   freeze_remark?: string
@@ -96,6 +98,9 @@ export interface CardRequest {
   mail_url?: string
   remark?: string
   code_link?: string
+  phone?: string
+  phone_link?: string
+  subscription_credits?: number
 }
 
 // 获取卡密列表
@@ -287,12 +292,38 @@ export const gotoProUpgrade = (token: string, subscriptionType: string): Promise
   return http.post('/admin/cards/goto-pro', { token, subscription_type: subscriptionType }) as Promise<ApiResponse<string>>
 }
 
+export interface StripeAlipayResult {
+  alipay_url: string
+  amount: number
+  currency: string
+  email: string
+  payment_intent_id: string
+  session_id: string
+}
+
+export const submitStripeAlipay = (checkoutUrl: string): Promise<ApiResponse<StripeAlipayResult>> => {
+  return http.post('/admin/cards/stripe-alipay', { checkout_url: checkoutUrl }) as Promise<ApiResponse<StripeAlipayResult>>
+}
+
+export interface PollSubscriptionResult {
+  subscription_type: string
+  subscribed: boolean
+}
+
+export const pollCardSubscription = (category: string, id: number): Promise<ApiResponse<PollSubscriptionResult>> => {
+  return http.post('/admin/cards/poll-subscription', { category, id }) as Promise<ApiResponse<PollSubscriptionResult>>
+}
+
 export const halfPriceCheckout = (data: {
   uid: string
   token: string
   tier: string
 }): Promise<ApiResponse<string>> => {
   return http.post('/admin/cards/half-price-checkout', data) as Promise<ApiResponse<string>>
+}
+
+export const getHalfPriceQuota = (uid: string): Promise<ApiResponse<string>> => {
+  return http.get('/admin/cards/half-price-quota', { params: { uid } }) as Promise<ApiResponse<string>>
 }
 
 // 单独更新卡密备注

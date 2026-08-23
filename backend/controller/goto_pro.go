@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
+	"regexp"
 	"strings"
 	"time"
 
@@ -407,4 +408,59 @@ func HalfPriceCheckout(c *gin.Context) {
 		"message": "成功",
 		"data":    link,
 	})
+}
+
+var (
+	halfPriceNavPillRe  = regexp.MustCompile(`(?is)class=["']nav-pill["'][^>]*>([^<]+)`)
+	halfPriceQuotaNumRe = regexp.MustCompile(`(\d+)\s*/\s*(\d+)`)
+)
+
+func extractHalfPriceQuota(html string) string {
+	text := html
+	if m := halfPriceNavPillRe.FindStringSubmatch(html); len(m) >= 2 {
+		text = m[1]
+	}
+	if n := halfPriceQuotaNumRe.FindStringSubmatch(text); len(n) >= 3 {
+		return n[1] + "/" + n[2]
+	}
+	return ""
+}
+
+func fetchHalfPriceQuota(uid string) string {
+	uid = strings.TrimSpace(uid)
+	if uid == "" {
+		return ""
+	}
+	client := &http.Client{Timeout: 20 * time.Second}
+	req, err := http.NewRequest(http.MethodGet, halfPriceCheckoutBase+"/?uid="+url.QueryEscape(uid), nil)
+	if err != nil {
+		return ""
+	}
+	req.Header.Set("Accept", "text/html,application/xhtml+xml")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36")
+	resp, err := client.Do(req)
+	if err != nil {
+		return ""
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return ""
+	}
+	return extractHalfPriceQuota(string(body))
+}
+
+// GetHalfPriceQuota 抓取活动页 nav-pill 中的已提交 xx/xx
+func GetHalfPriceQuota(c *gin.Context) {
+	uid := strings.TrimSpace(c.Query("uid"))
+	if uid == "" {
+		c.JSON(http.StatusOK, gin.H{"code": 400, "message": "请输入 uid"})
+		return
+	}
+	quota := fetchHalfPriceQuota(uid)
+	if quota == "" {
+		c.JSON(http.StatusOK, gin.H{"code": 400, "message": "未能读取活动余量"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 200, "message": "成功", "data": quota})
 }

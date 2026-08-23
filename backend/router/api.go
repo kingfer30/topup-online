@@ -93,7 +93,10 @@ func SetApiRouter(router *gin.Engine) {
 			adminGroup.POST("/cards/batch-enable-on-demand", controller.BatchEnableOnDemandSpendHandler) // 批量开启按需付费
 			adminGroup.POST("/cards/update-remark", controller.UpdateCardRemark)                         // 单独更新备注
 			adminGroup.POST("/cards/goto-pro", controller.GotoPro)                                       // 提链：获取 Cursor Pro 付款链接
+			adminGroup.POST("/cards/stripe-alipay", controller.SubmitStripeAlipay)                       // 自动提交 Stripe Alipay 账单并返回付款页
+			adminGroup.POST("/cards/poll-subscription", controller.PollCardSubscription)                 // 轮询卡密当前订阅类型
 			adminGroup.POST("/cards/half-price-checkout", controller.HalfPriceCheckout)                  // 半价提链：活动页预检+开单
+			adminGroup.GET("/cards/half-price-quota", controller.GetHalfPriceQuota)                      // 半价提链：抓取活动页余量
 			adminGroup.POST("/cards/batch-freeze", controller.BatchFreezeCards)                          // 批量冻结/解冻普号
 			adminGroup.POST("/cards/batch-delete", controller.BatchDeleteCards)                          // 批量删除（status=-1）
 

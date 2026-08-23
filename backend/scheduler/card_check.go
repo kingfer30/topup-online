@@ -95,6 +95,24 @@ func normalizeMembershipType(raw string) string {
 	}
 }
 
+// PeekCursorMembership 只读取当前订阅类型，不改卡密状态
+func PeekCursorMembership(token string) (string, error) {
+	workosID, err := extractWorkosID(token)
+	if err != nil {
+		return "", err
+	}
+	usage, err := fetchUsageSummary(workosID, token)
+	if err != nil {
+		return "", err
+	}
+	return normalizeMembershipType(usage.MembershipType), nil
+}
+
+// IsPaidMembership 是否为付费订阅
+func IsPaidMembership(membershipType string) bool {
+	return isPaidSubscriptionType(membershipType)
+}
+
 // isPaidSubscriptionType 是否为付费订阅类型（手动标记为成品时使用）
 func isPaidSubscriptionType(subscriptionType string) bool {
 	switch normalizeMembershipType(subscriptionType) {
