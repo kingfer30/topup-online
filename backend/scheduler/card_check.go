@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/kingfer30/topup-online/constants"
 	"github.com/kingfer30/topup-online/model"
 	"github.com/kingfer30/topup-online/utils/client"
 	"github.com/kingfer30/topup-online/utils/logger"
@@ -28,9 +29,9 @@ type CardCheckScheduler struct {
 
 // UsageSummaryResponse cursor.com/api/usage-summary 响应结构
 type UsageSummaryResponse struct {
-	MembershipType  string          `json:"membershipType"`
+	MembershipType    string          `json:"membershipType"`
 	BillingCycleStart string          `json:"billingCycleStart"`
-	IndividualUsage IndividualUsage `json:"individualUsage"`
+	IndividualUsage   IndividualUsage `json:"individualUsage"`
 }
 
 // IndividualUsage 个人用量数据
@@ -183,6 +184,11 @@ func (s *CardCheckScheduler) Stop() {
 
 // checkCards 检查所有 cards_* 表中未出售成品且有 token 的卡密（排除 subscription_status=-2）
 func (s *CardCheckScheduler) checkCards() {
+	if constants.GetDebugEnabled() {
+		logger.SysLog("调试模式(DEBUG=true)，跳过卡密订阅检查")
+		return
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -281,6 +287,22 @@ func safePrefix(s string, n int) string {
 	return string(runes[:n]) + "..."
 }
 
+// cursorAPIHTTPClient Cursor 订阅检测使用付款设置里的代理；未配置时回退到全局 HTTPClient
+func cursorAPIHTTPClient() *http.Client {
+	if proxyURL := model.GetCursorPayProxyURL(); proxyURL != nil {
+		return &http.Client{
+			Timeout: 30 * time.Second,
+			Transport: &http.Transport{
+				Proxy: http.ProxyURL(proxyURL),
+			},
+		}
+	}
+	if client.HTTPClient != nil {
+		return client.HTTPClient
+	}
+	return &http.Client{Timeout: 30 * time.Second}
+}
+
 // fetchUsageSummary 调用 cursor.com/api/usage-summary 获取订阅信息
 func fetchUsageSummary(workosID, token string) (*UsageSummaryResponse, error) {
 	apiURL := "https://cursor.com/api/usage-summary"
@@ -304,18 +326,7 @@ func fetchUsageSummary(workosID, token string) (*UsageSummaryResponse, error) {
 	req.Header.Set("referer", "https://cursor.com/dashboard?tab=billing")
 	req.Header.Set("cookie", cookie)
 
-	// // 使用 HTTP 代理
-	// proxyURL, _ := url.Parse("http://xiaoguo:Ji6dft4Cqd9l_eX6h3@199.119.138.75:1080")
-	// transport := &http.Transport{
-	// 	Proxy: http.ProxyURL(proxyURL),
-	// }
-	// client := &http.Client{
-	// 	Timeout:   15 * time.Second,
-	// 	Transport: transport,
-	// }
-	aClient := client.HTTPClient
-
-	resp, err := aClient.Do(req)
+	resp, err := cursorAPIHTTPClient().Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("请求失败: %v", err)
 	}
@@ -339,6 +350,24 @@ func fetchUsageSummary(workosID, token string) (*UsageSummaryResponse, error) {
 	return &result, nil
 }
 
+// maxCheckFailCount 连续检查失败达到该次数后自动下架（status=封禁），避免死卡（token 本身有误或已过期无法刷新）被无限期反复检查
+const maxCheckFailCount = 3
+
+// buildCheckFailureUpdates 生成检查失败时的更新字段：累加连续失败次数，达到阈值后自动下架并写入原因
+func buildCheckFailureUpdates(card *model.AccountCard, now int64, reason string) map[string]interface{} {
+	failCount := card.CheckFailCount + 1
+	updates := map[string]interface{}{
+		"is_check":         2,
+		"check_time":       now,
+		"check_fail_count": failCount,
+	}
+	if failCount >= maxCheckFailCount {
+		updates["status"] = model.CardStatusBanned
+		updates["freeze_remark"] = fmt.Sprintf("连续检查失败%d次，自动下架：%s", failCount, safePrefix(reason, 150))
+	}
+	return updates
+}
+
 // CheckSingleCard 对单张卡密执行订阅检查并将结果写入数据库，供外部直接调用
 func CheckSingleCard(tableName string, card *model.AccountCard) error {
 	if isChatGPTCardTable(tableName) {
@@ -354,11 +383,8 @@ func CheckSingleCard(tableName string, card *model.AccountCard) error {
 	now := time.Now().Unix()
 
 	if apiErr != nil {
-		// 请求失败：标记检查失败
-		_ = model.UpdateCardCheckResult(tableName, card.Id, map[string]interface{}{
-			"is_check":   2,
-			"check_time": now,
-		})
+		// 请求失败：标记检查失败，累加连续失败次数
+		_ = model.UpdateCardCheckResult(tableName, card.Id, buildCheckFailureUpdates(card, now, apiErr.Error()))
 		return apiErr
 	}
 
@@ -366,8 +392,9 @@ func CheckSingleCard(tableName string, card *model.AccountCard) error {
 	if membershipType == "free" {
 		if shouldPreserveManualSubscription(card, membershipType) {
 			return model.UpdateCardCheckResult(tableName, card.Id, map[string]interface{}{
-				"is_check":   2,
-				"check_time": now,
+				"is_check":         2,
+				"check_time":       now,
+				"check_fail_count": 0,
 			})
 		}
 		zeroPrice := 0.0
@@ -375,6 +402,7 @@ func CheckSingleCard(tableName string, card *model.AccountCard) error {
 			"subscription_status": -1,
 			"is_check":            2,
 			"check_time":          now,
+			"check_fail_count":    0,
 			"sell_status":         3,
 			"sell_price":          zeroPrice,
 			"sell_date":           now,
@@ -385,6 +413,7 @@ func CheckSingleCard(tableName string, card *model.AccountCard) error {
 		"subscription_type": membershipType,
 		"is_check":          1,
 		"check_time":        now,
+		"check_fail_count":  0,
 	}
 	if usageData.IndividualUsage.Plan.Remaining != nil {
 		remainingUSD := float64(*usageData.IndividualUsage.Plan.Remaining) / 100.0
@@ -409,10 +438,7 @@ func checkSingleChatGPTCard(tableName string, card *model.AccountCard) error {
 	now := time.Now().Unix()
 	accessToken, newRefreshToken, err := fetchChatGPTTokens(card.Token)
 	if err != nil {
-		_ = model.UpdateCardCheckResult(tableName, card.Id, map[string]interface{}{
-			"is_check":   2,
-			"check_time": now,
-		})
+		_ = model.UpdateCardCheckResult(tableName, card.Id, buildCheckFailureUpdates(card, now, err.Error()))
 		return fmt.Errorf("chatgpt oauth 刷新失败: %v", err)
 	}
 
@@ -421,11 +447,9 @@ func checkSingleChatGPTCard(tableName string, card *model.AccountCard) error {
 		if errors.Is(err, ErrChatGPTAccountBanned) {
 			return markChatGPTCardBanned(tableName, card.Id, newRefreshToken)
 		}
-		_ = model.UpdateCardCheckResult(tableName, card.Id, map[string]interface{}{
-			"is_check":   2,
-			"check_time": now,
-			"token":      newRefreshToken,
-		})
+		updates := buildCheckFailureUpdates(card, now, err.Error())
+		updates["token"] = newRefreshToken
+		_ = model.UpdateCardCheckResult(tableName, card.Id, updates)
 		return fmt.Errorf("chatgpt accounts/check 失败: %v", err)
 	}
 
@@ -434,19 +458,18 @@ func checkSingleChatGPTCard(tableName string, card *model.AccountCard) error {
 		if errors.Is(err, ErrChatGPTAccountBanned) {
 			return markChatGPTCardBanned(tableName, card.Id, newRefreshToken)
 		}
-		_ = model.UpdateCardCheckResult(tableName, card.Id, map[string]interface{}{
-			"is_check":   2,
-			"check_time": now,
-			"token":      newRefreshToken,
-		})
+		updates := buildCheckFailureUpdates(card, now, err.Error())
+		updates["token"] = newRefreshToken
+		_ = model.UpdateCardCheckResult(tableName, card.Id, updates)
 		return fmt.Errorf("chatgpt subscriptions 失败: %v", err)
 	}
 
 	membershipType := normalizeMembershipType(planType)
 	updates := map[string]interface{}{
-		"token":      newRefreshToken,
-		"is_check":   1,
-		"check_time": now,
+		"token":            newRefreshToken,
+		"is_check":         1,
+		"check_time":       now,
+		"check_fail_count": 0,
 	}
 
 	if membershipType == "plus" {
@@ -476,6 +499,7 @@ func markChatGPTCardBanned(tableName string, cardID int, newRefreshToken string)
 		"subscription_status": -1,
 		"is_check":            1,
 		"check_time":          now,
+		"check_fail_count":    0,
 	}
 	if newRefreshToken != "" {
 		updates["token"] = newRefreshToken
@@ -685,7 +709,7 @@ func EnableOnDemandSpend(workosID, token string) error {
 	req.Header.Set("sec-fetch-site", "same-origin")
 	req.Header.Set("cookie", cookie)
 
-	resp, err := client.HTTPClient.Do(req)
+	resp, err := cursorAPIHTTPClient().Do(req)
 	if err != nil {
 		return fmt.Errorf("请求失败: %v", err)
 	}

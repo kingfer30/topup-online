@@ -31,6 +31,9 @@ func SetApiRouter(router *gin.Engine) {
 		apiRouter.GET("/ads/active", controller.GetActiveAds)
 		apiRouter.POST("/ads/click", controller.ClickAd)
 
+		// Cursor 短信验证码查询（公开，无需认证，供独立取码页 /sms/cursor 使用）
+		apiRouter.GET("/sms/cursor/query", controller.GetCursorSmsCode)
+
 		// 管理员相关（需要认证）
 		adminGroup := apiRouter.Group("/admin")
 		adminGroup.Use(middleware.AdminAuth())
@@ -99,6 +102,7 @@ func SetApiRouter(router *gin.Engine) {
 			adminGroup.GET("/cards/half-price-quota", controller.GetHalfPriceQuota)                      // 半价提链：抓取活动页余量
 			adminGroup.POST("/cards/batch-freeze", controller.BatchFreezeCards)                          // 批量冻结/解冻普号
 			adminGroup.POST("/cards/batch-delete", controller.BatchDeleteCards)                          // 批量删除（status=-1）
+			adminGroup.GET("/cards/table-names", controller.GetCardTableNames)                           // 获取所有 cards_* 表名
 
 			// 话术管理接口（管理员专用）
 			adminGroup.GET("/sales-talks", controller.GetSalesTalkList)                   // 获取话术列表
@@ -116,6 +120,8 @@ func SetApiRouter(router *gin.Engine) {
 			// AI 模型设置与翻译（管理员专用）
 			adminGroup.GET("/settings/ai", controller.GetAdminAISettings)
 			adminGroup.PUT("/settings/ai", controller.UpdateAdminAISettings)
+			adminGroup.GET("/settings/cursor-pay", controller.GetAdminCursorPaySettings)
+			adminGroup.PUT("/settings/cursor-pay", controller.UpdateAdminCursorPaySettings)
 			adminGroup.POST("/ai/translate", controller.AdminAITranslate)
 
 			// GPT卡密管理（供应商卡密）
@@ -141,6 +147,7 @@ func SetApiRouter(router *gin.Engine) {
 			// 微软邮箱库存
 			adminGroup.GET("/microsoft-mails", controller.GetMicrosoftMailList)
 			adminGroup.GET("/microsoft-mails/export", controller.ExportMicrosoftMails)
+			adminGroup.GET("/microsoft-mails/by-card", controller.GetMicrosoftMailByCard)
 			adminGroup.GET("/microsoft-mails/:id", controller.GetMicrosoftMailById)
 			adminGroup.POST("/microsoft-mails", controller.CreateMicrosoftMail)
 			adminGroup.PUT("/microsoft-mails/:id", controller.UpdateMicrosoftMail)

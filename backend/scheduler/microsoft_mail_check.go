@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/kingfer30/topup-online/constants"
 	"github.com/kingfer30/topup-online/model"
 	"github.com/kingfer30/topup-online/utils/logger"
 	"github.com/kingfer30/topup-online/utils/outlook"
@@ -73,6 +74,11 @@ func (s *MicrosoftMailCheckScheduler) Stop() {
 }
 
 func (s *MicrosoftMailCheckScheduler) checkMails() {
+	if constants.GetDebugEnabled() {
+		logger.SysLog("调试模式(DEBUG=true)，跳过微软邮箱 refresh_token 检查")
+		return
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 

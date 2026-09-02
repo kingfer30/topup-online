@@ -111,6 +111,10 @@
             { label: '未冻结', value: -1 },
             { label: '已冻结', value: 1 },
           ]" placeholder="冻结状态" style="width: 150px" />
+          <n-select v-if="category === 'cursor'" v-model:value="searchPromo50Off" :options="[
+            { label: '全部', value: 0 },
+            { label: '仅命中半价优惠', value: 1 },
+          ]" placeholder="半价优惠" style="width: 150px" />
           <n-date-picker
             v-if="cardType === 'all'"
             v-model:value="searchFreezeTime"
@@ -601,8 +605,10 @@
               <n-radio-group v-model:value="pickupForm.format">
                 <n-space>
                   <n-radio value="digiseller">Digiseller订阅</n-radio>
+                  <n-radio value="digiseller_auto">Digiseller自动发货</n-radio>
                   <n-radio value="domestic">国内订阅</n-radio>
                   <n-radio value="reverse">逆向格式</n-radio>
+                  <n-radio value="code_method">接码方式</n-radio>
                 </n-space>
               </n-radio-group>
             </n-form-item>
@@ -660,6 +666,85 @@
       </n-space>
     </n-modal>
 
+    <!-- 原生取件弹窗 -->
+    <n-modal v-model:show="showNativeFetchModal" preset="card" title="原生取件" style="width: 960px; max-width: 96vw"
+      :bordered="false">
+      <n-spin :show="nativeFetchLoading" description="正在通过 refresh_token 取件…">
+        <template v-if="nativeFetchData">
+          <n-text depth="3" style="font-size: 13px">
+            当前邮箱：<strong>{{ nativeFetchData.email }}</strong>
+          </n-text>
+          <div class="native-fetch-panels">
+            <n-card v-for="folder in nativeFetchFolders" :key="folder.title" :bordered="false" size="small"
+              class="native-fetch-card">
+              <template #header>
+                <div style="display:flex;align-items:center;gap:8px">
+                  <span style="font-weight:600;font-size:14px">{{ folder.title }}</span>
+                  <n-tag size="small" :type="folder.items.length ? 'info' : 'default'">{{ folder.items.length }} 封</n-tag>
+                </div>
+              </template>
+              <n-empty v-if="folder.items.length === 0" description="暂无邮件" />
+              <n-list v-else hoverable clickable>
+                <n-list-item v-for="(mail, idx) in folder.items" :key="`${folder.title}-${idx}-${mail.received_at}`"
+                  @click="openNativeDetail(mail)">
+                  <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;width:100%">
+                    <div style="display:flex;flex-direction:column;gap:2px;min-width:0;flex:1">
+                      <span style="font-size:14px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ mail.subject }}</span>
+                      <span style="font-size:12px;color:var(--n-text-color-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ mail.from }}</span>
+                      <span style="font-size:11px;color:var(--n-text-color-4,#aaa)">{{ mail.received_at }}</span>
+                    </div>
+                    <div style="flex-shrink:0" @click.stop>
+                      <n-button v-if="mail.code" type="success" size="small" round @click="copyNativeCode(mail.code)">
+                        {{ mail.code }}
+                      </n-button>
+                      <n-button v-else type="warning" size="small" round @click="openNativeDetail(mail)">详情</n-button>
+                    </div>
+                  </div>
+                </n-list-item>
+              </n-list>
+            </n-card>
+          </div>
+        </template>
+        <n-empty v-else-if="!nativeFetchLoading" description="暂无数据" />
+      </n-spin>
+    </n-modal>
+
+    <!-- 原生取件 - 邮件详情弹窗 -->
+    <n-modal v-model:show="showNativeDetailModal" preset="card" :title="nativeDetailMail?.subject || '邮件详情'"
+      style="width: 860px; max-width: 96vw" :bordered="false">
+      <template v-if="nativeDetailMail">
+        <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--n-divider-color)">
+          <div style="display:flex;align-items:center;gap:12px">
+            <span style="font-size:13px;font-weight:600;color:var(--n-text-color-3);width:56px;flex-shrink:0">发件人</span>
+            <span style="font-size:13px">{{ nativeDetailMail.from }}</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px">
+            <span style="font-size:13px;font-weight:600;color:var(--n-text-color-3);width:56px;flex-shrink:0">时间</span>
+            <span style="font-size:13px">{{ nativeDetailMail.received_at }}</span>
+          </div>
+          <div v-if="nativeDetailMail.code" style="display:flex;align-items:center;gap:12px">
+            <span style="font-size:13px;font-weight:600;color:var(--n-text-color-3);width:56px;flex-shrink:0">验证码</span>
+            <n-button type="success" size="small" round @click="copyNativeCode(nativeDetailMail.code)">
+              {{ nativeDetailMail.code }}
+            </n-button>
+          </div>
+        </div>
+        <div style="min-height:200px">
+          <div v-if="nativeDetailLoading" style="display:flex;align-items:center;justify-content:center;padding:40px 0">
+            <n-spin size="small" />
+            <span style="margin-left:8px;color:#999">正在加载正文…</span>
+          </div>
+          <template v-else>
+            <iframe v-if="nativeDetailMail.html_body" :srcdoc="nativeDetailMail.html_body"
+              sandbox="allow-same-origin" style="width:100%;height:480px;border:none;border-radius:8px;background:#fff" />
+            <pre v-else-if="nativeDetailMail.body"
+              style="font-size:13px;line-height:1.7;white-space:pre-wrap;word-break:break-all;margin:0;background:var(--n-color-embedded,rgba(127,127,127,0.08));border-radius:8px;padding:16px;max-height:480px;overflow-y:auto">{{ nativeDetailMail.body }}</pre>
+            <n-empty v-else description="暂无正文内容" />
+          </template>
+        </div>
+      </template>
+    </n-modal>
+
     <!-- 提链结果弹窗 -->
     <n-modal v-model:show="showGotoProModal" :title="`提链成功 - ${gotoProAccount || '付款链接'}`" preset="card" style="width: 640px">
       <n-space vertical :size="12">
@@ -699,9 +784,9 @@
       negative-text="取消" :positive-button-props="{ loading: halfPriceLoading, disabled: halfPriceLoading }"
       @positive-click="handleHalfPriceNext" style="width: 480px">
       <n-form label-placement="left" label-width="90px" style="margin-top: 20px">
-        <n-form-item label="UID" required>
-          <n-input v-model:value="halfPriceForm.uid" placeholder="请输入活动页 uid"
-            @blur="loadHalfPriceQuota(halfPriceForm.uid)" />
+        <n-form-item label="活动链接" required>
+          <n-input v-model:value="halfPriceForm.url" placeholder="https://cursor.120.hk?uid=xx"
+            @blur="loadHalfPriceQuota(halfPriceForm.url)" />
         </n-form-item>
         <n-form-item label="当前余量">
           <span>{{ halfPriceQuota || '—' }}</span>
@@ -720,7 +805,7 @@
 
     <!-- 提链-支付成功：单卡升级成品弹窗 -->
     <n-modal v-model:show="showGotoProSuccessModal" title="支付成功 - 更新为成品" preset="dialog" positive-text="确认更新"
-      negative-text="取消" @positive-click="handleGotoProSuccessSubmit" style="width: 600px">
+      negative-text="取消" :auto-focus="false" @positive-click="handleGotoProSuccessSubmit" style="width: 600px">
       <n-form label-placement="left" label-width="120px" style="margin-top: 20px">
         <n-grid :cols="2" :x-gap="24" :y-gap="12">
           <n-form-item-gi label="订阅类型">
@@ -739,8 +824,9 @@
           </n-form-item-gi>
 
           <n-form-item-gi label="购买价格(追加)">
-            <n-input-number v-model:value="upgradeForm.purchase_price" :min="0" :precision="2" placeholder="追加到已有价格"
-              style="width: 100%" />
+            <n-input-number ref="gotoProPurchasePriceRef" v-model:value="upgradeForm.purchase_price" :min="0"
+              :precision="2" placeholder="追加到已有价格" style="width: 100%"
+              @keydown.enter.prevent="handleGotoProSuccessSubmit" />
           </n-form-item-gi>
 
           <n-form-item-gi label="购买平台">
@@ -803,7 +889,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, h, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, h, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import {
   NCard,
@@ -819,6 +905,7 @@ import {
   NSelect,
   NSpace,
   NTag,
+  NTooltip,
   NGrid,
   NGi,
   NAlert,
@@ -828,6 +915,11 @@ import {
   NCheckbox,
   NCheckboxGroup,
   NDivider,
+  NList,
+  NListItem,
+  NEmpty,
+  NSpin,
+  NText,
   useMessage,
   useDialog,
   type DataTableColumns,
@@ -863,6 +955,13 @@ import {
   type CardRequest,
 } from '@/api/card'
 import { getDigisellerPrices, type DigisellerPrice } from '@/api/digiseller'
+import { getMicrosoftMailByCard } from '@/api/microsoft-mail'
+import {
+  fetchOutlookMails,
+  fetchOutlookDetail,
+  type OutlookMailItem,
+  type OutlookFetchData,
+} from '@/api/outlook-oauth'
 
 const route = useRoute()
 const message = useMessage()
@@ -895,6 +994,8 @@ const pageTitle = computed(() => {
 // 仅 cards_cursor 才带出 session-token / Auto-Login 说明字段
 const isCursorCategory = computed(() => category.value === 'cursor')
 const CURSOR_AUTO_LOGIN_URL = 'https://docs.aiguoguo199.com/doc-9320337'
+// Digiseller 发货格式下，phone-login 固定指向独立取码页，账号/密码由页面自行拼接查询
+const CURSOR_SMS_QUERY_BASE_URL = 'https://chatgpt-topup.com/sms/cursor'
 
 const sessionTokenField = (card: Card, sep: string): string => {
   if (!isCursorCategory.value) return ''
@@ -902,18 +1003,23 @@ const sessionTokenField = (card: Card, sep: string): string => {
   return token ? `${sep}session-token: ${token}` : ''
 }
 
-const cursorAutoLoginField = (sep: string): string => {
+const cursorAutoLoginField = (card: Card, sep: string): string => {
   if (!isCursorCategory.value) return ''
+  // token 为空时无法通过 token 登录，不展示该提示
+  const token = (card.token || '').trim()
+  if (!token) return ''
   return `${sep}Account restrictions triggering SMS verification have been frequent recently; logging in via token is strongly recommended. Please refer to the following: ${CURSOR_AUTO_LOGIN_URL}`
 }
 
 const hasPhoneReceive = (card: Card): boolean => {
-  return !!(card.phone || '').trim() && !!(card.phone_link || '').trim()
+  // 只要配置了接码地址即可展示；手机号本身可以为空
+  return !!(card.phone_link || '').trim()
 }
 
 const phoneFields = (card: Card, sep: string): string => {
   if (!hasPhoneReceive(card)) return ''
-  return `${sep}phone: ${(card.phone || '').trim()}${sep}phone-login: ${(card.phone_link || '').trim()}`
+  const phoneLoginUrl = `${CURSOR_SMS_QUERY_BASE_URL}?${card.account}----${(card.password || '').trim()}`
+  return `${sep}phone-login: ${phoneLoginUrl}`
 }
 
 const phoneDashSuffix = (card: Card): string => {
@@ -932,22 +1038,18 @@ const domesticPhoneSuffix = (card: Card): string => {
 }
 
 const formatDigiseller = (card: Card): string => {
-  return `account: ${card.account}\npass: ${card.password || ''}\nmail-pass: ${card.mail_password || ''}${sessionTokenField(card, '\n')}\n\nmail-login: ${card.mail_url || ''}${cursorAutoLoginField('\n')}${phoneFields(card, '\n')}`
+  return `account: ${card.account}\npass: ${card.password || ''}\nmail-pass: ${card.mail_password || ''}${sessionTokenField(card, '\n')}\n\nmail-login: ${card.mail_url || ''}${cursorAutoLoginField(card, '\n')}${phoneFields(card, '\n')}`
 }
 
 const formatDigisellerAuto = (card: Card): string => {
-  return `account: ${card.account}<br>pass: ${card.password || ''}<br>mail-pass: ${card.mail_password || ''}${sessionTokenField(card, '<br>')}<br>mail-login: ${card.mail_url || ''}${cursorAutoLoginField('<br>')}${phoneFields(card, '<br>')}<br>Если вам удобно, не могли бы вы оставить нам хороший отзыв? https://ibb.co/tTgSNRLP<br>Подписывайтесь на наш канал, чтобы получать больше выгодных предложений: https://t.me/AI_GUO_GUO`
+  return `account: ${card.account}<br>pass: ${card.password || ''}<br>mail-pass: ${card.mail_password || ''}${sessionTokenField(card, '<br>')}<br>mail-login: ${card.mail_url || ''}${cursorAutoLoginField(card, '<br>')}${phoneFields(card, '<br>')}<br>Если вам удобно, не могли бы вы оставить нам хороший отзыв? https://ibb.co/tTgSNRLP<br>Подписывайтесь на наш канал, чтобы получать больше выгодных предложений: https://t.me/AI_GUO_GUO`
 }
 
-// 取货卡密信息格式化
-const pickupCardInfo = computed(() => {
-  if (!pickedCard.value) return ''
-
-  const card = pickedCard.value
-  if (pickupForm.value.format === 'digiseller') {
-    // 密码和邮箱密码均为空时，使用邮箱验证码登录格式
-    if (!card.password && !card.mail_password) {
-      return `Пожалуйста, войдите в систему, используя код подтверждения, отправленный на электронную почту:
+// digiseller 格式下，密码和邮箱密码均为空时改用邮箱验证码登录话术；
+// 单个取货/批量取货/列表复制/导出 四处统一调用本函数，保持格式一致
+const formatDigisellerWithFallback = (card: Card): string => {
+  if (!card.password && !card.mail_password) {
+    return `Пожалуйста, войдите в систему, используя код подтверждения, отправленный на электронную почту:
 
 ${card.account}
 
@@ -957,13 +1059,28 @@ mail-login: ${card.mail_url || ''}${phoneFields(card, '\n')}
 1. Введите аккаунт: ${card.account}
 2. Нажмите «Далее»
 3. Нажмите кнопку: «Email sign-in code»`
-    }
-    // 常规 digiseller 订阅格式
-    return formatDigiseller(card)
+  }
+  return formatDigiseller(card)
+}
+
+// 取货卡密信息格式化
+const pickupCardInfo = computed(() => {
+  if (!pickedCard.value) return ''
+
+  const card = pickedCard.value
+  if (pickupForm.value.format === 'digiseller') {
+    return formatDigisellerWithFallback(card)
+  } else if (pickupForm.value.format === 'digiseller_auto') {
+    // Digiseller 自动发货格式
+    return formatDigisellerAuto(card)
   } else if (pickupForm.value.format === 'reverse') {
     // 逆向格式
     return `账号----token${phoneDashTitle(card)}
 ${card.account}----${card.token || ''}${phoneDashSuffix(card)}`
+  } else if (pickupForm.value.format === 'code_method') {
+    // 接码方式：标题 账号----接码方式；数据 账号----接码链接----账号----邮箱密码
+    return `账号----接码方式${phoneDashTitle(card)}
+${card.account}----${card.code_link || ''}----${card.account}----${card.mail_password || ''}${phoneDashSuffix(card)}`
   } else {
     // 国内订阅格式：账号----密码----邮箱密码----token----手机号----短信接码地址
     return `账号----密码----邮箱密码----token${domesticPhoneTitle}
@@ -985,6 +1102,7 @@ const searchSellTo = ref('')
 const searchPurchaseBy = ref('')
 const searchIsCheck = ref(0)
 const searchFreezeStatus = ref(0)
+const searchPromo50Off = ref(0)
 // 购买日期 / 冻结时间筛选（n-date-picker 返回毫秒）
 const searchPurchaseDate = ref<number | null>(null)
 const searchFreezeTime = ref<number | null>(null)
@@ -1177,6 +1295,8 @@ const gotoProCardId = ref<number>(0)
 const gotoProAccount = ref('')
 const gotoProSubscriptionType = ref('')
 const showGotoProSuccessModal = ref(false)
+const gotoProPurchasePriceRef = ref<{ focus: () => void } | null>(null)
+const gotoProSuccessSubmitting = ref(false)
 const showGotoProFailModal = ref(false)
 const gotoProFailRemark = ref('')
 const stripeAlipayLoading = ref(false)
@@ -1192,10 +1312,17 @@ const showHalfPriceModal = ref(false)
 const halfPriceLoading = ref(false)
 const halfPriceCard = ref<Card | null>(null)
 const halfPriceForm = ref({
-  uid: '',
+  url: '',
   tier: 'pro' as 'pro' | 'pro_plus' | 'ultra',
 })
 const HALF_PRICE_UID_COOKIE = 'cursor_half_price_uid'
+
+const normalizeHalfPricePageUrl = (raw: string) => {
+  const value = raw.trim()
+  if (!value) return ''
+  if (/^https?:\/\//i.test(value)) return value
+  return `https://cursor.120.hk?uid=${encodeURIComponent(value)}`
+}
 const halfPriceQuota = ref('')
 
 // 已售列表：批量提链结果弹窗
@@ -1222,7 +1349,7 @@ const pickupCardInfoRef = ref<HTMLPreElement | null>(null)
 // 取货表单
 const pickupForm = ref({
   subscription_type: '',
-  format: 'digiseller' as 'digiseller' | 'domestic' | 'reverse',
+  format: 'digiseller' as 'digiseller' | 'digiseller_auto' | 'domestic' | 'reverse' | 'code_method',
 })
 
 // 完成取货表单
@@ -1238,6 +1365,94 @@ const shippedForm = ref({
   sell_price: 20 as number | undefined,
   sell_to: 'Digiseller',
 })
+
+// ---- 原生取件（基于关联的 MicrosoftMail refresh_token 取件） ----
+const showNativeFetchModal = ref(false)
+const nativeFetchLoading = ref(false)
+const nativeFetchData = ref<OutlookFetchData | null>(null)
+const nativeFetchAccountLine = ref('')
+const NATIVE_FETCH_FORMAT = '2' // 邮箱----邮箱密码----refresh_token----client_id
+
+const nativeFetchFolders = computed(() => {
+  if (!nativeFetchData.value) return []
+  return [
+    { title: '📥 收件箱', items: nativeFetchData.value.inbox },
+    { title: '🗑️ 垃圾箱', items: nativeFetchData.value.junk },
+  ]
+})
+
+const handleNativeFetch = async (row: Card) => {
+  showNativeFetchModal.value = true
+  nativeFetchLoading.value = true
+  nativeFetchData.value = null
+  nativeFetchAccountLine.value = ''
+  try {
+    const mailRes = await getMicrosoftMailByCard(`cards_${category.value}`, row.id)
+    if (mailRes.code !== 200 || !mailRes.data) {
+      message.error(mailRes.message || '未找到关联的微软邮箱记录')
+      return
+    }
+    const mail = mailRes.data
+    if (!mail.token) {
+      message.error('该微软邮箱记录缺少 refresh_token')
+      return
+    }
+    const accountLine = `${mail.account}----${mail.password || ''}----${mail.token}----${mail.client_id || ''}`
+    nativeFetchAccountLine.value = accountLine
+
+    const res = await fetchOutlookMails(accountLine, NATIVE_FETCH_FORMAT)
+    if (res.code !== 200) {
+      message.error(res.message || '取件失败')
+      return
+    }
+    nativeFetchData.value = res.data
+  } catch (e: any) {
+    message.error(e?.message || '取件失败')
+  } finally {
+    nativeFetchLoading.value = false
+  }
+}
+
+// 原生取件 - 邮件详情弹窗
+const showNativeDetailModal = ref(false)
+const nativeDetailMail = ref<OutlookMailItem | null>(null)
+const nativeDetailLoading = ref(false)
+
+const openNativeDetail = async (mail: OutlookMailItem) => {
+  nativeDetailMail.value = mail
+  showNativeDetailModal.value = true
+
+  if (!mail.body && !mail.html_body) {
+    nativeDetailLoading.value = true
+    try {
+      const res = await fetchOutlookDetail(
+        nativeFetchAccountLine.value,
+        mail.folder,
+        mail.seq_num,
+        NATIVE_FETCH_FORMAT,
+        mail.id || '',
+      )
+      if (res.code === 200 && res.data) {
+        mail.body = res.data.body
+        mail.html_body = res.data.html_body
+        nativeDetailMail.value = { ...mail }
+      }
+    } catch {
+      // 静默失败，弹窗仍展示已有信息
+    } finally {
+      nativeDetailLoading.value = false
+    }
+  }
+}
+
+const copyNativeCode = async (text: string) => {
+  try {
+    await navigator.clipboard.writeText(text)
+    message.success('已复制：' + text)
+  } catch {
+    message.error('复制失败')
+  }
+}
 
 // 批量导入配置
 const batchConfig = ref({
@@ -1491,6 +1706,7 @@ const buildCardQueryParams = () => {
     ...(purchaseDateParam ? { purchase_date: purchaseDateParam } : {}),
     ...(searchFreezeStatus.value !== 0 ? { freeze_status: searchFreezeStatus.value } : {}),
     ...(searchFreezeTime.value != null ? { freeze_time: formatYYYYMMDD(searchFreezeTime.value) } : {}),
+    ...(searchPromo50Off.value !== 0 ? { promo_50off: searchPromo50Off.value } : {}),
   }
 }
 
@@ -1513,9 +1729,51 @@ const columns = computed<DataTableColumns<Card>>(() => {
       key: 'account',
       width: 200,
       render: (row: Card) => {
+        const tags: any[] = []
+        // 仅 cursor 类别显示：是否命中 Cursor 半价召回邮件
+        if (category.value === 'cursor') {
+          const isHit = !!row.promo_50off_time
+          const isSkip = !isHit && !!row.promo_50off_skip
+          const promoTag = h(
+            NTag,
+            { type: isHit ? 'warning' : isSkip ? 'error' : 'default', size: 'small', bordered: false },
+            { default: () => (isHit ? '半价' : isSkip ? '非半价(已停止)' : '非半价') }
+          )
+          if (isHit) {
+            tags.push(
+              h(
+                NTooltip,
+                { trigger: 'hover' },
+                {
+                  trigger: () => promoTag,
+                  default: () => [
+                    h('div', {}, formatTimestamp(row.promo_50off_time)),
+                    row.promo_50off_info ? h('div', {}, row.promo_50off_info) : null,
+                  ],
+                }
+              )
+            )
+          } else if (row.promo_50off_last_error) {
+            tags.push(
+              h(
+                NTooltip,
+                { trigger: 'hover' },
+                {
+                  trigger: () => promoTag,
+                  default: () => [
+                    h('div', {}, `检测失败: ${formatTimestamp(row.promo_50off_check_time)}`),
+                    h('div', {}, row.promo_50off_last_error),
+                    isSkip ? h('div', {}, '已停止自动检测') : null,
+                  ],
+                }
+              )
+            )
+          } else {
+            tags.push(promoTag)
+          }
+        }
         // 未售/已售：账号单独一行，标签换行在下面一行
         if (!isAll) {
-          const tags: any[] = []
           if (row.subscription_type) {
             tags.push(
               h(
@@ -1559,23 +1817,23 @@ const columns = computed<DataTableColumns<Card>>(() => {
               )
             }
           }
-          if (tags.length > 0) {
-            return h(
-              'div',
-              {
-                style: {
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '6px',
-                  lineHeight: '1.2',
-                },
+        }
+        if (tags.length > 0) {
+          return h(
+            'div',
+            {
+              style: {
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '6px',
+                lineHeight: '1.2',
               },
-              [
-                h('div', { style: { fontWeight: 500 } }, row.account),
-                h(NSpace, { size: 6, wrap: true }, { default: () => tags }),
-              ]
-            )
-          }
+            },
+            [
+              h('div', { style: { fontWeight: 500 } }, row.account),
+              h(NSpace, { size: 6, wrap: true }, { default: () => tags }),
+            ]
+          )
         }
         return h('span', row.account)
       },
@@ -1812,8 +2070,9 @@ const columns = computed<DataTableColumns<Card>>(() => {
         )
       }
 
-      // 所有列表中，邮件接码或短信接码有地址时显示下拉
-      if (row.code_link || row.phone_link) {
+      // 所有列表中，邮件接码/短信接码有地址，或当前为 cursor 表时显示下拉（原生取件仅 cursor 表支持）
+      const supportNativeFetch = category.value === 'cursor'
+      if (row.code_link || row.phone_link || supportNativeFetch) {
         buttons.push(
           h(
             NDropdown,
@@ -1822,6 +2081,7 @@ const columns = computed<DataTableColumns<Card>>(() => {
               options: [
                 { label: '邮件接码', key: 'mail', disabled: !row.code_link },
                 { label: '短信接码', key: 'sms', disabled: !row.phone_link },
+                { label: '原生取件', key: 'native', disabled: !supportNativeFetch },
               ],
               onSelect: (key: string) => {
                 if (key === 'mail') {
@@ -1830,6 +2090,14 @@ const columns = computed<DataTableColumns<Card>>(() => {
                     return
                   }
                   window.open(`${row.code_link}/${row.account}----${row.mail_password || ''}`, '_blank')
+                  return
+                }
+                if (key === 'native') {
+                  if (!supportNativeFetch) {
+                    message.warning('仅 cursor 卡密表支持原生取件')
+                    return
+                  }
+                  handleNativeFetch(row)
                   return
                 }
                 if (!row.phone_link) {
@@ -2107,21 +2375,21 @@ const handleOpenHalfPrice = (row: Card) => {
   if (!row.token) return
   halfPriceCard.value = row
   halfPriceForm.value = {
-    uid: readCookie(HALF_PRICE_UID_COOKIE),
+    url: normalizeHalfPricePageUrl(readCookie(HALF_PRICE_UID_COOKIE)),
     tier: 'pro',
   }
   showHalfPriceModal.value = true
-  loadHalfPriceQuota(halfPriceForm.value.uid)
+  loadHalfPriceQuota(halfPriceForm.value.url)
 }
 
-const loadHalfPriceQuota = async (uid: string) => {
-  const id = uid.trim()
-  if (!id) {
+const loadHalfPriceQuota = async (raw: string) => {
+  const pageUrl = normalizeHalfPricePageUrl(raw)
+  if (!pageUrl) {
     halfPriceQuota.value = ''
     return
   }
   try {
-    const res = await getHalfPriceQuota(id)
+    const res = await getHalfPriceQuota(pageUrl)
     if (res.code === 200 && res.data) {
       halfPriceQuota.value = res.data
     } else {
@@ -2134,32 +2402,32 @@ const loadHalfPriceQuota = async (uid: string) => {
 
 let halfPriceQuotaTimer: ReturnType<typeof setTimeout> | null = null
 watch(
-  () => halfPriceForm.value.uid,
-  (uid) => {
+  () => halfPriceForm.value.url,
+  (pageUrl) => {
     if (!showHalfPriceModal.value) return
     if (halfPriceQuotaTimer) clearTimeout(halfPriceQuotaTimer)
-    halfPriceQuotaTimer = setTimeout(() => loadHalfPriceQuota(uid), 400)
+    halfPriceQuotaTimer = setTimeout(() => loadHalfPriceQuota(pageUrl), 400)
   }
 )
 
 const handleHalfPriceNext = async () => {
   const row = halfPriceCard.value
-  const uid = halfPriceForm.value.uid.trim()
+  const pageUrl = normalizeHalfPricePageUrl(halfPriceForm.value.url)
   if (!row?.token) {
     message.error('当前卡密没有 Token')
     return false
   }
-  if (!uid) {
-    message.warning('请输入 uid')
+  if (!pageUrl) {
+    message.warning('请输入活动链接')
     return false
   }
 
-  writeCookie(HALF_PRICE_UID_COOKIE, uid)
+  writeCookie(HALF_PRICE_UID_COOKIE, pageUrl)
   halfPriceLoading.value = true
   gotoProLoading.value[row.id] = true
   try {
     const response = await halfPriceCheckout({
-      uid,
+      url: pageUrl,
       token: row.token,
       tier: halfPriceForm.value.tier,
     })
@@ -2369,14 +2637,26 @@ const handleGotoProSuccess = () => {
   showGotoProSuccessModal.value = true
 }
 
+watch(showGotoProSuccessModal, (show) => {
+  if (!show) return
+  nextTick(() => {
+    window.setTimeout(() => {
+      gotoProPurchasePriceRef.value?.focus()
+    }, 80)
+  })
+})
+
 // 支付成功确认：单卡升级为成品
 const handleGotoProSuccessSubmit = async () => {
+  if (gotoProSuccessSubmitting.value) return false
+
   const subscriptionType = (upgradeForm.value.subscription_type || gotoProSubscriptionType.value || '').trim()
   if (!subscriptionType) {
     message.warning('请选择订阅类型')
     return false
   }
 
+  gotoProSuccessSubmitting.value = true
   try {
     const now = Math.floor(Date.now() / 1000)
     const subscriptionTime = upgradeForm.value.subscription_time
@@ -2408,6 +2688,8 @@ const handleGotoProSuccessSubmit = async () => {
   } catch (error: any) {
     message.error(error.response?.data?.message || '更新失败')
     return false
+  } finally {
+    gotoProSuccessSubmitting.value = false
   }
 }
 
@@ -2449,6 +2731,7 @@ const handleReset = () => {
   searchPurchaseDate.value = null
   searchFreezeStatus.value = 0
   searchFreezeTime.value = null
+  searchPromo50Off.value = 0
   pagination.value.page = 1
   loadCards()
 }
@@ -2714,7 +2997,7 @@ const handleSubmit = async () => {
 const handleCopy = async (card: Card, format: string) => {
   let text = ''
   if (format === 'digiseller') {
-    text = formatDigiseller(card)
+    text = formatDigisellerWithFallback(card)
   } else if (format === 'digiseller_auto') {
     text = formatDigisellerAuto(card)
   } else if (format === 'reverse') {
@@ -2764,7 +3047,7 @@ const getFieldValue = (card: Card, field: string): string => {
 const doDownload = (cards: Card[]) => {
   let content = ''
   if (exportFormatMode.value === 'digiseller') {
-    content = cards.map(formatDigiseller).join('\n\n')
+    content = cards.map(formatDigisellerWithFallback).join('\n\n')
   } else if (exportFormatMode.value === 'digiseller_auto') {
     content = cards.map(formatDigisellerAuto).join('\n')
   } else {
@@ -3149,10 +3432,7 @@ const handleBatchPickup = async () => {
     const fmt = batchPickupForm.value.format
     const lines = cards.map(card => {
       if (fmt === 'digiseller') {
-        if (!card.password && !card.mail_password) {
-          return `Пожалуйста, войдите в систему, используя код подтверждения, отправленный на электронную почту:\n\n${card.account}\n\nmail-login: ${card.mail_url || ''}${phoneFields(card, '\n')}\n\nПожалуйста, выполните следующие шаги заново:\n1. Введите аккаунт: ${card.account}\n2. Нажмите «Далее»\n3. Нажмите кнопку: «Email sign-in code»`
-        }
-        return formatDigiseller(card)
+        return formatDigisellerWithFallback(card)
       } else if (fmt === 'digiseller_auto') {
         return formatDigisellerAuto(card)
       } else if (fmt === 'reverse') {
@@ -3202,7 +3482,7 @@ const handlePickup = async () => {
   pickedCard.value = null
   pickupForm.value = {
     subscription_type: '',
-    format: 'digiseller' as 'digiseller' | 'domestic' | 'reverse',
+    format: 'digiseller' as 'digiseller' | 'digiseller_auto' | 'domestic' | 'reverse' | 'code_method',
   }
   completeForm.value = {
     sell_price: 20,
@@ -3412,6 +3692,7 @@ watch(
       searchPurchaseDate.value = null
       searchFreezeStatus.value = 0
       searchFreezeTime.value = null
+      searchPromo50Off.value = 0
       checkedRowKeys.value = []
       selectedCardsMap.value.clear()
 
@@ -3486,6 +3767,23 @@ onMounted(() => {
 <style scoped>
 .cards-management {
   padding: 0;
+}
+
+.native-fetch-panels {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 12px;
+}
+
+@media (max-width: 900px) {
+  .native-fetch-panels {
+    grid-template-columns: 1fr;
+  }
+}
+
+.native-fetch-card {
+  border-radius: 12px;
 }
 
 :deep(.n-card) {

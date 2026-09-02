@@ -37,6 +37,11 @@ export interface Card {
   freeze_status?: number
   freeze_time?: number
   freeze_remark?: string
+  promo_50off_time?: number
+  promo_50off_info?: string
+  promo_50off_check_time?: number
+  promo_50off_last_error?: string
+  promo_50off_skip?: number
   created_at?: string
   updated_at?: string
 }
@@ -61,6 +66,7 @@ export interface CardListParams {
   subscription_time?: string   // 订阅时间精确查询（保留兼容）
   freeze_status?: number       // 冻结状态过滤 -1未冻结 1已冻结（仅普号列表）
   freeze_time?: string         // 冻结时间筛选 YYYY-MM-DD（仅普号列表，按当天范围）
+  promo_50off?: number         // Cursor 50% off 召回邮件命中筛选：1=仅命中，不传/0=不过滤
 }
 
 // 卡密列表响应
@@ -231,6 +237,17 @@ export const getDashboardStats = (date?: string): Promise<ApiResponse<CardTypeSt
   return http.get('/admin/dashboard/stats', { params: date ? { date } : {} }) as Promise<ApiResponse<CardTypeStat[]>>
 }
 
+// cards_* 表信息
+export interface CardTableInfo {
+  table: string      // 表名，如 cards_cursor
+  category: string   // 类别名，如 cursor
+}
+
+// 获取所有 cards_* 表名（供关联下拉选择使用）
+export const getCardTableNames = (): Promise<ApiResponse<CardTableInfo[]>> => {
+  return http.get('/admin/cards/table-names') as Promise<ApiResponse<CardTableInfo[]>>
+}
+
 // 批量升级为成品请求
 export interface BatchUpgradeRequest {
   category: string
@@ -315,15 +332,15 @@ export const pollCardSubscription = (category: string, id: number): Promise<ApiR
 }
 
 export const halfPriceCheckout = (data: {
-  uid: string
+  url: string
   token: string
   tier: string
 }): Promise<ApiResponse<string>> => {
   return http.post('/admin/cards/half-price-checkout', data) as Promise<ApiResponse<string>>
 }
 
-export const getHalfPriceQuota = (uid: string): Promise<ApiResponse<string>> => {
-  return http.get('/admin/cards/half-price-quota', { params: { uid } }) as Promise<ApiResponse<string>>
+export const getHalfPriceQuota = (url: string): Promise<ApiResponse<string>> => {
+  return http.get('/admin/cards/half-price-quota', { params: { url } }) as Promise<ApiResponse<string>>
 }
 
 // 单独更新卡密备注

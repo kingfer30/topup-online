@@ -80,12 +80,14 @@ func GetCardList(c *gin.Context) {
 	freezeTimeStr := c.Query("freeze_time")
 	sellTo := strings.TrimSpace(c.Query("sell_to"))
 	purchaseBy := strings.TrimSpace(c.Query("purchase_by"))
+	promo50OffStr := c.DefaultQuery("promo_50off", "0")
 
 	page, _ := strconv.Atoi(pageStr)
 	pageSize, _ := strconv.Atoi(pageSizeStr)
 	subscriptionStatus, _ := strconv.Atoi(subscriptionStatusStr)
 	isCheck, _ := strconv.Atoi(isCheckStr)
 	freezeStatus, _ := strconv.Atoi(freezeStatusStr)
+	promo50Off, _ := strconv.Atoi(promo50OffStr)
 
 	// 将日期输入转换为当天零点 Unix 时间戳（UTC+8）
 	cst := time.FixedZone("CST", 8*3600)
@@ -130,7 +132,7 @@ func GetCardList(c *gin.Context) {
 	}
 
 	// 查询卡密列表
-	cards, total, err := model.GetCardList(tableName, cardType, page, pageSize, accounts, subscriptionType, subscriptionStatus, isCheck, purchaseDate, freezeStatus, freezeTime, sellTo, purchaseBy)
+	cards, total, err := model.GetCardList(tableName, cardType, page, pageSize, accounts, subscriptionType, subscriptionStatus, isCheck, purchaseDate, freezeStatus, freezeTime, sellTo, purchaseBy, promo50Off)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"code":    500,
@@ -551,6 +553,38 @@ func BatchImportCards(c *gin.Context) {
 	})
 }
 
+// CardTableInfo 卡密表信息（表名 + 类别名）
+type CardTableInfo struct {
+	Table    string `json:"table"`
+	Category string `json:"category"`
+}
+
+// GetCardTableNames 获取所有 cards_* 表名（供关联下拉选择使用）
+func GetCardTableNames(c *gin.Context) {
+	tables, err := model.GetAllCardTableNames()
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"code":    500,
+			"message": "获取表列表失败: " + err.Error(),
+		})
+		return
+	}
+
+	list := make([]CardTableInfo, 0, len(tables))
+	for _, t := range tables {
+		list = append(list, CardTableInfo{
+			Table:    t,
+			Category: strings.TrimPrefix(t, "cards_"),
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    200,
+		"message": "获取成功",
+		"data":    list,
+	})
+}
+
 // GetUnsoldSubscriptionTypes 获取未售出的订阅类型列表
 func GetUnsoldSubscriptionTypes(c *gin.Context) {
 	category := c.Query("category")
@@ -884,6 +918,7 @@ func ExportCards(c *gin.Context) {
 	purchaseBy := strings.TrimSpace(c.Query("purchase_by"))
 	subscriptionStatus, _ := strconv.Atoi(subscriptionStatusStr)
 	isCheck, _ := strconv.Atoi(isCheckStr)
+	promo50Off, _ := strconv.Atoi(c.DefaultQuery("promo_50off", "0"))
 
 	// purchase_date / freeze_time：统一解析到当天零点（UTC+8）
 	cst := time.FixedZone("CST", 8*3600)
@@ -915,7 +950,7 @@ func ExportCards(c *gin.Context) {
 		return
 	}
 
-	cards, err := model.GetAllCardsForExport(tableName, cardType, accounts, subscriptionType, subscriptionStatus, isCheck, purchaseDate, exportFreezeStatus, freezeTime, sellTo, purchaseBy)
+	cards, err := model.GetAllCardsForExport(tableName, cardType, accounts, subscriptionType, subscriptionStatus, isCheck, purchaseDate, exportFreezeStatus, freezeTime, sellTo, purchaseBy, promo50Off)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{"code": 500, "message": "导出失败: " + err.Error()})
 		return

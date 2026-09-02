@@ -196,24 +196,57 @@ func DeleteMicrosoftMail(c *gin.Context) {
 // BatchImportMicrosoftMails 批量导入
 func BatchImportMicrosoftMails(c *gin.Context) {
 	var req struct {
-		Mails []MicrosoftMailRequest `json:"mails" binding:"required"`
+		Mails            []MicrosoftMailRequest `json:"mails" binding:"required"`
+		AccountCardTable string                 `json:"account_card_table"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusOK, gin.H{"code": 400, "message": "参数错误: " + err.Error()})
 		return
 	}
+	cardTable := strings.TrimSpace(req.AccountCardTable)
+	matched := 0
 	mails := make([]model.MicrosoftMail, 0, len(req.Mails))
 	for _, item := range req.Mails {
 		if strings.TrimSpace(item.Account) == "" {
 			continue
 		}
-		mails = append(mails, toMicrosoftMail(item))
+		mail := toMicrosoftMail(item)
+		if cardTable != "" {
+			mail.AccountCardId = nil
+			mail.AccountCardTable = ""
+			if id, ok, err := model.FindCardIdByAccount(cardTable, mail.Account); err == nil && ok {
+				mail.AccountCardId = &id
+				mail.AccountCardTable = cardTable
+				matched++
+			}
+		}
+		mails = append(mails, mail)
 	}
 	if err := model.BatchCreateMicrosoftMails(mails); err != nil {
 		c.JSON(http.StatusOK, gin.H{"code": 500, "message": "批量导入失败: " + err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"code": 200, "message": "批量导入成功"})
+	msg := "批量导入成功"
+	if cardTable != "" {
+		msg = fmt.Sprintf("批量导入成功，成功关联 %d 条卡密记录", matched)
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 200, "message": msg})
+}
+
+// GetMicrosoftMailByCard 根据所属卡密表+ID 查询关联的微软邮箱记录
+func GetMicrosoftMailByCard(c *gin.Context) {
+	table := strings.TrimSpace(c.Query("table"))
+	cardId, _ := strconv.Atoi(c.Query("card_id"))
+	if table == "" || cardId == 0 {
+		c.JSON(http.StatusOK, gin.H{"code": 400, "message": "参数错误"})
+		return
+	}
+	mail, err := model.GetMicrosoftMailByCard(table, cardId)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"code": 404, "message": "未找到关联的微软邮箱记录"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 200, "message": "获取成功", "data": mail})
 }
 
 // ExportMicrosoftMails 导出

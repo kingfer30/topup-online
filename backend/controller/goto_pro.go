@@ -14,6 +14,8 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/kingfer30/topup-online/model"
+	"github.com/kingfer30/topup-online/utils/client"
 )
 
 // GotoProRequest 提链请求
@@ -55,11 +57,11 @@ func GotoPro(c *gin.Context) {
 
 	// 通用请求头
 	commonHeaders := map[string]string{
-		"accept-language": "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7,en-GB;q=0.6",
-		"cache-control":   "no-cache",
-		"pragma":          "no-cache",
-		"user-agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0",
-		"sec-ch-ua":       `"Not:A-Brand";v="99", "Microsoft Edge";v="145", "Chromium";v="145"`,
+		"accept-language":    "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7,en-GB;q=0.6",
+		"cache-control":      "no-cache",
+		"pragma":             "no-cache",
+		"user-agent":         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0",
+		"sec-ch-ua":          `"Not:A-Brand";v="99", "Microsoft Edge";v="145", "Chromium";v="145"`,
 		"sec-ch-ua-mobile":   "?0",
 		"sec-ch-ua-platform": `"Windows"`,
 	}
@@ -72,72 +74,72 @@ func GotoPro(c *gin.Context) {
 		{
 			url: "https://js.stripe.com/basil/stripe.js",
 			headers: map[string]string{
-				"accept":               "*/*",
-				"referer":              "https://cursor.com/",
-				"sec-fetch-dest":       "script",
-				"sec-fetch-mode":       "no-cors",
-				"sec-fetch-site":       "cross-site",
+				"accept":                   "*/*",
+				"referer":                  "https://cursor.com/",
+				"sec-fetch-dest":           "script",
+				"sec-fetch-mode":           "no-cors",
+				"sec-fetch-site":           "cross-site",
 				"sec-fetch-storage-access": "none",
 			},
 		},
 		{
 			url: "https://js.stripe.com/v3/controller-with-preconnect-562954400a1d5ed269a33dd401040ace.html",
 			headers: map[string]string{
-				"accept":               "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
-				"referer":              "https://cursor.com/",
-				"priority":             "u=0, i",
-				"sec-fetch-dest":       "iframe",
-				"sec-fetch-mode":       "navigate",
-				"sec-fetch-site":       "cross-site",
-				"sec-fetch-storage-access": "none",
-				"sec-fetch-user":       "?1",
+				"accept":                    "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+				"referer":                   "https://cursor.com/",
+				"priority":                  "u=0, i",
+				"sec-fetch-dest":            "iframe",
+				"sec-fetch-mode":            "navigate",
+				"sec-fetch-site":            "cross-site",
+				"sec-fetch-storage-access":  "none",
+				"sec-fetch-user":            "?1",
 				"upgrade-insecure-requests": "1",
 			},
 		},
 		{
 			url: "https://js.stripe.com/v3/m-outer-3437aaddcdf6922d623e172c2d6f9278.html",
 			headers: map[string]string{
-				"accept":               "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
-				"referer":              "https://cursor.com/",
-				"priority":             "u=0, i",
-				"sec-fetch-dest":       "iframe",
-				"sec-fetch-mode":       "navigate",
-				"sec-fetch-site":       "cross-site",
-				"sec-fetch-storage-access": "none",
-				"sec-fetch-user":       "?1",
+				"accept":                    "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+				"referer":                   "https://cursor.com/",
+				"priority":                  "u=0, i",
+				"sec-fetch-dest":            "iframe",
+				"sec-fetch-mode":            "navigate",
+				"sec-fetch-site":            "cross-site",
+				"sec-fetch-storage-access":  "none",
+				"sec-fetch-user":            "?1",
 				"upgrade-insecure-requests": "1",
 			},
 		},
 		{
 			url: "https://js.stripe.com/v3/fingerprinted/js/shared-9a246c2de00bc656633679d45127b572.js",
 			headers: map[string]string{
-				"accept":               "*/*",
-				"referer":              "https://js.stripe.com/v3/controller-with-preconnect-562954400a1d5ed269a33dd401040ace.html",
-				"sec-fetch-dest":       "script",
-				"sec-fetch-mode":       "no-cors",
-				"sec-fetch-site":       "same-origin",
+				"accept":                   "*/*",
+				"referer":                  "https://js.stripe.com/v3/controller-with-preconnect-562954400a1d5ed269a33dd401040ace.html",
+				"sec-fetch-dest":           "script",
+				"sec-fetch-mode":           "no-cors",
+				"sec-fetch-site":           "same-origin",
 				"sec-fetch-storage-access": "none",
 			},
 		},
 		{
 			url: "https://js.stripe.com/v3/fingerprinted/js/controller-with-preconnect-01e2ee01eaf8224dfc7590fb8fc67129.js",
 			headers: map[string]string{
-				"accept":               "*/*",
-				"referer":              "https://js.stripe.com/v3/controller-with-preconnect-562954400a1d5ed269a33dd401040ace.html",
-				"sec-fetch-dest":       "script",
-				"sec-fetch-mode":       "no-cors",
-				"sec-fetch-site":       "same-origin",
+				"accept":                   "*/*",
+				"referer":                  "https://js.stripe.com/v3/controller-with-preconnect-562954400a1d5ed269a33dd401040ace.html",
+				"sec-fetch-dest":           "script",
+				"sec-fetch-mode":           "no-cors",
+				"sec-fetch-site":           "same-origin",
 				"sec-fetch-storage-access": "none",
 			},
 		},
 		{
 			url: "https://js.stripe.com/v3/fingerprinted/js/m-outer-15a2b40a058ddff1cffdb63779fe3de1.js",
 			headers: map[string]string{
-				"accept":               "*/*",
-				"referer":              "https://js.stripe.com/v3/m-outer-3437aaddcdf6922d623e172c2d6f9278.html",
-				"sec-fetch-dest":       "script",
-				"sec-fetch-mode":       "no-cors",
-				"sec-fetch-site":       "same-origin",
+				"accept":                   "*/*",
+				"referer":                  "https://js.stripe.com/v3/m-outer-3437aaddcdf6922d623e172c2d6f9278.html",
+				"sec-fetch-dest":           "script",
+				"sec-fetch-mode":           "no-cors",
+				"sec-fetch-site":           "same-origin",
 				"sec-fetch-storage-access": "none",
 			},
 		},
@@ -243,9 +245,39 @@ func GotoPro(c *gin.Context) {
 const halfPriceCheckoutBase = "https://cursor.120.hk"
 
 type HalfPriceCheckoutRequest struct {
-	UID   string `json:"uid" binding:"required"`
+	URL   string `json:"url"`
+	UID   string `json:"uid"`
 	Token string `json:"token" binding:"required"`
 	Tier  string `json:"tier" binding:"required"`
+}
+
+type halfPricePage struct {
+	PageURL string
+	Origin  string
+	UID     string
+}
+
+func parseHalfPricePage(raw string) (*halfPricePage, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil, fmt.Errorf("请输入活动链接")
+	}
+	if !strings.Contains(raw, "://") {
+		raw = halfPriceCheckoutBase + "?uid=" + url.QueryEscape(raw)
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
+		return nil, fmt.Errorf("活动链接格式不正确")
+	}
+	uid := strings.TrimSpace(u.Query().Get("uid"))
+	if uid == "" {
+		return nil, fmt.Errorf("链接中未找到 uid")
+	}
+	return &halfPricePage{
+		PageURL: raw,
+		Origin:  u.Scheme + "://" + u.Host,
+		UID:     uid,
+	}, nil
 }
 
 type halfPriceAPIResp struct {
@@ -273,7 +305,24 @@ func normalizeWorkosCookie(raw string) string {
 	return key + token
 }
 
-func postHalfPriceForm(client *http.Client, apiPath string, fields map[string]string) (*halfPriceAPIResp, error) {
+func halfPriceHTTPClient(timeout time.Duration) *http.Client {
+	transport := &http.Transport{
+		Proxy: http.ProxyFromEnvironment,
+	}
+	if proxyURL := model.GetCursorPayProxyURL(); proxyURL != nil {
+		transport.Proxy = http.ProxyURL(proxyURL)
+	} else if client.HTTPClient != nil {
+		if t, ok := client.HTTPClient.Transport.(*http.Transport); ok && t != nil && t.Proxy != nil {
+			transport.Proxy = t.Proxy
+		}
+	}
+	return &http.Client{
+		Timeout:   timeout,
+		Transport: transport,
+	}
+}
+
+func postHalfPriceForm(httpClient *http.Client, page *halfPricePage, apiPath string, fields map[string]string) (*halfPriceAPIResp, error) {
 	var buf bytes.Buffer
 	writer := multipart.NewWriter(&buf)
 	for k, v := range fields {
@@ -285,17 +334,17 @@ func postHalfPriceForm(client *http.Client, apiPath string, fields map[string]st
 		return nil, err
 	}
 
-	req, err := http.NewRequest(http.MethodPost, halfPriceCheckoutBase+apiPath, &buf)
+	req, err := http.NewRequest(http.MethodPost, page.Origin+apiPath, &buf)
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	req.Header.Set("Accept", "application/json, text/plain, */*")
-	req.Header.Set("Origin", halfPriceCheckoutBase)
-	req.Header.Set("Referer", halfPriceCheckoutBase+"/?uid="+url.QueryEscape(fields["uid"]))
+	req.Header.Set("Origin", page.Origin)
+	req.Header.Set("Referer", page.PageURL)
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36")
 
-	resp, err := client.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -324,12 +373,17 @@ func HalfPriceCheckout(c *gin.Context) {
 		return
 	}
 
-	uid := strings.TrimSpace(req.UID)
-	tier := strings.TrimSpace(req.Tier)
-	if uid == "" {
-		c.JSON(http.StatusOK, gin.H{"code": 400, "message": "请输入 uid"})
+	pageRaw := strings.TrimSpace(req.URL)
+	if pageRaw == "" {
+		pageRaw = strings.TrimSpace(req.UID)
+	}
+	page, err := parseHalfPricePage(pageRaw)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"code": 400, "message": err.Error()})
 		return
 	}
+	uid := page.UID
+	tier := strings.TrimSpace(req.Tier)
 	switch tier {
 	case "pro", "pro_plus", "ultra":
 	default:
@@ -343,9 +397,9 @@ func HalfPriceCheckout(c *gin.Context) {
 		return
 	}
 
-	client := &http.Client{Timeout: 90 * time.Second}
+	httpClient := halfPriceHTTPClient(90 * time.Second)
 
-	pre, err := postHalfPriceForm(client, "/api/precheck", map[string]string{
+	pre, err := postHalfPriceForm(httpClient, page, "/api/precheck", map[string]string{
 		"uid":    uid,
 		"cookie": cookie,
 	})
@@ -380,7 +434,7 @@ func HalfPriceCheckout(c *gin.Context) {
 		return
 	}
 
-	result, err := postHalfPriceForm(client, "/api/checkout", map[string]string{
+	result, err := postHalfPriceForm(httpClient, page, "/api/checkout", map[string]string{
 		"uid":    uid,
 		"cookie": cookie,
 		"tier":   tier,
@@ -426,19 +480,19 @@ func extractHalfPriceQuota(html string) string {
 	return ""
 }
 
-func fetchHalfPriceQuota(uid string) string {
-	uid = strings.TrimSpace(uid)
-	if uid == "" {
+func fetchHalfPriceQuota(raw string) string {
+	page, err := parseHalfPricePage(raw)
+	if err != nil {
 		return ""
 	}
-	client := &http.Client{Timeout: 20 * time.Second}
-	req, err := http.NewRequest(http.MethodGet, halfPriceCheckoutBase+"/?uid="+url.QueryEscape(uid), nil)
+	httpClient := halfPriceHTTPClient(20 * time.Second)
+	req, err := http.NewRequest(http.MethodGet, page.PageURL, nil)
 	if err != nil {
 		return ""
 	}
 	req.Header.Set("Accept", "text/html,application/xhtml+xml")
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36")
-	resp, err := client.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return ""
 	}
@@ -452,12 +506,19 @@ func fetchHalfPriceQuota(uid string) string {
 
 // GetHalfPriceQuota 抓取活动页 nav-pill 中的已提交 xx/xx
 func GetHalfPriceQuota(c *gin.Context) {
-	uid := strings.TrimSpace(c.Query("uid"))
-	if uid == "" {
-		c.JSON(http.StatusOK, gin.H{"code": 400, "message": "请输入 uid"})
+	raw := strings.TrimSpace(c.Query("url"))
+	if raw == "" {
+		raw = strings.TrimSpace(c.Query("uid"))
+	}
+	if raw == "" {
+		c.JSON(http.StatusOK, gin.H{"code": 400, "message": "请输入活动链接"})
 		return
 	}
-	quota := fetchHalfPriceQuota(uid)
+	if _, err := parseHalfPricePage(raw); err != nil {
+		c.JSON(http.StatusOK, gin.H{"code": 400, "message": err.Error()})
+		return
+	}
+	quota := fetchHalfPriceQuota(raw)
 	if quota == "" {
 		c.JSON(http.StatusOK, gin.H{"code": 400, "message": "未能读取活动余量"})
 		return

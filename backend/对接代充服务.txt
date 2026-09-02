@@ -1,0 +1,59 @@
+## ChatGPT 通道 API 对接文档
+接口地址：https://kkk.ow800.com/
+### 1. 验证卡密
+```
+POST /api/cards/verify
+Body: { cardInfo: string }
+```
+### 2. 通道一：验证卡密充值
+```
+POST /api/cards/verify-gpt
+Body: {
+  cardInfo: string,        // 卡密
+  userEmail: string,       // 用户邮箱
+  userGptToken: string,   // GPT token
+  fullAuthData: string,    // 完整认证数据JSON
+  productId?: number       // 商品ID（GPT默认 3，GPT_VIP通道 9）
+}
+```
+### 3. 查询充值任务状态
+```
+POST /api/recharge/query-task-status
+Body: {
+  taskId: string,          // 任务ID
+  productId: number,       // 产品ID（默认3，GPT_VIP通道 9）
+  cardInfo?: string        // 卡密（可选）
+}
+```
+```
+响应示例 - verify-gpt：
+
+```
+{
+  "code": 200,
+  "success": true,
+  "data": {
+    "taskId": "21a94a97-2690-43fc-8c9d-7649e445ee17",
+    "processing": true,
+    "needsPolling": true,
+    "usageId": null,
+    "cardId": 44275,
+    "success": true,
+    "message": "任务已提交，正在处理中"
+  }
+}
+```
+响应示例 - query-task-status：
+
+```
+{
+  "code": 200,
+  "success": true,
+  "data": {
+    "status": "success",  // success | processing | failed
+    "success": true,
+    "message": "充值成功"
+  }
+
+```
+

@@ -86,6 +86,67 @@
             </n-form>
           </n-tab-pane>
 
+          <n-tab-pane name="cursor-pay" tab="Cursor付款设置">
+            <n-form
+              ref="cursorPayFormRef"
+              :model="cursorPaySettings"
+              label-placement="left"
+              label-width="120px"
+              class="max-w-2xl"
+            >
+              <n-text depth="3" style="font-size: 13px; display: block; margin-bottom: 16px">
+                用于自动提交 Stripe 结账并提取支付宝付款页。
+              </n-text>
+              <n-form-item label="账单姓名">
+                <n-input v-model:value="cursorPaySettings.billing_name" placeholder="例如 AIGuoGuo" />
+              </n-form-item>
+              <n-form-item label="账单邮编">
+                <n-input v-model:value="cursorPaySettings.billing_postal" placeholder="例如 536546" />
+              </n-form-item>
+              <n-form-item label="账单省份">
+                <n-input v-model:value="cursorPaySettings.billing_state" placeholder="例如 Zhejiang" />
+              </n-form-item>
+              <n-form-item label="账单城市">
+                <n-input v-model:value="cursorPaySettings.billing_city" placeholder="例如 Huzhou" />
+              </n-form-item>
+              <n-form-item label="账单地址">
+                <n-input v-model:value="cursorPaySettings.billing_line1" placeholder="例如 清河路177号" />
+              </n-form-item>
+              <n-form-item label="账单国家">
+                <n-input v-model:value="cursorPaySettings.billing_country" placeholder="例如 CN" />
+              </n-form-item>
+              <n-form-item label="代理协议">
+                <n-select
+                  v-model:value="cursorPaySettings.proxy_scheme"
+                  :options="cursorPayProxySchemeOptions"
+                  style="width: 160px"
+                />
+              </n-form-item>
+              <n-form-item label="代理主机">
+                <n-input v-model:value="cursorPaySettings.proxy_host" placeholder="例如 hk.stormip.cn:1000" />
+              </n-form-item>
+              <n-form-item label="代理用户名">
+                <n-input v-model:value="cursorPaySettings.proxy_username" placeholder="例如 abc" />
+              </n-form-item>
+              <n-form-item label="代理密码">
+                <n-input
+                  v-model:value="cursorPaySettings.proxy_password"
+                  type="password"
+                  show-password-on="click"
+                  :placeholder="cursorPaySettings.proxy_password_configured ? '已配置，留空则不修改' : '留空表示无密码'"
+                />
+              </n-form-item>
+              <n-form-item>
+                <n-space vertical :size="8">
+                  <n-text depth="3" style="font-size: 12px">
+                    代理只用于提取 Stripe / Alipay 付款页。分开填写主机、账号、密码更方便，保存时由后端组装。主机留空则走系统环境代理。
+                  </n-text>
+                  <n-button type="primary" :loading="cursorPaySaving" @click="handleSaveCursorPay">保存 Cursor 付款设置</n-button>
+                </n-space>
+              </n-form-item>
+            </n-form>
+          </n-tab-pane>
+
           <n-tab-pane name="payment" tab="支付设置">
             <n-form
               ref="paymentFormRef"
@@ -267,6 +328,7 @@ import {
   NFormItem,
   NInput,
   NInputNumber,
+  NSelect,
   NSwitch,
   NCheckboxGroup,
   NCheckbox,
@@ -282,6 +344,7 @@ import {
 } from 'naive-ui'
 import { getDigisellerPrices, upsertDigisellerPrice } from '@/api/digiseller'
 import { getAdminAISettings, updateAdminAISettings } from '@/api/ai'
+import { getAdminCursorPaySettings, updateAdminCursorPaySettings } from '@/api/cursorPay'
 import { getAdminSessions, kickSession, kickAllSessions, type AdminSession } from '@/api/admin'
 
 const router = useRouter()
@@ -295,6 +358,27 @@ const aiSettings = ref({
   model_name: '',
   base_url: '',
   api_key: '',
+})
+
+const cursorPayFormRef = ref()
+const cursorPaySaving = ref(false)
+const cursorPayProxySchemeOptions = [
+  { label: 'HTTP', value: 'http' },
+  { label: 'HTTPS', value: 'https' },
+  { label: 'SOCKS5', value: 'socks5' },
+]
+const cursorPaySettings = ref({
+  billing_name: '',
+  billing_postal: '',
+  billing_state: '',
+  billing_city: '',
+  billing_line1: '',
+  billing_country: '',
+  proxy_scheme: 'http',
+  proxy_host: '',
+  proxy_username: '',
+  proxy_password: '',
+  proxy_password_configured: false,
 })
 
 const basicFormRef = ref()
@@ -358,6 +442,58 @@ const handleSaveAI = async () => {
     message.error('保存失败')
   } finally {
     aiSaving.value = false
+  }
+}
+
+const loadCursorPaySettings = async () => {
+  try {
+    const res = await getAdminCursorPaySettings()
+    if (res.code === 200 && res.data) {
+      cursorPaySettings.value = {
+        billing_name: res.data.billing_name || '',
+        billing_postal: res.data.billing_postal || '',
+        billing_state: res.data.billing_state || '',
+        billing_city: res.data.billing_city || '',
+        billing_line1: res.data.billing_line1 || '',
+        billing_country: res.data.billing_country || '',
+        proxy_scheme: res.data.proxy_scheme || 'http',
+        proxy_host: res.data.proxy_host || '',
+        proxy_username: res.data.proxy_username || '',
+        proxy_password: '',
+        proxy_password_configured: !!res.data.proxy_password_configured,
+      }
+    }
+  } catch {
+    message.error('加载 Cursor 付款配置失败')
+  }
+}
+
+const handleSaveCursorPay = async () => {
+  cursorPaySaving.value = true
+  try {
+    const res = await updateAdminCursorPaySettings({
+      billing_name: cursorPaySettings.value.billing_name,
+      billing_postal: cursorPaySettings.value.billing_postal,
+      billing_state: cursorPaySettings.value.billing_state,
+      billing_city: cursorPaySettings.value.billing_city,
+      billing_line1: cursorPaySettings.value.billing_line1,
+      billing_country: cursorPaySettings.value.billing_country,
+      proxy_scheme: cursorPaySettings.value.proxy_scheme,
+      proxy_host: cursorPaySettings.value.proxy_host,
+      proxy_username: cursorPaySettings.value.proxy_username,
+      proxy_password: cursorPaySettings.value.proxy_password,
+    })
+    if (res.code === 200) {
+      message.success('Cursor 付款设置已保存')
+      cursorPaySettings.value.proxy_password = ''
+      await loadCursorPaySettings()
+    } else {
+      message.error(res.message || '保存失败')
+    }
+  } catch {
+    message.error('保存失败')
+  } finally {
+    cursorPaySaving.value = false
   }
 }
 
@@ -525,6 +661,7 @@ const sessionColumns: DataTableColumns<AdminSession> = [
 onMounted(() => {
   loadDigisellerPrices()
   loadAISettings()
+  loadCursorPaySettings()
   loadSessions()
 })
 </script>

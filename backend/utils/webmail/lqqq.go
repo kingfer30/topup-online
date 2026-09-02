@@ -14,20 +14,20 @@ import (
 const lqqqBaseURL = "https://ms.lqqq.cc/web/"
 
 var (
-	lqqqSubjectRe       = regexp.MustCompile(`(?is)<div\s+class=["']email-subject["'][^>]*>(.*?)</div>`)
-	lqqqDateRe          = regexp.MustCompile(`(?is)<(?:div|time)\s+class=["']email-date["'][^>]*>([^<]*)</(?:div|time)>`)
-	lqqqCardRe          = regexp.MustCompile(`(?is)<article\s+class=["'][^"']*email-row[^"']*["'][^>]*>`)
-	lqqqPanelRe         = regexp.MustCompile(`(?is)<div\s+class=["']mail-panel["']`)
-	lqqqTitleRe         = regexp.MustCompile(`(?is)<div\s+class=["']mail-panel-header["'][^>]*>.*?<h1[^>]*>([^<]*)</h1>`)
-	lqqqViewOpenRe      = regexp.MustCompile(`(?is)<a\b[^>]*\bemail-open\b[^>]*>`)
-	lqqqViewHrefRe      = regexp.MustCompile(`(?is)href=["'](/?[^"']*show_email[^"']*)["']`)
-	lqqqHrefAttrRe      = regexp.MustCompile(`(?is)href=["']([^"']+)["']`)
-	lqqqHTMLTagRe       = regexp.MustCompile(`(?s)<[^>]*>`)
-	lqqqDetailIframeRe  = regexp.MustCompile(`(?is)<iframe[^>]*\bmessage-body\b[^>]*\ssrcdoc=["'](.*?)["']`)
-	lqqqPreheaderRe     = regexp.MustCompile(`(?is)<div\s+class=["']preheader["'][^>]*>([^<]*)</div>`)
-	lqqqH1Re            = regexp.MustCompile(`(?is)<h1[^>]*>\s*(\d{6})\s*</h1>`)
-	lqqqHeadRe          = regexp.MustCompile(`(?is)<head[^>]*>.*?</head>`)
-	lqqqCodePatterns = []*regexp.Regexp{
+	lqqqSubjectRe      = regexp.MustCompile(`(?is)<div\s+class=["']email-subject["'][^>]*>(.*?)</div>`)
+	lqqqDateRe         = regexp.MustCompile(`(?is)<(?:div|time)\s+class=["']email-date["'][^>]*>([^<]*)</(?:div|time)>`)
+	lqqqCardRe         = regexp.MustCompile(`(?is)<article\s+class=["'][^"']*email-row[^"']*["'][^>]*>`)
+	lqqqPanelRe        = regexp.MustCompile(`(?is)<div\s+class=["']mail-panel["']`)
+	lqqqTitleRe        = regexp.MustCompile(`(?is)<div\s+class=["']mail-panel-header["'][^>]*>.*?<h1[^>]*>([^<]*)</h1>`)
+	lqqqViewOpenRe     = regexp.MustCompile(`(?is)<a\b[^>]*\bemail-open\b[^>]*>`)
+	lqqqViewHrefRe     = regexp.MustCompile(`(?is)href=["'](/?[^"']*show_email[^"']*)["']`)
+	lqqqHrefAttrRe     = regexp.MustCompile(`(?is)href=["']([^"']+)["']`)
+	lqqqHTMLTagRe      = regexp.MustCompile(`(?s)<[^>]*>`)
+	lqqqDetailIframeRe = regexp.MustCompile(`(?is)<iframe[^>]*\bmessage-body\b[^>]*\ssrcdoc=["'](.*?)["']`)
+	lqqqPreheaderRe    = regexp.MustCompile(`(?is)<div\s+class=["']preheader["'][^>]*>([^<]*)</div>`)
+	lqqqH1Re           = regexp.MustCompile(`(?is)<h1[^>]*>\s*(\d{6})\s*</h1>`)
+	lqqqHeadRe         = regexp.MustCompile(`(?is)<head[^>]*>.*?</head>`)
+	lqqqCodePatterns   = []*regexp.Regexp{
 		regexp.MustCompile(`(?i)verification code to continue:\s*(\d{6})`),
 		regexp.MustCompile(`(?i)temporary openai login code\s*(?:is\s*)?[:\s]*(\d{6})`),
 		regexp.MustCompile(`(?i)temporary chatgpt verification code\s*(?:is\s*)?[:\s]*(\d{6})`),

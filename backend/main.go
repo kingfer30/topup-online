@@ -101,6 +101,14 @@ func main() {
 			msMailCheckScheduler.Start()
 			logger.SysLog("MicrosoftMail Check Scheduler started successfully")
 		}
+
+		// 启动 cards_cursor 表 "Cursor 50% off" 召回邮件检测任务（每 360 分钟即 6 小时执行一次）
+		if os.Getenv("PROMO_MAIL_CHECK_DISABLE") != "true" {
+			logger.SysLog("Starting PromoMail Check Scheduler...")
+			promoMailCheckScheduler := scheduler.NewPromoMailCheckScheduler(360)
+			promoMailCheckScheduler.Start()
+			logger.SysLog("PromoMail Check Scheduler started successfully")
+		}
 	} else {
 		logger.SysLog("System not initialized yet, waiting for initialization...")
 	}

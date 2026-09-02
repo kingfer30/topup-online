@@ -10,6 +10,24 @@ const (
 	KeyAIModelName = "ai_model_name"
 	KeyAIBaseURL   = "ai_base_url"
 	KeyAIAPIKey    = "ai_api_key"
+
+	KeyCursorPayBillingName    = "cursor_pay_billing_name"
+	KeyCursorPayBillingPostal  = "cursor_pay_billing_postal"
+	KeyCursorPayBillingState   = "cursor_pay_billing_state"
+	KeyCursorPayBillingCity    = "cursor_pay_billing_city"
+	KeyCursorPayBillingLine1   = "cursor_pay_billing_line1"
+	KeyCursorPayBillingCountry = "cursor_pay_billing_country"
+	KeyCursorPayProxyScheme    = "cursor_pay_proxy_scheme"
+	KeyCursorPayProxyHost      = "cursor_pay_proxy_host"
+	KeyCursorPayProxyUsername  = "cursor_pay_proxy_username"
+	KeyCursorPayProxyPassword  = "cursor_pay_proxy_password"
+
+	DefaultCursorPayBillingName    = "AIGuoGuo"
+	DefaultCursorPayBillingPostal  = "536546"
+	DefaultCursorPayBillingState   = "Zhejiang"
+	DefaultCursorPayBillingCity    = "Huzhou"
+	DefaultCursorPayBillingLine1   = "清河路177号"
+	DefaultCursorPayBillingCountry = "CN"
 )
 
 // GetSystemConfigValue 按 key 读取配置值，不存在则返回空字符串

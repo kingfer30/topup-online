@@ -255,20 +255,14 @@
                   :disabled="batchImportLoading"
                 />
               </n-form-item-gi>
-              <n-form-item-gi label="所属卡密表">
-                <n-input
+              <n-form-item-gi label="关联卡密表" :span="2">
+                <n-select
                   v-model:value="batchConfig.account_card_table"
-                  placeholder="如 cards_cursor"
-                  :disabled="batchImportLoading"
-                />
-              </n-form-item-gi>
-              <n-form-item-gi label="所属卡密ID">
-                <n-input-number
-                  v-model:value="batchConfig.account_card_id"
-                  :min="0"
-                  placeholder="选填"
-                  style="width: 100%"
+                  :options="cardTableOptions"
+                  placeholder="选择要关联的卡密表（选填，按账号自动匹配）"
                   clearable
+                  filterable
+                  :loading="cardTableOptionsLoading"
                   :disabled="batchImportLoading"
                 />
               </n-form-item-gi>
@@ -518,6 +512,7 @@ import {
   type MicrosoftMail,
   type MicrosoftMailRequest,
 } from '@/api/microsoft-mail'
+import { getCardTableNames } from '@/api/card'
 
 const route = useRoute()
 const message = useMessage()
@@ -1106,8 +1101,7 @@ const batchConfig = ref({
   purchase_date: undefined as number | undefined,
   mail_url: 'https://login.live.com',
   sell_status: 1,
-  account_card_id: null as number | null,
-  account_card_table: '',
+  account_card_table: '' as string | null,
   remark: '',
   field_mapping: {
     account: 1,
@@ -1117,6 +1111,26 @@ const batchConfig = ref({
     '2fa': 0,
   },
 })
+
+// 关联卡密表下拉选项（cards_*）
+const cardTableOptions = ref<{ label: string; value: string }[]>([])
+const cardTableOptionsLoading = ref(false)
+const loadCardTableOptions = async () => {
+  cardTableOptionsLoading.value = true
+  try {
+    const res = await getCardTableNames()
+    if (res.code === 200 && res.data) {
+      cardTableOptions.value = res.data.map((item) => ({
+        label: `${item.category}（${item.table}）`,
+        value: item.table,
+      }))
+    }
+  } catch {
+    // 静默失败，不影响批量导入本身
+  } finally {
+    cardTableOptionsLoading.value = false
+  }
+}
 
 const handleBatchImport = () => {
   if (batchImportLoading.value) return
@@ -1129,12 +1143,14 @@ const handleBatchImport = () => {
     purchase_date: undefined,
     mail_url: 'https://login.live.com',
     sell_status: 1,
-    account_card_id: null,
     account_card_table: '',
     remark: '',
     field_mapping: currentMapping,
   }
   showBatchModal.value = true
+  if (cardTableOptions.value.length === 0) {
+    loadCardTableOptions()
+  }
 }
 
 const handleBatchCancel = () => !batchImportLoading.value
@@ -1189,8 +1205,6 @@ const handleBatchSubmit = async () => {
         status: 1,
         mail_url: batchConfig.value.mail_url || undefined,
         remark: batchConfig.value.remark || undefined,
-        account_card_id: batchConfig.value.account_card_id,
-        account_card_table: batchConfig.value.account_card_table || undefined,
       })
     }
 
@@ -1200,7 +1214,7 @@ const handleBatchSubmit = async () => {
     }
 
     batchImportLoading.value = true
-    const res = await batchImportMicrosoftMails(mails)
+    const res = await batchImportMicrosoftMails(mails, batchConfig.value.account_card_table || undefined)
     if (res.code === 200) {
       message.success(`成功导入 ${mails.length} 条数据`)
       batchImportText.value = ''

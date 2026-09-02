@@ -1,0 +1,815 @@
+1. payment_methods
+
+fetch("https://api.stripe.com/v1/payment_methods", {
+  "headers": {
+    "accept": "application/json",
+    "accept-language": "en-US,en;q=0.9",
+    "cache-control": "no-cache",
+    "content-type": "application/x-www-form-urlencoded",
+    "pragma": "no-cache",
+    "priority": "u=1, i",
+    "sec-ch-ua": "\"Not;A=Brand\";v=\"8\", \"Chromium\";v=\"150\", \"Google Chrome\";v=\"150\"",
+    "sec-ch-ua-mobile": "?0",
+    "sec-ch-ua-platform": "\"Windows\"",
+    "sec-fetch-dest": "empty",
+    "sec-fetch-mode": "cors",
+    "sec-fetch-site": "same-site",
+    "Referer": "https://checkout.stripe.com/"
+  },
+  "body": "type=alipay&billing_details[name]=aiguoguo&billing_details[email]=websterwilliamsonrsot%40outlook.com&billing_details[address][country]=CN&billing_details[address][line1]=%E6%B8%85%E6%B2%B3%E8%B7%AF177%E5%8F%B7&billing_details[address][city]=%E6%B9%96%E5%B7%9E%E5%B8%82&billing_details[address][postal_code]=545452&billing_details[address][state]=%E6%B1%9F%E8%A5%BF%E7%9C%81&guid=226c6ab9-deb4-445d-a233-3efe04ef9c0908767c&muid=b5c46ba5-615d-4351-9aa1-b11861c3acb90fe433&sid=5f9b8d20-6bc7-4dac-b39c-9af98dcf7a50fdfd55&key=pk_live_51Lb5LzB4TZWxSIGU4LcaRyvT5xW1Iw8Z3E1iOpuCblBLoLhoq3xQnt2U6sR0kfr6wwTdLdQCykfzNnw778PaO7n200tsRmVe72&payment_user_agent=stripe.js%2Fb6feaa70de%3B+stripe-js-v3%2Fb6feaa70de%3B+checkout&client_attribution_metadata[client_session_id]=603407a3-6bfc-434c-b0d2-9e5b05d2d002&client_attribution_metadata[checkout_session_id]=cs_live_a1wT4jeApixjgBV9FJN9ENrQBxpH4dDhCqazDTuFpenpRmdi4WxyUjFpMh&client_attribution_metadata[merchant_integration_source]=checkout&client_attribution_metadata[merchant_integration_version]=hosted_checkout&client_attribution_metadata[payment_method_selection_flow]=automatic&client_attribution_metadata[checkout_config_id]=8b417f31-2812-489a-93b0-846516fe7ef5",
+  "method": "POST"
+});
+resp:
+{
+  "id": "pm_1TxTEDB4TZWxSIGUoThrXpRW",
+  "object": "payment_method",
+  "alipay": {},
+  "allow_redisplay": "unspecified",
+  "billing_details": {
+    "address": {
+      "city": "湖州市",
+      "country": "CN",
+      "line1": "清河路177号",
+      "line2": null,
+      "postal_code": "545452",
+      "state": "江西省"
+    },
+    "email": "websterwilliamsonrsot@outlook.com",
+    "name": "aiguoguo",
+    "phone": null,
+    "tax_id": null
+  },
+  "created": 1785076833,
+  "customer": null,
+  "customer_account": null,
+  "livemode": true,
+  "shared_payment_granted_token": null,
+  "type": "alipay"
+}
+
+
+======================
+2. confirm
+fetch("https://api.stripe.com/v1/payment_pages/cs_live_a1wT4jeApixjgBV9FJN9ENrQBxpH4dDhCqazDTuFpenpRmdi4WxyUjFpMh/confirm", {
+  "headers": {
+    "accept": "application/json",
+    "accept-language": "en-US,en;q=0.9",
+    "cache-control": "no-cache",
+    "content-type": "application/x-www-form-urlencoded",
+    "pragma": "no-cache",
+    "priority": "u=1, i",
+    "sec-ch-ua": "\"Not;A=Brand\";v=\"8\", \"Chromium\";v=\"150\", \"Google Chrome\";v=\"150\"",
+    "sec-ch-ua-mobile": "?0",
+    "sec-ch-ua-platform": "\"Windows\"",
+    "sec-fetch-dest": "empty",
+    "sec-fetch-mode": "cors",
+    "sec-fetch-site": "same-site",
+    "Referer": "https://checkout.stripe.com/"
+  },
+  "body": "eid=NA&payment_method=pm_1TxTEDB4TZWxSIGUoThrXpRW&expected_amount=2000&expected_payment_method_type=alipay&return_url=https%3A%2F%2Fcheckout.stripe.com%2Fc%2Fpay%2Fcs_live_a1wT4jeApixjgBV9FJN9ENrQBxpH4dDhCqazDTuFpenpRmdi4WxyUjFpMh%3Fredirect_pm_type%3Dalipay%26lid%3D6ce9e53c-2aad-4a6a-beb2-65285b3ed660%26ui_mode%3Dhosted%23fidnandhYHdWcXxpYCc%252FJ2FgY2RwaXEnKSd2cGd2ZndsdXFsamtQa2x0cGBrYHZ2QGtkZ2lgYSc%252FY2RpdmApJ2JwZGZkaGppYFNkd2xka3EnPydmamtxd2ppJyknZHVsTmB8Jz8ndW5aaWxzYFowNElnMEl%252FRzFRX1J9VkxCUDFJZmRXfHNRMH1SNExyPV82QDRsSnVwRmdpR0lqSW1qdDZ9VGtxN1Azdlc1bmN3M3JyUWFJYVRGfG5jf0trcjIyPVVkSjJrNzU1cXZXaFNgMjcnKSdjd2poVmB3c2B3Jz9xd3BgKSdnZGZuYndqcGthRmppancnPycmNTU1NTU1JyknaWR8anBxUXx1YCc%252FJ3Zsa2JpYFpscWBoJyknYGtkZ2lgVWlkZmBtamlhYHd2Jz9xd3BgeCUl&guid=226c6ab9-deb4-445d-a233-3efe04ef9c0908767c&muid=b5c46ba5-615d-4351-9aa1-b11861c3acb90fe433&sid=5f9b8d20-6bc7-4dac-b39c-9af98dcf7a50fdfd55&key=pk_live_51Lb5LzB4TZWxSIGU4LcaRyvT5xW1Iw8Z3E1iOpuCblBLoLhoq3xQnt2U6sR0kfr6wwTdLdQCykfzNnw778PaO7n200tsRmVe72&version=b6feaa70de&init_checksum=m0VyLdUSW1pbBbEBx2pLn8SnSFWo9ku7&js_checksum=qto~d%5En0%3DQU%3Eazbu%5D%5DqaQL%5C%60n%24%60aD%5EqaeX%5CwM%7C%60b%3C%3Eccac%60to%3FU%5E%60w&px3=e34c713a032075fd3fb70911d6e5a0eb2f73aa9562ec17f614525f63b4955c3b%3ACRDIcRpRzVFT87hSbRGsJKOO0o23bKc5jaxrIc6hWEvY4orweK7Aaa9NOapYMrfAaW5CHd2nbTfs9sNAqLXS3Q%3D%3D%3A1000%3AiLlavVpfgAlX8UPUlOOQ3cjq1haY7bdJuoiW3fpuFh4VBSdwr0eL5MZ7Pa2CjzQ6%2BBhQgq6ePNxagivAdAAMchk%2FhhR6iMu5gJYbXVvWz3hy0gjtEtQHlYqT3ZZCkKgVHH%2Bn7DiL6%2BijS7krNN98zhSKFHwN%2FMjRr8E4IuQmsGBNgjqpu5HLV39FMva9PZQV6ffKElD%2BL2eeJIHwFSZodrJKDIZxHqa9MfmKxU%2B2FQx3AsgUrP1L1pqeVvogdmCUND6w3Aljmv%2FzcgI2s9SIMPQnYzbcYEMN2d9cmrv7boUMxTPZgcMoViaY7D4u3WelpGW7%2Bp%2BJ1cy%2FapJuYRE0%2FveHIIluZ%2BpUJrbB3NogIhK0oEbxa16ccc1NfSsVGRaa5xR0RcUUkD8xer7HLYbVl1Skk25PpLkc4qIXJbh9pmrwwLgFxYzZOQtc%2FCjgFJv032uPd%2FW5%2FfrQWWDOWRny7EyHDfhgRAbyUK7OXqEwvreRFutUmxSl%2B%2FriK9JR1vYemhcGUoDc9Rd5%2FT1CMEF4Dt8Y3Q7r%2BP8FzaYeu%2BtK%2FtI%3D&pxvid=12d029d6-88fd-11f1-a86c-f12c51b2b1ad&pxcts=y6bLx7ebZd64Sw1oD79ntj-2XzqcbXiDAAaUWA9oOjg%3D%3AoL4qq5GjAw1fS7cLqVUldJJo1kloYJKVqxMffvNcEHjpgTT1Z6BqjVgw3iP0f4A86V6zuZqZmBMrztfwKYJqqYa9gDfr1eIUra3AOqIc0cyJeQEt-1SUY-T39v92mvWRBYnJZY8lM-cAPdmj7cFxNw0CTXP0PTXl-k%2FjP1fr3OqzD01EZF11zcs1-BfA5wY2&passive_captcha_token=P1_eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJwZCI6MCwiZXhwIjoxNzg1MTYzMjAxLCJjZGF0YSI6IlA4b0k5aUxFczJWNjA1TkVsQjhFdjk5bTNTY3hVRXk3SFRRQTBXNnY0NHdFMlRDaldhSXRQc0VXaGhmNjhqVzdJSHpVUVhoS253ZmxIcFJBQldmc3NjUlNFVWhFc1NNWTRQbFBOUHZ4MUxlQUQrVWxieFZab2JVVURqa2lwcE1tcFozaHk5djgwNG9XdldRR0JNaU81azVDSFVRQXFlbUdEWFFmTENualcwQ3U0NWJXSWRoMWFpSHkwazFwSzNUUWFpRi91TzY2M2x3VjJlR28vazEzSlRkSnFmcE81c1BYNStMc2U4dTJyZHFuYys0YWE0WDlFdkIxQ21aQkc3NlpoUFJodVphWkF5Y016N2ZrZGNBK1VHRVR3UjZOdUErK3VnNFhJNU1XbmJiTGI1aXlFeUdiQkpVM3cyQU9uMXlXR0RJcVh1cXl2emo2cVMxeFE0ZTlydjdKR2VBaUFBdmV5NEJPbE1DSHYxWkxMZDN3QkxBUnNBQ2RUWFpuU0VzZjljMFlsR0FzVVJJUW5VY3ptbUFUMTM3bjd4TXUzWUZObzBXNHVLQVQ0Mm11clFPYVd2aWV5Y08rOGc9PXhHLy9xbGJLSGZCOW5iVXciLCJwYXNza2V5Ijoib21GdVRJaktxVmJhYTVZOS9ybUZOS2s0MlJTMm1nczVSTHR5YVAzbzJWYm1MOVM2Ym9qaFpDZjgyWnhGNC9hWUpCL0RHS0dGdWNXQUIxVGQ5OUQrMzhiVG9PYVBOdFdCNXljTFZRTW1MaUVPZ1hsQzhjb0MrdjhUc3ZUMHVjMFdqVTlaR05YaDB0Z0ZxWEJXUG84aHk4dGxOSzZUY2pBL3c5ZTBMbnRzUWphRVRTbngzNjlBREJBZDZpYUJHWTZKd1JGZkxmajhwaVFnejlMOGdDZnlpNGYwUXBaS3FaQW02L2NlR0hNSEpJc1V6SmF4YWVZd0JHekFBRG1MbURVcEhmSnpHekp3QVJDL3RPS1dHc05IeVZSVmg4eTdMR2F6MzBmc0czRDJxL2M1YjRuUHRBcElsajVqRXJKdkdoVEZMUUZobVZBVTNMVk9xZjQwVkEwY0VOMmRDcVlMZzZROXZnYjhlNFlKRjRDZllrbFhYRDhWZjdyaGFnMEpjYThPK2V0aURSaGZFOHV2MHlGbkxLSmtOVUdtODc1R2pRNENkOXJKUWh0WEt0WldVOElrWkJkeUZWSmFCZERaeVBjdDU4NXIzZzJyWm4yVHNiNFZwV0VQV0czTlVZRnJnVjh6QlpmL3ZlbGk4dkJyOUNKR1JvV0V2MkVtMEs5UWNwVldORkZtaTd3bEVNem54VGNrYW9nZXNkL3ZBcmxzNUIzZ3J3YXNIRVZYQk1FSGlqSHBUODRaVnY3dis1ODhrcDBjNWNNWWR0MUdmTG5DQWg5REdBS3JLUTFSTUFTb3ZOdkNsL21wNVR2a2JnckxnRkh5cFdCbmc4cCtxTzlXMnVTRnp0dFRkbjBjQlBtc1Q4cG5DbjgvclgyYlcxRFYvckJJd3RtakNXQnF5U3puc0NHL05RdFNhVkcxeVNoU3hjb25ydnJoQ1VmVEhTd25WaERsRnBTbmtYOXJGaldyMGJOSUtaQ3gyQTl6RFNUblRRb2puNFcxZ2FYTVMydnhIRm02WTZrSFRNbjJEcnF3Y2luNnhNbXo4WS84VXFQYXhZV0d1b1R3aXFUQnNEUkJqNmhXT2prS2RUWVAyd3o0cUk2UHZJcWZlYUN4UVBNcExqU3U2eXQvaTBZZThzNDRhR3U0cUoydmI2MXdZMTlvZXlhN0F3Kys0MGtNbkFJckEwcllvT3A1WVpsbC82MGN0VTFuLzVjL3NQWEgxN1NjRGlWZktMMGJrSGN4ZlIvNDNXNXI4NGR2NVEwZDBwdWwwaU1jYUFxL3JKWHpjYmtoU1AzSFhzckJ0a3BFMzNodWpkaHJibzc3QkJWL0lycDQxci8wZE5GdURsK0VTVXNIR2xCb1FNbjJ5dWxSSVJhTmZPamNBL3B6U3VOTUh6aE9mT2x6OXNpdGg4V3hKWjd3R2czRjUrR1lOQ2g3dEhPS3VQYmNUb0lZbUxxQ0JFWmEyV0toZFlmaTk3SFZVOEc1WDU0NmtybmpBcWZSaWJmT29Hb1VSZEw2T3VHRzByclh5ZVJFWHd2MmxoQzlRMFdoeFlTNTVTdVl2dk9lQjNPSXdDNjNOUU90ZTQvcFN6QWY2czdaUFBPeHk5TTBlY3k2Zlhibnc0U2h1d0pVR1F3Q016ZWY2dFhOcWR1N3lyUmFSRVhpU0d3Nnk3ZDBlM0JtVUtqTjM5eFkzdHFIbjAvUUI4S0NDOEJxeGllWkRCbDZWTXRmWklzcXJuMUZYTmFSd1UyYVc5QmZtN1A0cDJJV2FNcWtpbGlhdHkzQ1lYMGp4czVBS3ZRVGZ3WFpCMXN3RWdoL3pGaUhvSDY0ZnNhNGt2MXdIQXF0RTRsSE9yME1wOUpzVDdpTTJVQnZmWjVYemJIb0x0Q01Nblh0ZUNwaXVQdWN5cWlucG5FWTU5cHFiK0lITTZkUnQ1U3AwVmM4ZlpsRVdaYXBXOXJrSTMrbXRSWHpSWEsvUlpWVU5FODQyUVhNdTUxcHY0anRzb1BsMUhHOEZLc251MmF3ZkVNbTN2YnVyWC9wM0hLS2RnNXJJNkRQVVpHWXhHZnU5K2VTdFk0cEdqSmxaQVZFS0xXZ3FNeC9Qa1lEb2JIRi9EUTlLL0pKTkpxV1Joa3FUU3pDbzZ4TVhlQmpxTjFXZTFSeXdvdG8vUHVvQ21PMTR5cXNpUWxJK0N0MXNYR3Y5bmQzWFFYeEEva3ZvZWN6L3BiSTVyL0pCbStENnRWaS8zR3IrOHZ0bmRyWUdNaEVrSitkZlIwemxQcXJoSFdsaC8xL1I1UmZMZ20rY29keElkdTlvYnVmQmNwSUlnZFZEUFk4empXS3NBclp2bVdZY3cvWWZxbG1OOHg3RzIzWnNKWW9PYXV4MnJYaWh3bUJ5eXV3M09mdzQzeEJIaEYxODVycm11YU1reCt3a1dvVlEvemVwWmQyT2Q5Q3hBQWttSjlRcDBhY1BjbmYxWUhoanpxeUpsWnFNNk00RXJDQ01tMGZWbmJrN3Q2QmJVWjU4TnNLN002bS96SGh5UStnVjh4NENIL1ZRMUFlYnFDNkVycjVRTG56emNtY0pQbG9yTjZ4R2xlN2I1K3BTVzROYzFTdmxaNkQwMzUyLzdZL2FlZklwVkVidW96NE4yaUZueGJxWTFYZFpMbzJYWk41bXd3ZkdwdEZ0bHdIUldqQ2k2Z0xlYW9HY0U1VUxEdzBScUxQV3ViVjIxNTkwandkU1ZPVnBRT1hUcFBlbUxtZ2tIVzRseDNFNDhwZjFBS0t5a3VnZkdvc0tVcHBBVHVGVExVa0dSakttVmQ5Z09kc1l1aGl0UHozc0x0aUJXZktvZnJPMTA2WlJVQzl6N09NRCs0dkUvbmZTSHlzb2xwMTJRU1J6L0gyZVAzSnQzMno1WTY1ci92S0gzZjI2V2dWZlUzQmd3RE52R1lIM3pnTUxoLzRIY0xVZG1BdGN2YXFtc0N3Y0NZc3ZVVDBuY3dWUFZmQ0F4NGpKSEZJVmlYUkhiU3RRY3pJMkJsV0JoSkxsZmhXTndaK2xhQ0p5dUE9Iiwia3IiOiI3NTA3ZmI4Iiwic2hhcmRfaWQiOjM2MjQwNjk5Nn0.nYabmg2S1jbOSE_yT3O9meBuAq7AOn5z5fqaAFN5eGI&passive_captcha_ekey=&rv_timestamp=qto%3En%3CQ%3DU%26CyY%26%60%3EX%5Er%3CYNr%3CYN%60%3CY_C%3CY_C%3CY%5E%60zY_%60%3CY%5En%7BU%3Eo%26U%26Cye%26YudR%5DvXuasdRQxeOL%23e%26%3BDYu%23%3DdbX%24XOQxY_YrYbL%26XO%5DrX%26os%5BNn%7BU%3Ee%26U%26CyYudC%5B_exY%26%5DuYbd%25X_LCYb%5C%25X_%3CxY%26nDYuerdReve%26QrX_asXxP%3Ee%3DP%25YOP%25d_%60%25XRX%24e%26eyYuoye%26%23%3BY%3Doue%25o%3FU%5E%60w&client_attribution_metadata[client_session_id]=603407a3-6bfc-434c-b0d2-9e5b05d2d002&client_attribution_metadata[checkout_session_id]=cs_live_a1wT4jeApixjgBV9FJN9ENrQBxpH4dDhCqazDTuFpenpRmdi4WxyUjFpMh&client_attribution_metadata[merchant_integration_source]=checkout&client_attribution_metadata[merchant_integration_version]=hosted_checkout&client_attribution_metadata[payment_method_selection_flow]=automatic&client_attribution_metadata[checkout_config_id]=8b417f31-2812-489a-93b0-846516fe7ef5&link_brand=link",
+  "method": "POST"
+});
+resp:
+{
+  "id": "ppage_1TxTDQB4TZWxSIGUd3VDxORO",
+  "object": "checkout.session",
+  "account_settings": {
+    "account_id": "acct_1Lb5LzB4TZWxSIGU",
+    "assets": {
+      "icon": "https://stripe-camo.global.ssl.fastly.net/bd37c85af66d25d9c9ca31b805f029242b8ac532e312d99715fcf47d090ef273/68747470733a2f2f66696c65732e7374726970652e636f6d2f66696c65732f4d44423859574e6a6446387854474931544870434e465261563368545355645666475a6662476c325a56395054304e4a557a4a7864464d344e3256684e4546486233466b4d5646745a556b3030794f734d6c765433/6d65726368616e745f69643d616363745f314c62354c7a4234545a57785349475526636c69656e743d5041594d454e545f50414745",
+      "logo": "https://stripe-camo.global.ssl.fastly.net/9fbbd385ba603909e4c1bec1f85822ac69f4e93767c4cfddd665afe29f08ebc5/68747470733a2f2f66696c65732e7374726970652e636f6d2f66696c65732f4d44423859574e6a6446387854474931544870434e465261563368545355645666475a6662476c325a5639525545564755545661524531744f4551324e584a6b616a424f55555a345131493030756576714a6b6130/6d65726368616e745f69643d616363745f314c62354c7a4234545a57785349475526636c69656e743d5041594d454e545f50414745",
+      "use_logo": true
+    },
+    "branding": {
+      "background_color": "#000000",
+      "border_style": "default",
+      "button_color": "#000000",
+      "font_family": "default"
+    },
+    "business_url": "https://cursor.com",
+    "country": "US",
+    "display_name": "Cursor",
+    "merchant_of_record_country": "US",
+    "merchant_of_record_display_name": "Cursor",
+    "order_summary_display_name": "Cursor",
+    "privacy_policy_url": "https://www.cursor.com/privacy",
+    "specified_commercial_transactions_act_url": null,
+    "statement_descriptor": "CURSOR, AI POWERED IDE",
+    "support_email": "hi@cursor.com",
+    "support_phone": "+18314259504",
+    "support_url": "",
+    "terms_of_service_url": "https://www.cursor.com/terms-of-service"
+  },
+  "adaptive_pricing_info": {
+    "active_presentment_currency": "usd",
+    "integration_amount": 2000,
+    "integration_currency": "usd",
+    "integration_currency_position_in_currency_selector": "right",
+    "integration_custom_amount_info": null,
+    "is_using_subscription_threshold_fx_rate_behavior": true,
+    "local_currency_options": [
+      {
+        "amount": 14086,
+        "conversion_markup_bps": 400,
+        "currency": "cny",
+        "presentment_exchange_rate": "7.043146",
+        "reference_rate_info": null
+      }
+    ]
+  },
+  "application": null,
+  "automatic_payment_method_types": true,
+  "beta_versions": null,
+  "billing_address_collection": "required",
+  "blob": null,
+  "blocked_billing_address_countries": [],
+  "bnpl_in_link_ui_enabled": false,
+  "bnpl_link_experiment_payment_method_type": null,
+  "cancel_url": "https://cursor.sh/dashboard",
+  "capture_method": null,
+  "card_brand_choice": {
+    "eligible": false,
+    "preferred_networks": [
+      "cartes_bancaires"
+    ],
+    "supported_cobranded_networks": {
+      "cartes_bancaires": false
+    }
+  },
+  "card_brands": {
+    "accel": false,
+    "amex": true,
+    "carnet": false,
+    "cartes_bancaires": false,
+    "conecs": false,
+    "diners": true,
+    "discover": true,
+    "eftpos_au": false,
+    "elo": false,
+    "girocard": false,
+    "jaywan": false,
+    "jcb": true,
+    "link": true,
+    "maestro": false,
+    "mastercard": true,
+    "nyce": false,
+    "pulse": false,
+    "rupay": false,
+    "star": false,
+    "unionpay": true,
+    "visa": true
+  },
+  "checkout_multistep_ui": false,
+  "client_reference_id": null,
+  "config_id": "8b417f31-2812-489a-93b0-846516fe7ef5",
+  "consent": null,
+  "consent_collection": null,
+  "cross_sell_group": null,
+  "crypto_in_link_ui_enabled": false,
+  "currency": "usd",
+  "custom_components": [],
+  "custom_fields": [],
+  "custom_text": {
+    "after_submit": null,
+    "shipping_address": null,
+    "submit": null,
+    "terms_of_service_acceptance": null
+  },
+  "customer": {
+    "id": "cus_UxNzMAkjfClSTQ",
+    "object": "customer",
+    "address": {
+      "city": "湖州市",
+      "country": "CN",
+      "line1": "清河路177号",
+      "line2": null,
+      "postal_code": "545452",
+      "state": "江西省"
+    },
+    "business_name": null,
+    "card_art": null,
+    "customer_provided": true,
+    "email": "websterwilliamsonrsot@outlook.com",
+    "has_fallback_payment_method": false,
+    "individual_name": null,
+    "name": "aiguoguo",
+    "payment_methods": [],
+    "phone": null,
+    "tax_ids": []
+  },
+  "customer_email": "websterwilliamsonrsot@outlook.com",
+  "customer_managed_saved_payment_methods_offer_save": null,
+  "developer_tool_context": null,
+  "display_consent_collection_promotions": false,
+  "does_not_collect_postal_code_for_non_us_card_transactions": false,
+  "eid": "NA",
+  "email_collection": "always",
+  "enabled_third_party_wallets": [
+    {
+      "id": "APPLE_PAY",
+      "apple_pay": {
+        "required_version": 13
+      },
+      "carousel_enabled": true,
+      "enabled": true
+    },
+    {
+      "id": "GOOGLE_PAY",
+      "carousel_enabled": false,
+      "enabled": false,
+      "google_pay": {
+        "id": "GOOGLE_PAY",
+        "version_major": 2,
+        "version_minor": 0
+      }
+    },
+    {
+      "id": "LINK_BUTTON",
+      "carousel_enabled": false,
+      "enabled": true
+    },
+    {
+      "id": "AMAZON_PAY",
+      "carousel_enabled": false,
+      "enabled": false
+    },
+    {
+      "id": "KLARNA_EXPRESS",
+      "carousel_enabled": false,
+      "enabled": false
+    }
+  ],
+  "enforcement_mode": "open",
+  "experiment_data": [
+    {
+      "event_id": "f2dd53f9-16e8-4bd9-9924-89dc6e1ac3f6",
+      "exposure_event_name": "",
+      "name": "link_global_holdback_checkout_aa",
+      "variant": "control"
+    },
+    {
+      "event_id": "4541d572-a8fa-47c3-bf55-53ae57ca7dd4",
+      "exposure_event_name": "",
+      "name": "link_global_holdback_checkout",
+      "variant": "control"
+    }
+  ],
+  "experiments_data": {
+    "event_id": "d05ed998-0374-4ffd-aa94-f544c54dd1f9",
+    "experiment_assignments": {
+      "checkout_bancontact_name_optional_one_time": "control",
+      "checkout_eps_name_optional": "control",
+      "checkout_li_larger_image_size": "control",
+      "checkout_link_instant_debits_accordion_logos": "control",
+      "checkout_p24_name_optional": "control",
+      "connections_checkout_us_bank_account_picker_icons": "control",
+      "cpl_guacamole": "control",
+      "cpl_spicy_guacamole": "control",
+      "cpl_unified_order_summary_experiment": "control",
+      "emea_wallets_ideal_wero_rebranding": "treatment",
+      "ff_checkout_cpl_lid_promo_badge_color_opt": "control",
+      "ff_checkout_elements_cs_card_brand_funding_filtering_eff": "control",
+      "ff_checkout_optimized_image_eff": "treatment",
+      "ff_checkout_test_frontend_eff": "control",
+      "ff_elements_cs_pe_wallet_details_eff": "control",
+      "link_ab_test": "control",
+      "link_ab_test_aa": "control",
+      "link_risk_based_disable_auto_prompting_checkout": "control",
+      "ocs_buyer_xp_cpl_android_a2w_holdback": "control",
+      "ocs_buyer_xp_cpl_ap_currency_label_removal": "control",
+      "ocs_buyer_xp_cpl_apple_pay_button_type": "control",
+      "ocs_buyer_xp_cpl_currency_symbol_optimization": "treatment_1",
+      "ocs_buyer_xp_cpl_easy_opt_link_signup_in_form": "control",
+      "ocs_buyer_xp_cpl_ece_kakao_naver": "control",
+      "ocs_buyer_xp_cpl_embedded_pay_button": "control",
+      "ocs_buyer_xp_cpl_link_signup_in_form": "control",
+      "ocs_buyer_xp_cpl_lpm_content_simplification": "control",
+      "ocs_buyer_xp_cpl_lpm_dynamic_filtering_threshold": "control",
+      "ocs_buyer_xp_cpl_progressive_ece": "control",
+      "ocs_buyer_xp_cpl_single_column_checkout": "control",
+      "ocs_buyer_xp_cpl_terms_above_submit": "control",
+      "ocs_buyer_xp_cpl_theme_pay_button": "treatment",
+      "ocs_buyer_xp_remove_name_field_guac_related_pms": "treatment"
+    },
+    "experiment_metadata": {
+      "ocs_buyer_xp_cpl_lpm_holdback": {
+        "heldback_special_wallets": []
+      }
+    }
+  },
+  "feature_flags": {
+    "checkout_address_autocomplete_enabled": true,
+    "checkout_enable_hcaptcha_async_token_logging": true,
+    "checkout_enable_link_api_hcaptcha_rqdata": true,
+    "checkout_enable_link_api_passive_hcaptcha": true,
+    "checkout_enable_new_google_places_api": true,
+    "checkout_enable_pay_by_bank_remember_bank_selection": true,
+    "checkout_hcaptcha_redundancy_treatment_1_enabled": true,
+    "checkout_item_order_summary_enabled": true,
+    "checkout_link_enable_mfa": true,
+    "checkout_link_in_habanero_enabled": true,
+    "checkout_link_purchase_protections_rollout": true,
+    "checkout_optional_items": true,
+    "checkout_passive_captcha": true,
+    "checkout_show_swish_factoring_notice": true,
+    "checkout_tide_remount_override_replay": true,
+    "checkout_yearly_as_monthly_price_display": true,
+    "enable_custom_checkout_name_collection": true,
+    "ocs_payment_prompt_for_agents": true,
+    "sandboxes_rebrand_testmode": true
+  },
+  "geocoding": {
+    "country_code": "JP",
+    "region_name": null
+  },
+  "has_async_attached_payment_method": false,
+  "has_dynamic_tax_rates": false,
+  "init_checksum": "2Zgufk9kywfQq09mjMASdPPoPovENzNC",
+  "invoice_creation": null,
+  "is_sandbox_merchant": false,
+  "is_unclaimed_anonymous_sandbox": false,
+  "klarna_info": null,
+  "konbini_confirmation_number": null,
+  "line_item_group": null,
+  "link_settings": {
+    "consumer_found": false,
+    "enable_partner_lookup": false,
+    "hcaptcha_rqdata": "/dMw5ddTuTtGqqRcYawL86dZYFSGQCyPqpUFwQqHX4d5skQWCVntpnCrcV07/9tijjwST6HfgBUlZLVp5leKO4W0MqfAL3kyLw0ZdZDinriFcyiEvReRW8b1CMkE4uxTHdjjVqBUUW9qY+ny9c4mrulWghyBxb9IPG75esEFft7jgpTOAGi/enQx3CSEhrx+iQE/DihJTGvSV+u1hzHxsO+cQrsDRCe1RupFXxeiHzZe9Mrsf5K+KUKN938MaoXWB/RHs6I7/FVzvRyaQVc26w==FcaKWpXSrYzCHFO+",
+    "hcaptcha_site_key": "24ed0064-62cf-4d42-9960-5dd1a41d4e29",
+    "link_brand": "link",
+    "link_consumer_incentive": null,
+    "link_funding_sources": [
+      "CARD"
+    ],
+    "link_mode": "LINK_CARD_BRAND",
+    "link_payment_session_context": {
+      "bank_account_permissions": [],
+      "bank_account_verification_method": null,
+      "link_payment_method_bank_account_data_consent": null,
+      "link_payment_method_bank_account_permissions": null,
+      "link_supported_payment_methods": [
+        "CARD"
+      ]
+    },
+    "link_supported_payment_methods": [
+      "CARD"
+    ],
+    "link_supported_payment_methods_onboarding_enabled": [
+      "CARD"
+    ],
+    "link_us_bank_account_funding_source_enabled": false
+  },
+  "livemode": true,
+  "locale": null,
+  "lpm_settings": null,
+  "managed_payments": {
+    "enabled": false
+  },
+  "management_url": "https://billing.stripe.com",
+  "mode": "subscription",
+  "name_collection": null,
+  "on_behalf_of": null,
+  "ordered_payment_method_types": [
+    "alipay",
+    "card",
+    "google_pay",
+    "apple_pay"
+  ],
+  "origin_context": null,
+  "payment_intent": {
+    "id": "pi_3TxTEGB4TZWxSIGU1X4BgGxR",
+    "object": "payment_intent",
+    "allowed_payment_method_types": null,
+    "amount": 2000,
+    "amount_details": {
+      "tip": {}
+    },
+    "automatic_payment_methods": null,
+    "canceled_at": null,
+    "cancellation_reason": null,
+    "capture_method": "automatic",
+    "client_secret": "pi_3TxTEGB4TZWxSIGU1X4BgGxR_secret_EghPZ6a651OSZcmoiNf6vUDeY",
+    "confirmation_method": "automatic",
+    "created": 1785076836,
+    "currency": "usd",
+    "description": "Subscription creation",
+    "excluded_payment_method_types": null,
+    "last_payment_error": null,
+    "livemode": true,
+    "next_action": {
+      "alipay_handle_redirect": {
+        "native_data": "https://pm-redirects.stripe.com/authorize/acct_1Lb5LzB4TZWxSIGU/pa_nonce_UxO0ewDYIn2nblfePApkb8LRqqNOePV",
+        "native_url": "https://pm-redirects.stripe.com/authorize/acct_1Lb5LzB4TZWxSIGU/pa_nonce_UxO0ewDYIn2nblfePApkb8LRqqNOePV",
+        "return_url": "https://pm-redirects.stripe.com/return/acct_1Lb5LzB4TZWxSIGU/pa_nonce_UxO0Xf5HxKomBMD9Cwhq9EJp4CQuKgd",
+        "url": "https://pm-redirects.stripe.com/authorize/acct_1Lb5LzB4TZWxSIGU/pa_nonce_UxO0ewDYIn2nblfePApkb8LRqqNOePV"
+      },
+      "type": "alipay_handle_redirect"
+    },
+    "payment_method": "pm_1TxTEDB4TZWxSIGUoThrXpRW",
+    "payment_method_configuration_details": null,
+    "payment_method_options": {
+      "alipay": {
+        "setup_future_usage": "off_session"
+      }
+    },
+    "payment_method_types": [
+      "alipay",
+      "card",
+      "link"
+    ],
+    "processing": null,
+    "receipt_email": null,
+    "setup_future_usage": "off_session",
+    "shipping": null,
+    "source": null,
+    "status": "requires_action"
+  },
+  "payment_method_collection": "always",
+  "payment_method_details": {
+    "type": "alipay"
+  },
+  "payment_method_options": {
+    "card": {
+      "request_three_d_secure": "automatic"
+    }
+  },
+  "payment_method_specs": [
+    {
+      "async": false,
+      "fields": [],
+      "selector_icon": {
+        "light_theme_png": "https://js.stripe.com/v3/fingerprinted/img/payment-methods/icon-pm-alipay@3x-d216a94882c3c5422274faaec75a3c81.png",
+        "light_theme_svg": "https://js.stripe.com/v3/fingerprinted/img/payment-methods/alipay-22c167d415e209c71b2ac68b7fbc9f43.svg"
+      },
+      "type": "alipay"
+    },
+    {
+      "async": false,
+      "fields": [],
+      "type": "card"
+    }
+  ],
+  "payment_method_types": [
+    "card",
+    "alipay"
+  ],
+  "payment_status": "unpaid",
+  "permissions": null,
+  "phone_number_collection": {
+    "enabled": false
+  },
+  "policies": {
+    "contacts": {
+      "display_email": true,
+      "display_phone": true,
+      "display_url": true,
+      "enabled": false
+    },
+    "legal": {
+      "agreement_required": false,
+      "enabled": false
+    },
+    "returns": {
+      "custom_message": null,
+      "enabled": false,
+      "exceptions_apply": false,
+      "exchanges_accepted": false,
+      "fee_required": null,
+      "fee_type": null,
+      "logistics": [
+        "LABEL_PROVIDED_AUTOMATICALLY"
+      ],
+      "policy_url": null,
+      "refunds_accepted": null,
+      "returns_accepted": null,
+      "window": null,
+      "window_start": null
+    }
+  },
+  "prefilled": null,
+  "receipt_emails_enabled": false,
+  "redirect_on_completion": null,
+  "return_url": null,
+  "route_to_orchestration_interface": false,
+  "rqdata": "UvEyzFACiBo8Dh0hM3oVWfgkqlKSPh2vF9OHIWv4ou5pkNEGhgu5Wo4cOwFYX6DD7cXQKQISUMA+l0dKuiDY6MLzzSNA1BaaMX4rD3XkMEfzY/VxKbRXQnhcyJFR6EzhYjnKsSFEgi2q9G1DrVeZyitkQ8bb3g97jYdUbJeQENFXauNMjKGQ8O5ZCSaSRZtHf7c8YsKdT1q+sqDAeCe3nV2kjYIwS2wGHDAKAhta5GDMKLNm//sH+OGjieiwNlbeWy03PxL4zTn/E1jRZhANog==4jj1EPDyMnz1ytV5",
+  "sepa_debit_info": null,
+  "session_id": "cs_live_a1wT4jeApixjgBV9FJN9ENrQBxpH4dDhCqazDTuFpenpRmdi4WxyUjFpMh",
+  "setup_future_usage": null,
+  "setup_future_usage_for_payment_method_type": {},
+  "setup_intent": null,
+  "shipping": null,
+  "shipping_address_collection": null,
+  "shipping_options": [],
+  "shipping_rate": null,
+  "shipping_tax_amounts": [],
+  "site_key": "ec637546-e9b8-447a-ab81-b5fb6d228ab8",
+  "state": "active",
+  "statement_descriptor": "CURSOR, AI POWERED IDE",
+  "status": "open",
+  "stripe_hosted_url": "https://checkout.stripe.com/c/pay/cs_live_a1wT4jeApixjgBV9FJN9ENrQBxpH4dDhCqazDTuFpenpRmdi4WxyUjFpMh#fidnandhYHdWcXxpYCc%2FJ2FgY2RwaXEnKSd2cGd2ZndsdXFsamtQa2x0cGBrYHZ2QGtkZ2lgYSc%2FY2RpdmApJ2R1bE5gfCc%2FJ3VuWmlsc2BaMDRJZzBJf0cxUV9SfVZMQlAxSWZkV3xzUTB9UjRMcj1fNkA0bEp1cEZnaUdJakltanQ2fVRrcTdQM3ZXNW5jdzNyclFhSWFURnxuY39La3IyMj1VZEoyazc1NXF2V2hTYDI3JyknY3dqaFZgd3Ngdyc%2FcXdwYCknZ2RmbmJ3anBrYUZqaWp3Jz8nJjU1NTU1NScpJ2lkfGpwcVF8dWAnPyd2bGtiaWBabHFgaCcpJ2BrZGdpYFVpZGZgbWppYWB3dic%2FcXdwYHgl",
+  "submit_type": null,
+  "subscription_data": {
+    "display_trial_end": null,
+    "display_trial_period_days": null,
+    "trial_end": null,
+    "trial_period_days": null
+  },
+  "subscription_settings": {
+    "enabled": false,
+    "merchant_login_page_url": null,
+    "portal_login_page_slug": "14k03P4lr5edeOY9AA"
+  },
+  "success_url": "https://cursor.sh/dashboard",
+  "tax_context": {
+    "automatic_tax_address_collection_precision": null,
+    "automatic_tax_address_source": "session.billing",
+    "automatic_tax_enabled": true,
+    "automatic_tax_error": null,
+    "automatic_tax_exempt": "none",
+    "automatic_tax_taxability_reason": null,
+    "customer_tax_country": "CN",
+    "dynamic_tax_enabled": false,
+    "has_maximum_tax_ids": false,
+    "tax_id_collection_enabled": true,
+    "tax_id_collection_required": "never"
+  },
+  "tax_exclusion_from_total_is_allowed": false,
+  "tax_meta": {
+    "computation_type": "automatic",
+    "customer_tax_exempt": "none",
+    "error_reason": null,
+    "status": "complete"
+  },
+  "token_notification_url": "https://pm-hooks.stripe.com/apple_pay/merchant_token/pDq7tf9uieoQWMVJixFwuOve/acct_1Lb5LzB4TZWxSIGU/",
+  "total_summary": null,
+  "ui_mode": "hosted",
+  "url": "https://checkout.stripe.com/c/pay/cs_live_a1wT4jeApixjgBV9FJN9ENrQBxpH4dDhCqazDTuFpenpRmdi4WxyUjFpMh#fidnandhYHdWcXxpYCc%2FJ2FgY2RwaXEnKSd2cGd2ZndsdXFsamtQa2x0cGBrYHZ2QGtkZ2lgYSc%2FY2RpdmApJ2JwZGZkaGppYFNkd2xka3EnPydmamtxd2ppJyknZHVsTmB8Jz8ndW5aaWxzYFowNElnMEl%2FRzFRX1J9VkxCUDFJZmRXfHNRMH1SNExyPV82QDRsSnVwRmdpR0lqSW1qdDZ9VGtxN1Azdlc1bmN3M3JyUWFJYVRGfG5jf0trcjIyPVVkSjJrNzU1cXZXaFNgMjcnKSdjd2poVmB3c2B3Jz9xd3BgKSdnZGZuYndqcGthRmppancnPycmNTU1NTU1JyknaWR8anBxUXx1YCc%2FJ3Zsa2JpYFpscWBoJyknYGtkZ2lgVWlkZmBtamlhYHd2Jz9xd3BgeCUl",
+  "use_payment_methods": true,
+  "utm_codes": null,
+  "visible_custom_component_locations": [
+    "checkout_form_before",
+    "checkout_form_after",
+    "submit_button_before",
+    "submit_button_after",
+    "contact_before",
+    "contact_after",
+    "express_checkout_before",
+    "express_checkout_after",
+    "payment_details_before",
+    "payment_details_after"
+  ]
+}
+
+=============
+3. pm-redirects.stripe.com
+fetch("https://pm-redirects.stripe.com/authorize/acct_1Lb5LzB4TZWxSIGU/pa_nonce_UxO0ewDYIn2nblfePApkb8LRqqNOePV", {
+  "headers": {
+    "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+    "accept-language": "en-US,en;q=0.9",
+    "cache-control": "no-cache",
+    "pragma": "no-cache",
+    "priority": "u=0, i",
+    "sec-ch-ua": "\"Not;A=Brand\";v=\"8\", \"Chromium\";v=\"150\", \"Google Chrome\";v=\"150\"",
+    "sec-ch-ua-mobile": "?0",
+    "sec-ch-ua-platform": "\"Windows\"",
+    "sec-fetch-dest": "document",
+    "sec-fetch-mode": "navigate",
+    "sec-fetch-site": "same-site",
+    "upgrade-insecure-requests": "1",
+    "Referer": "https://checkout.stripe.com/"
+  },
+  "body": null,
+  "method": "GET"
+});
+
+resp:
+Status Code 302 Found
+
+===============
+4. openapi.alipay.com/gateway.do
+fetch("https://openapi.alipay.com/gateway.do?app_auth_token=202301BBe24fca107d80420ea512e7924b275X16&app_id=2021002182675086&biz_content=%7B%22access_params%22%3A%7B%22channel%22%3A%22QRCODE%22%7D%2C%22agreement_effect_type%22%3A%22NOTICE%22%2C%22external_agreement_no%22%3A%222026072619091305000700026435903%22%2C%22personal_product_code%22%3A%22GENERAL_WITHHOLDING_P%22%2C%22product_code%22%3A%22FOREX_GENERAL_WITHHOLDING%22%2C%22sign_scene%22%3A%22INDUSTRY%7CINTERNATIONAL_UNION%22%2C%22sub_merchant%22%3A%7B%22sub_merchant_id%22%3A%22A111275600000000_acct_1Lb5LzB4TZWxSIGU%22%2C%22sub_merchant_name%22%3A%22Anysphere%2C%20Inc.%22%7D%2C%22third_party_type%22%3A%22PARTNER%22%7D&charset=UTF-8&method=alipay.user.agreement.page.sign&return_url=https%3A%2F%2Frender.alipay.com%2Fp%2Fw%2Fac-fe-adaptor%2Fadaptor.html%3FaccessType%3Dback%26callbackType%3DCommon%26terminalType%3DWEB%26referenceAgreementId%3Dufpi_6041B4TZWxSIGU10Q1b1TxTEG1qtTpvP2m0%26authRequestId%3D2026072619091305000700026435903%26pspId%3D1022088000000000001%26clientId%3D305Y367YSG5QB000740&sign=GPa4SXbjD9IN3lRMgjr8yIIZT22qs2RcUaNKebTZFWIBfHOBBQbb4m%2BixQQM4ZBL6sNAW1CbiCOo4V5th9SWssp5GRYBSxFemolMRd%2B9zSQPzwbuQ%2FHsfq7dXE4CkYAbC8l0yAOQDGsDAblJWVI9XYDmXuyaKFRfnBVmx6kRUvXePTLhDP5OJ066Q7qhQiSI%2FGF4qaFaHTgJ0bDGINlQp1JrHhcgv267jjKOVw5f9hUqGGcSo2IeyUIcmOHw45x3vMdrjlQEbB%2Fw5fe1KgRFIvaAoRoTG7%2Fwio9iPFk0MplVrF1luPoUha8lFeRakLeh1B5bwdGrh7fofxESQcWGcw%3D%3D&sign_type=RSA2&timestamp=2026-07-26%2022%3A40%3A39&version=1.0", {
+  "headers": {
+    "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+    "accept-language": "en-US,en;q=0.9",
+    "cache-control": "no-cache",
+    "pragma": "no-cache",
+    "priority": "u=0, i",
+    "sec-ch-ua": "\"Not;A=Brand\";v=\"8\", \"Chromium\";v=\"150\", \"Google Chrome\";v=\"150\"",
+    "sec-ch-ua-mobile": "?0",
+    "sec-ch-ua-platform": "\"Windows\"",
+    "sec-fetch-dest": "document",
+    "sec-fetch-mode": "navigate",
+    "sec-fetch-site": "cross-site",
+    "upgrade-insecure-requests": "1",
+    "cookie": "752459860=pWo3LXKJwPy774Z067UZDx4ArLoLv7inf%2B67pGYSocHd; ctoken=JRfLgNM5F-aB19cD; ALIPAYJSESSIONID=RZ55SxMj4hXRxjMlNosBS6GdHr0SyJsuperapiRZ55; JSESSIONID=91B2E5D00001284432A8E860901A2DDA; spanner=5VpyFt4MAbPgXA2A3hVR4bUEMb6gwxAx; jsh_t_c_e=jsh_t_0.390788737472348; zone=RZ55B",
+    "Referer": "https://checkout.stripe.com/"
+  },
+  "body": null,
+  "method": "GET"
+});
+resp:
+Status Code 302 Found
+
+
+===============
+5. appAssign
+fetch("https://payauth.alipay.com/appAssign.htm?alipay_exterface_invoke_assign_target=invoke_32c40c99cfd937df907861a8e9ce869d_uid55&alipay_exterface_invoke_assign_sign=_k%2F_y_id_y_xhuf_u_ezltce84xi89_mz_p_j_nm_k5_shn_s02%2F8dg%2Bkul2_mm_blf%2F_bg%3D%3D", {
+  "headers": {
+    "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+    "accept-language": "en-US,en;q=0.9",
+    "cache-control": "no-cache",
+    "pragma": "no-cache",
+    "priority": "u=0, i",
+    "sec-ch-ua": "\"Not;A=Brand\";v=\"8\", \"Chromium\";v=\"150\", \"Google Chrome\";v=\"150\"",
+    "sec-ch-ua-mobile": "?0",
+    "sec-ch-ua-platform": "\"Windows\"",
+    "sec-fetch-dest": "document",
+    "sec-fetch-mode": "navigate",
+    "sec-fetch-site": "cross-site",
+    "upgrade-insecure-requests": "1",
+    "cookie": "752459860=pWo3LXKJwPy774Z067UZDx4ArLoLv7inf%2B67pGYSocHd; ctoken=JRfLgNM5F-aB19cD; ALIPAYJSESSIONID=RZ55SxMj4hXRxjMlNosBS6GdHr0SyJsuperapiRZ55; jsh_t_c_e=jsh_t_0.390788737472348; JSESSIONID=7B96F72A285F2C39A4152BE897496D79; zone=RZ55B; spanner=j8rxYWw3XZxMO/znPFEkIgm+tBfif1xf4EJoL7C0n0A=",
+    "Referer": "https://checkout.stripe.com/"
+  },
+  "body": null,
+  "method": "GET"
+});
+resp:
+`
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>支付宝</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1.0,minimum-scale=1.0,maximum-scale=1.0,user-scalable=no">
+    <meta name="format-detection" content="telephone=no"/>
+    <meta name="format-detection" content="email=no"/>
+    <meta name="Alipay:title" content="支付宝"/>
+    <meta name="Alipay:imgUrl" content="https://t.alipayobjects.com/images/rmsweb/T1mQxhXbRXXXXXXXXX.png"/>
+    <meta name="Alipay:desc" content=""/>
+    <link rel="stylesheet" href="https://a.alipayobjects.com/g/antui/antui/10.0.18/rem/??antui.css,widget/message.css,widget/toast.css,widget/dialog.css,widget/loading.css"/>
+    <script type="text/javascript" src="https://a.alipayobjects.com??g/h5-lib/vue/2.1.6/vue.min.js,g/h5-lib/vuex/2.1.2/vuex.min.js,static/fastclick/1.0.6/fastclick.min.js,g/h5-lib/vue-router/2.5.3/vue-router.min.js,g/component/es6-promise/3.2.2/es6-promise.min.js"></script>
+</head>
+<body>
+  
+<!--umid渲染-->
+
+<script type="text/javascript" >
+  window.i_c_i_d = '32c40c99cfd937df907861a8e9ce869d_55';
+  window.defaultRedirectUrl = '';
+    window.errorMsg = '';
+
+  // 转译html字符
+  function htmlUnescape (str) {
+    return str
+      .replace(/&quot;/g, '"')
+      .replace(/&ldquo;/g, '“')
+      .replace(/&rdquo;/g, '”')
+      .replace(/&lsquo;/g, '‘')
+      .replace(/&rsquo;/g, '’')
+      .replace(/&#39;/g, '\'')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&amp;/g, '&')
+      ;
+  }
+
+  function parseQueryString(queryString) {
+    var result = {};
+    var searchStr = queryString || window.location.search;
+    var kv;
+    searchStr = searchStr.indexOf('?') === 0 ? searchStr.substr(1) : searchStr;
+    searchStr = searchStr ? searchStr.split('&') : '';
+    for (var i = 0; i < searchStr.length; i++) {
+      kv = searchStr[i].split('=');
+      kv[1] = decodeURIComponent(kv[1]);
+      result[kv[0]] = kv[1];
+    }
+    return result;
+  }
+
+  function ready(callback) {
+    if (window.AlipayJSBridge) {
+      callback && callback();
+    } else {
+      document.addEventListener('AlipayJSBridgeReady', callback, false);
+    }
+  }
+
+  // 如果有默认跳转的url，直接跳转
+  // 因为alipays的标签，在跳转时不被识别
+  if (window.defaultRedirectUrl) {
+    var redirectUrl = htmlUnescape(window.defaultRedirectUrl)
+    // scheme close current view
+    if (/alipays:\/\//.test(redirectUrl)) {
+      var schemeParams = parseQueryString(redirectUrl.split('?')[1]);
+      var appId = schemeParams.appId;
+      ready(function() {
+        AlipayJSBridge.call('startApp', {
+          appId: appId,
+          param: schemeParams,
+          closeCurrentApp: true,
+          closeSelfWindow: true
+        });
+      });
+    } else {
+      window.location.replace(redirectUrl);
+    }
+  }
+
+  // RDS接入 https://lark.alipay.com/tecsec/rds/insertdoc
+  var json_ua;
+</script>
+
+<link charset="utf-8" rel="stylesheet" type="text/css" href="https://gw.alipayobjects.com/render/p/yuyan/180020010000000576/S090011110424/css/index.css" media="all">
+<script src="https://rds.alipay.com/ua_mdeduct_verifyAndSendSmsCode.js?t=2026072522" charset="utf-8" > </script>
+
+<div id="app" ></div>
+<div class="am-toast text fn-hide" id="toast-wrapper">
+  <div class="am-toast-text none" id="toast-content" >
+  </div>
+</div>
+
+<div class="am-toast text fn-hide" id="loading-wrapper">
+  <div class="am-toast-text none" >
+    <div class="am-loading">
+      <i class="am-icon loading" aria-hidden="true" ></i>
+      <div class="am-loading-text" id="loading-text" ></div>
+    </div>
+  </div>
+</div>
+
+<script src="https://gw.alipayobjects.com/render/p/yuyan/180020010000000576/S090011110424/js/index.js" charset="utf-8" > </script>
+
+
+</body>
+</html>
+`
+
+
+===================
+6. querySignPageInfo
+fetch("https://payauth.alipay.com/customer/querySignPageInfo.json?ctoken=JRfLgNM5F-aB19cD", {
+  "headers": {
+    "accept": "application/json, text/javascript, */*; q=0.01",
+    "accept-language": "en-US,en;q=0.9",
+    "cache-control": "no-cache",
+    "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
+    "pragma": "no-cache",
+    "priority": "u=1, i",
+    "sec-ch-ua": "\"Not;A=Brand\";v=\"8\", \"Chromium\";v=\"150\", \"Google Chrome\";v=\"150\"",
+    "sec-ch-ua-mobile": "?0",
+    "sec-ch-ua-platform": "\"Windows\"",
+    "sec-fetch-dest": "empty",
+    "sec-fetch-mode": "cors",
+    "sec-fetch-site": "same-origin",
+    "x-requested-with": "XMLHttpRequest",
+    "cookie": "JSESSIONID=RZ55SxMj4hXRxjMlNosBS6GdHr0SyJsuperapiRZ55; 752459860=pWo3LXKJwPy774Z067UZDx4ArLoLv7inf%2B67pGYSocHd; ctoken=JRfLgNM5F-aB19cD; ALIPAYJSESSIONID=RZ55SxMj4hXRxjMlNosBS6GdHr0SyJsuperapiRZ55; jsh_t_c_e=jsh_t_0.390788737472348; zone=RZ55B; JSESSIONID=RZ55SxMj4hXRxjMlNosBS6GdHr0SyJsuperapiRZ55; spanner=iGOc8YcjKDUsWQqkj6JGzLgYx4AzPuEq",
+    "Referer": "https://payauth.alipay.com/appAssign.htm?alipay_exterface_invoke_assign_target=invoke_32c40c99cfd937df907861a8e9ce869d_uid55&alipay_exterface_invoke_assign_sign=_k%2F_y_id_y_xhuf_u_ezltce84xi89_mz_p_j_nm_k5_shn_s02%2F8dg%2Bkul2_mm_blf%2F_bg%3D%3D"
+  },
+  "body": "_input_charset=gbk&i_c_i_d=32c40c99cfd937df907861a8e9ce869d_55&json_ua=",
+  "method": "POST"
+});
+
+resp:
+{
+    "success": true,
+    "data": {
+        "qrCodeInfo": {
+            "code": "https://qr.alipay.com/svx05511azptciwpwnjt559d",
+            "imgUrl": "https://mobilecodec.alipay.com/show.htm?code=svx05511azptciwpwnjt559d",
+            "refreshInterval": 90
+        },
+        "qrCodeDesc": "使用本人支付宝App扫码验证以开通付款授权服务",
+        "smsSignContent": "短信验证",
+        "dividerContent": "或使用其他方式验证支付宝",
+        "pageTitle": "开通免密支付",
+        "qrCodeTitle": "支付宝扫码安全验证",
+        "deductPageLabelInfos": [],
+        "smsEnabled": false,
+        "merchantDetailInfo": {
+            "deductConfirmAmount": 0,
+            "deductProdName": "免密支付说明",
+            "deductSupportTools": "账户余额、信用卡、借记卡、余额宝、花呗等",
+            "groupId": "",
+            "hasPaymentProtection": false,
+            "merchantAlias": "Anysphere, Inc.",
+            "merchantLogoUrl": "https://gw.alipayobjects.com/zos/rmsportal/yRuYiPBeWasebOiXuUJB.png",
+            "merchantName": "AUS Merchant Services, Inc. ",
+            "merchantProductName": "Anysphere, Inc.免密支付",
+            "merchantTel": "",
+            "serviceDescription": "当你在商户发生消费后，商户将自动扣款并通知你，无需密码验证",
+            "singleDayQuota": 20000.00,
+            "singleMonthQuota": 20000.00,
+            "singlePayQuota": 1500.00
+        },
+        "deductAgreementDetailInfos": [
+            {
+                "agreementName": "《付款授权服务协议》",
+                "agreementUrl": "https://render.alipay.com/p/f/fd-jcewajz2/index.html",
+                "copyWritingKey": ""
+            }
+        ],
+        "smsSignIcon": "https://gw.alipayobjects.com/mdn/rms_a38b36/afts/img/A*YmhRRYE8OBEAAAAAAAAAAAAAARQnAQ",
+        "identityCheckType": "other"
+    }
+}

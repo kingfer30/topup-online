@@ -35,6 +35,14 @@ type toolsvipRawItem struct {
 	HTML    string `json:"html"`
 }
 
+// toolsvipErrorResponse 接口异常/包裹响应时可能返回的对象结构（而非数组）
+type toolsvipErrorResponse struct {
+	Error   string            `json:"error"`
+	Message string            `json:"message"`
+	Msg     string            `json:"msg"`
+	Data    []toolsvipRawItem `json:"data"`
+}
+
 // ToolsvipMailItem 单封 toolsvip 邮件
 type ToolsvipMailItem struct {
 	Subject  string `json:"subject"`
@@ -90,10 +98,41 @@ func fetchToolsvipMailbox(client *http.Client, email, password, mailbox string) 
 	}
 
 	var items []toolsvipRawItem
-	if err := json.Unmarshal(body, &items); err != nil {
-		return nil, fmt.Errorf("JSON 解析失败 (%s): %w", mailbox, err)
+	if err := json.Unmarshal(body, &items); err == nil {
+		return items, nil
 	}
-	return items, nil
+
+	// 接口未按预期返回数组：尝试按对象解析（常见于报错信息或 {data: [...]} 包裹结构）
+	var wrapped toolsvipErrorResponse
+	if jsonErr := json.Unmarshal(body, &wrapped); jsonErr == nil {
+		if len(wrapped.Data) > 0 {
+			return wrapped.Data, nil
+		}
+		if msg := firstNonEmptyToolsvip(wrapped.Error, wrapped.Message, wrapped.Msg); msg != "" {
+			return nil, fmt.Errorf("%s 接口返回: %s", mailbox, msg)
+		}
+		// 未命中已知错误字段的空对象，视为该邮箱暂无邮件
+		return []toolsvipRawItem{}, nil
+	}
+
+	return nil, fmt.Errorf("JSON 解析失败 (%s): %s", mailbox, toolsvipSafePrefix(string(body), 200))
+}
+
+func firstNonEmptyToolsvip(values ...string) string {
+	for _, v := range values {
+		if strings.TrimSpace(v) != "" {
+			return strings.TrimSpace(v)
+		}
+	}
+	return ""
+}
+
+func toolsvipSafePrefix(s string, n int) string {
+	runes := []rune(s)
+	if len(runes) <= n {
+		return s
+	}
+	return string(runes[:n]) + "..."
 }
 
 // FetchToolsvipMails 获取 toolsvip 收件箱与垃圾箱邮件

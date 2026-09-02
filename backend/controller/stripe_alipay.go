@@ -13,20 +13,16 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/kingfer30/topup-online/model"
 	"github.com/kingfer30/topup-online/utils/client"
 	"github.com/kingfer30/topup-online/utils/logger"
 )
 
 const (
-	stripeCheckoutOrigin  = "https://checkout.stripe.com"
-	stripeAPIBase         = "https://api.stripe.com/v1/payment_pages/"
-	cursorStripePK        = "pk_live_51Lb5LzB4TZWxSIGU4LcaRyvT5xW1Iw8Z3E1iOpuCblBLoLhoq3xQnt2U6sR0kfr6wwTdLdQCykfzNnw778PaO7n200tsRmVe72"
-	defaultBillingName    = "AIGuoGuo"
-	defaultBillingPostal  = "536546"
-	defaultBillingState   = "Zhejiang"
-	defaultBillingCity    = "Huzhou"
-	defaultBillingLine1   = "清河路177号"
-	defaultBillingCountry = "CN"
+	stripeCheckoutOrigin   = "https://checkout.stripe.com"
+	stripeAPIBase          = "https://api.stripe.com/v1/payment_pages/"
+	stripePaymentMethodAPI = "https://api.stripe.com/v1/payment_methods"
+	cursorStripePK         = "pk_live_51Lb5LzB4TZWxSIGU4LcaRyvT5xW1Iw8Z3E1iOpuCblBLoLhoq3xQnt2U6sR0kfr6wwTdLdQCykfzNnw778PaO7n200tsRmVe72"
 )
 
 var (
@@ -161,6 +157,7 @@ type stripeBilling struct {
 }
 
 func stripeBillingFromReq(req StripeAlipayRequest) stripeBilling {
+	cfg := model.GetCursorPayBilling()
 	b := stripeBilling{
 		Name:       strings.TrimSpace(req.Name),
 		PostalCode: strings.TrimSpace(req.PostalCode),
@@ -170,22 +167,22 @@ func stripeBillingFromReq(req StripeAlipayRequest) stripeBilling {
 		Country:    strings.ToUpper(strings.TrimSpace(req.Country)),
 	}
 	if b.Name == "" {
-		b.Name = defaultBillingName
+		b.Name = cfg.Name
 	}
 	if b.PostalCode == "" {
-		b.PostalCode = defaultBillingPostal
+		b.PostalCode = cfg.PostalCode
 	}
 	if b.State == "" {
-		b.State = defaultBillingState
+		b.State = cfg.State
 	}
 	if b.City == "" {
-		b.City = defaultBillingCity
+		b.City = cfg.City
 	}
 	if b.Line1 == "" {
-		b.Line1 = defaultBillingLine1
+		b.Line1 = cfg.Line1
 	}
 	if b.Country == "" {
-		b.Country = defaultBillingCountry
+		b.Country = cfg.Country
 	}
 	return b
 }
@@ -319,7 +316,10 @@ func stripeHTTPClient() *http.Client {
 		ExpectContinueTimeout: 1 * time.Second,
 		DisableCompression:    true,
 	}
-	if client.HTTPClient != nil {
+	if proxyURL := model.GetCursorPayProxyURL(); proxyURL != nil {
+		transport.Proxy = http.ProxyURL(proxyURL)
+		logger.SysLog("[stripe-alipay] 使用配置代理 " + proxyURL.Scheme + "://" + proxyURL.Host)
+	} else if client.HTTPClient != nil {
 		if t, ok := client.HTTPClient.Transport.(*http.Transport); ok && t != nil && t.Proxy != nil {
 			transport.Proxy = t.Proxy
 		}
@@ -348,6 +348,35 @@ func stripeRetryableNetErr(err error) bool {
 }
 
 func stripeConfirmAlipay(client *http.Client, pk, sessionID string, amount int, currency, email string, billing stripeBilling) (map[string]any, error) {
+	var last error
+
+	pmID, err := stripeCreateAlipayPaymentMethod(client, pk, sessionID, email, billing)
+	if err != nil {
+		last = err
+		logger.SysLog("[stripe-alipay] 创建 payment_method 失败: " + err.Error())
+	} else {
+		logger.SysLog("[stripe-alipay] 已创建 payment_method=" + pmID)
+		if refreshed, rerr := stripeInitPaymentPage(client, pk, sessionID); rerr == nil {
+			if amt := stripeExpectedAmount(refreshed); amt > 0 {
+				amount = amt
+			}
+			if stripeAlipayRedirectURL(refreshed) != "" {
+				return refreshed, nil
+			}
+		}
+		data, confirmErr := stripeConfirmWithPaymentMethod(client, pk, sessionID, pmID, amount, currency)
+		if confirmErr == nil {
+			return data, nil
+		}
+		last = confirmErr
+		if stripeConfirmAlreadyDone(confirmErr) {
+			if retrySession, retryErr := stripeInitPaymentPage(client, pk, sessionID); retryErr == nil && stripeAlipayRedirectURL(retrySession) != "" {
+				return retrySession, nil
+			}
+			return nil, last
+		}
+	}
+
 	attempts := []struct {
 		name string
 		form url.Values
@@ -357,7 +386,6 @@ func stripeConfirmAlipay(client *http.Client, pk, sessionID string, amount int, 
 		{"country-only", stripeAlipayConfirmForm(pk, sessionID, amount, email, billing, false, true)},
 		{"minimal", stripeAlipayConfirmForm(pk, sessionID, 0, "", billing, false, false)},
 	}
-	var last error
 	for _, attempt := range attempts {
 		logger.SysLog(fmt.Sprintf("[stripe-alipay] confirm session=%s amount=%d currency=%s mode=%s", sessionID, amount, currency, attempt.name))
 		data, err := stripeFormPost(client, pk, stripeAPIBase+sessionID+"/confirm", attempt.form)
@@ -374,8 +402,7 @@ func stripeConfirmAlipay(client *http.Client, pk, sessionID string, amount int, 
 			logger.SysLog("[stripe-alipay] confirm 报错后重新 init 已拿到 Alipay 跳转")
 			return retrySession, nil
 		}
-		if strings.Contains(strings.ToLower(err.Error()), "already been confirmed") ||
-			strings.Contains(strings.ToLower(err.Error()), "has already been") {
+		if stripeConfirmAlreadyDone(err) {
 			break
 		}
 	}
@@ -383,6 +410,138 @@ func stripeConfirmAlipay(client *http.Client, pk, sessionID string, amount int, 
 		last = fmt.Errorf("提交 Alipay 失败")
 	}
 	return nil, last
+}
+
+func stripeConfirmAlreadyDone(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "already been confirmed") || strings.Contains(msg, "has already been")
+}
+
+func stripeConfirmWithPaymentMethod(client *http.Client, pk, sessionID, pmID string, amount int, currency string) (map[string]any, error) {
+	tryAmount := amount
+	var last error
+	for i := 0; i < 2; i++ {
+		logger.SysLog(fmt.Sprintf("[stripe-alipay] confirm session=%s amount=%d currency=%s mode=payment-method", sessionID, tryAmount, currency))
+		form := stripeAlipayConfirmWithPMForm(pk, sessionID, pmID, tryAmount)
+		data, err := stripeFormPost(client, pk, stripeAPIBase+sessionID+"/confirm", form)
+		if err == nil {
+			if stripeAlipayRedirectURL(data) != "" {
+				return data, nil
+			}
+			last = fmt.Errorf("confirm 成功但未返回支付宝跳转")
+			return nil, last
+		}
+		last = err
+		logger.SysLog("[stripe-alipay] confirm 失败 mode=payment-method err=" + err.Error())
+		if retrySession, retryErr := stripeInitPaymentPage(client, pk, sessionID); retryErr == nil && stripeAlipayRedirectURL(retrySession) != "" {
+			logger.SysLog("[stripe-alipay] confirm 报错后重新 init 已拿到 Alipay 跳转")
+			return retrySession, nil
+		}
+		if i == 0 && strings.Contains(strings.ToLower(err.Error()), "amount") {
+			if refreshed, rerr := stripeInitPaymentPage(client, pk, sessionID); rerr == nil {
+				if amt := stripeExpectedAmount(refreshed); amt > 0 && amt != tryAmount {
+					tryAmount = amt
+					continue
+				}
+			}
+		}
+		break
+	}
+	if last == nil {
+		last = fmt.Errorf("提交 Alipay 失败")
+	}
+	return nil, last
+}
+
+func stripeCreateAlipayPaymentMethod(client *http.Client, pk, sessionID, email string, billing stripeBilling) (string, error) {
+	var last error
+	for _, postal := range stripePostalCandidates(billing.PostalCode) {
+		b := billing
+		b.PostalCode = postal
+		id, err := stripeCreateAlipayPaymentMethodOnce(client, pk, sessionID, email, b)
+		if err == nil {
+			if postal != strings.TrimSpace(billing.PostalCode) {
+				logger.SysLog("[stripe-alipay] 邮编 " + billing.PostalCode + " 无效，已改用 " + postal)
+			}
+			return id, nil
+		}
+		last = err
+		if !strings.Contains(strings.ToLower(err.Error()), "postal") {
+			return "", err
+		}
+		logger.SysLog("[stripe-alipay] 创建 payment_method 邮编失败 postal=" + postal + " err=" + err.Error())
+	}
+	if last == nil {
+		last = fmt.Errorf("创建 Alipay payment method 失败")
+	}
+	return "", last
+}
+
+func stripeCreateAlipayPaymentMethodOnce(client *http.Client, pk, sessionID, email string, billing stripeBilling) (string, error) {
+	form := url.Values{}
+	form.Set("type", "alipay")
+	form.Set("key", pk)
+	form.Set("guid", "NA")
+	form.Set("muid", "NA")
+	form.Set("sid", "NA")
+	form.Set("billing_details[name]", billing.Name)
+	form.Set("billing_details[address][country]", billing.Country)
+	form.Set("billing_details[address][line1]", billing.Line1)
+	form.Set("billing_details[address][city]", billing.City)
+	form.Set("billing_details[address][state]", billing.State)
+	form.Set("billing_details[address][postal_code]", billing.PostalCode)
+	if email != "" {
+		form.Set("billing_details[email]", email)
+	}
+	form.Set("client_attribution_metadata[checkout_session_id]", sessionID)
+	form.Set("client_attribution_metadata[merchant_integration_source]", "checkout")
+	form.Set("client_attribution_metadata[merchant_integration_version]", "hosted_checkout")
+	form.Set("client_attribution_metadata[payment_method_selection_flow]", "automatic")
+
+	data, err := stripeFormPost(client, pk, stripePaymentMethodAPI, form)
+	if err != nil {
+		return "", err
+	}
+	id := stripeMapString(data, "id")
+	if id == "" {
+		return "", fmt.Errorf("创建 Alipay payment method 未返回 id")
+	}
+	return id, nil
+}
+
+func stripePostalCandidates(configured string) []string {
+	configured = strings.TrimSpace(configured)
+	seen := map[string]bool{}
+	out := make([]string, 0, 6)
+	add := func(v string) {
+		v = strings.TrimSpace(v)
+		if v == "" || seen[v] {
+			return
+		}
+		seen[v] = true
+		out = append(out, v)
+	}
+	add(configured)
+	for _, v := range []string{"313000", "200000", "100000", "518000", "545452"} {
+		add(v)
+	}
+	return out
+}
+
+func stripeAlipayConfirmWithPMForm(pk, sessionID, pmID string, amount int) url.Values {
+	form := url.Values{}
+	form.Set("key", pk)
+	form.Set("eid", "NA")
+	form.Set("payment_method", pmID)
+	form.Set("expected_payment_method_type", "alipay")
+	form.Set("return_url", stripeCheckoutOrigin+"/c/pay/"+sessionID)
+	if amount > 0 {
+		form.Set("expected_amount", fmt.Sprintf("%d", amount))
+	}
+	return form
 }
 
 func stripeAlipayConfirmForm(pk, sessionID string, amount int, email string, billing stripeBilling, fullAddress, includeEmail bool) url.Values {
@@ -511,6 +670,15 @@ func stripeExpectedAmount(session map[string]any) int {
 			return total
 		}
 	}
+	adaptive := stripeMap(session["adaptive_pricing_info"])
+	if amt := stripeMapInt(adaptive, "integration_amount"); amt > 0 {
+		return amt
+	}
+	if pi := stripeMap(session["payment_intent"]); pi != nil {
+		if amt := stripeMapInt(pi, "amount"); amt > 0 {
+			return amt
+		}
+	}
 	if invoice := stripeMap(session["invoice"]); invoice != nil {
 		if due := stripeMapInt(invoice, "amount_due"); due > 0 {
 			return due
@@ -518,6 +686,9 @@ func stripeExpectedAmount(session map[string]any) int {
 		if total := stripeMapInt(invoice, "total"); total > 0 {
 			return total
 		}
+	}
+	if amt := stripeMapInt(session, "amount_total"); amt > 0 {
+		return amt
 	}
 	return 0
 }

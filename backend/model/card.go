@@ -30,6 +30,7 @@ type AccountCard struct {
 	SubscriptionCredits     *float64       `json:"subscription_credits" gorm:"type:decimal(10,2);comment:订阅额度"`
 	IsCheck                 int            `json:"is_check" gorm:"type:tinyint(2);default:-1;comment:检查状态 -1未检查 1检查成功 2检查失败"`
 	CheckTime               *int64         `json:"check_time" gorm:"type:bigint(20);comment:检查时间"`
+	CheckFailCount          int            `json:"check_fail_count" gorm:"type:tinyint(2);default:0;comment:连续检查失败次数"`
 	PurchaseDate            *int64         `json:"purchase_date" gorm:"type:bigint(20);comment:购买时间"`
 	PurchasePrice           *float64       `json:"purchase_price" gorm:"type:decimal(10,2);comment:购买价格(成本)"`
 	PurchaseFrom            string         `json:"purchase_from" gorm:"type:varchar(50);comment:购买平台"`
@@ -53,6 +54,11 @@ type AccountCard struct {
 	FreezeStatus            int            `json:"freeze_status" gorm:"type:tinyint(2);default:-1;comment:冻结状态 -1未冻结 1已冻结"`
 	FreezeTime              *int64         `json:"freeze_time" gorm:"type:bigint(20);comment:冻结时间"`
 	FreezeRemark            string         `json:"freeze_remark" gorm:"type:varchar(200);comment:冻结备注"`
+	Promo50OffTime          *int64         `json:"promo_50off_time" gorm:"column:promo_50off_time;type:bigint(20);comment:检测到Cursor 50%off召回邮件的时间"`
+	Promo50OffInfo          string         `json:"promo_50off_info" gorm:"column:promo_50off_info;type:varchar(300);comment:命中的Cursor 50%off召回邮件信息(位置|日期|标题)"`
+	Promo50OffCheckTime     *int64         `json:"promo_50off_check_time" gorm:"column:promo_50off_check_time;type:bigint(20);comment:最近一次检测50%off召回邮件的时间(无论成功失败)"`
+	Promo50OffLastError     string         `json:"promo_50off_last_error" gorm:"column:promo_50off_last_error;type:varchar(300);comment:最近一次检测50%off召回邮件失败的错误信息"`
+	Promo50OffSkip          int            `json:"promo_50off_skip" gorm:"column:promo_50off_skip;type:tinyint(2);default:0;comment:是否永久跳过50%off召回邮件检测 0否 1是"`
 	CreatedAt               time.Time      `json:"created_at"`
 	UpdatedAt               time.Time      `json:"updated_at"`
 	DeletedAt               gorm.DeletedAt `json:"deleted_at" gorm:"index"`
@@ -111,7 +117,7 @@ func applyAccountSearchFilter(query *gorm.DB, accounts []string) *gorm.DB {
 }
 
 // GetAllCardsForExport 获取符合条件的全部卡密（不分页，用于导出）
-func GetAllCardsForExport(tableName string, cardType string, accounts []string, subscriptionType string, subscriptionStatus int, isCheck int, purchaseDate int64, freezeStatus int, freezeTime int64, sellTo string, purchaseBy string) ([]AccountCard, error) {
+func GetAllCardsForExport(tableName string, cardType string, accounts []string, subscriptionType string, subscriptionStatus int, isCheck int, purchaseDate int64, freezeStatus int, freezeTime int64, sellTo string, purchaseBy string, promo50Off int) ([]AccountCard, error) {
 	var cards []AccountCard
 
 	query := DB.Table(tableName).Where("status != ?", CardStatusDeleted)
@@ -167,9 +173,14 @@ func GetAllCardsForExport(tableName string, cardType string, accounts []string, 
 		query = query.Where("purchase_by LIKE ?", "%"+pb+"%")
 	}
 
+	// Cursor 50% off 召回邮件命中筛选（1=仅命中，0=不过滤）
+	if promo50Off == 1 {
+		query = query.Where("promo_50off_time IS NOT NULL")
+	}
+
 	query = applyAccountSearchFilter(query, accounts)
 
-	orderClause := "freeze_status ASC, updated_at DESC, id DESC"
+	orderClause := "freeze_status ASC, created_at ASC, id ASC"
 	if cardType == "unsold" {
 		orderClause = "sell_status DESC, purchase_date ASC, id ASC"
 	} else if cardType == "sold" {
@@ -181,7 +192,7 @@ func GetAllCardsForExport(tableName string, cardType string, accounts []string, 
 }
 
 // GetCardList 获取卡密列表
-func GetCardList(tableName string, cardType string, page, pageSize int, accounts []string, subscriptionType string, subscriptionStatus int, isCheck int, purchaseDate int64, freezeStatus int, freezeTime int64, sellTo string, purchaseBy string) ([]AccountCard, int64, error) {
+func GetCardList(tableName string, cardType string, page, pageSize int, accounts []string, subscriptionType string, subscriptionStatus int, isCheck int, purchaseDate int64, freezeStatus int, freezeTime int64, sellTo string, purchaseBy string, promo50Off int) ([]AccountCard, int64, error) {
 	var cards []AccountCard
 	var total int64
 
@@ -241,6 +252,11 @@ func GetCardList(tableName string, cardType string, page, pageSize int, accounts
 		query = query.Where("purchase_by LIKE ?", "%"+pb+"%")
 	}
 
+	// Cursor 50% off 召回邮件命中筛选（1=仅命中，0=不过滤）
+	if promo50Off == 1 {
+		query = query.Where("promo_50off_time IS NOT NULL")
+	}
+
 	// 账号搜索（单行模糊，多行精确 IN）
 	query = applyAccountSearchFilter(query, accounts)
 
@@ -250,9 +266,9 @@ func GetCardList(tableName string, cardType string, page, pageSize int, accounts
 	}
 
 	// 分页查询：未售列表发货中优先，同组内按订阅到期时间先进先出（与取货逻辑一致）
-	// 普号列表：未冻结（freeze_status=-1）排前，已冻结（freeze_status=1）排后，同组内按 updated_at DESC
+	// 普号列表：未冻结排前、已冻结排后；同组内按创建时间（录入时间）升序，旧号优先
 	offset := (page - 1) * pageSize
-	orderClause := "freeze_status ASC, updated_at DESC, id DESC"
+	orderClause := "freeze_status ASC, created_at ASC, id ASC"
 	if cardType == "unsold" {
 		orderClause = "sell_status DESC, subscription_expired_time ASC, id ASC"
 	} else if cardType == "sold" {
@@ -284,6 +300,17 @@ func GetCardById(tableName string, id int) (*AccountCard, error) {
 	}
 	var card AccountCard
 	err := DB.Table(tableName).Where("status != ?", CardStatusDeleted).First(&card, "id = ?", id).Error
+	return &card, err
+}
+
+// GetCardByAccount 根据账号获取卡密（跳过软删记录）
+func GetCardByAccount(tableName string, account string) (*AccountCard, error) {
+	account = strings.TrimSpace(account)
+	if account == "" {
+		return nil, errors.New("账号为空")
+	}
+	var card AccountCard
+	err := DB.Table(tableName).Where("status != ? AND account = ?", CardStatusDeleted, account).First(&card).Error
 	return &card, err
 }
 
@@ -321,34 +348,34 @@ func UpdateCard(tableName string, id int, card *AccountCard) error {
 
 	card.Id = id
 	updates := map[string]interface{}{
-		"account":             card.Account,
-		"password":            card.Password,
-		"mail_password":       card.MailPassword,
-		"subscription_status": card.SubscriptionStatus,
-		"subscription_type":   card.SubscriptionType,
-		"purchase_price":      card.PurchasePrice,
-		"purchase_from":       card.PurchaseFrom,
-		"purchase_by":         card.PurchaseBy,
-		"sell_price":          card.SellPrice,
-		"sell_to":             card.SellTo,
-		"sell_status":         card.SellStatus,
-		"account_type":        card.AccountType,
-		"status":              card.Status,
-		"api_key":             card.ApiKey,
-		"token":               card.Token,
-		"2fa":                 card.TwoFA,
-		"client_id":           card.ClientId,
-		"mail_url":            card.MailUrl,
-		"remark":              card.Remark,
-		"code_link":           card.CodeLink,
-		"phone":               card.Phone,
-		"phone_link":          card.PhoneLink,
-		"subscription_time":   card.SubscriptionTime,
+		"account":                   card.Account,
+		"password":                  card.Password,
+		"mail_password":             card.MailPassword,
+		"subscription_status":       card.SubscriptionStatus,
+		"subscription_type":         card.SubscriptionType,
+		"purchase_price":            card.PurchasePrice,
+		"purchase_from":             card.PurchaseFrom,
+		"purchase_by":               card.PurchaseBy,
+		"sell_price":                card.SellPrice,
+		"sell_to":                   card.SellTo,
+		"sell_status":               card.SellStatus,
+		"account_type":              card.AccountType,
+		"status":                    card.Status,
+		"api_key":                   card.ApiKey,
+		"token":                     card.Token,
+		"2fa":                       card.TwoFA,
+		"client_id":                 card.ClientId,
+		"mail_url":                  card.MailUrl,
+		"remark":                    card.Remark,
+		"code_link":                 card.CodeLink,
+		"phone":                     card.Phone,
+		"phone_link":                card.PhoneLink,
+		"subscription_time":         card.SubscriptionTime,
 		"subscription_expired_time": card.SubscriptionExpiredTime,
-		"subscription_credits": card.SubscriptionCredits,
-		"purchase_date":       card.PurchaseDate,
-		"sell_date":           card.SellDate,
-		"sell_order_no":       card.SellOrderNo,
+		"subscription_credits":      card.SubscriptionCredits,
+		"purchase_date":             card.PurchaseDate,
+		"sell_date":                 card.SellDate,
+		"sell_order_no":             card.SellOrderNo,
 	}
 	return DB.Table(tableName).Where("id = ?", id).Updates(updates).Error
 }
@@ -559,9 +586,9 @@ type SubscriptionTypeStat struct {
 type CardTypeStat struct {
 	Category           string                 `json:"category"`
 	SoldCount          int64                  `json:"sold_count"`
-	ProductStockCount  int64                  `json:"product_stock_count"`  // 成品未售库存合计（account_type=2）
+	ProductStockCount  int64                  `json:"product_stock_count"`   // 成品未售库存合计（account_type=2）
 	ProductStockByType []SubscriptionTypeStat `json:"product_stock_by_type"` // 成品按订阅类型细分
-	RegularStockCount  int64                  `json:"regular_stock_count"`  // 普号库存合计（account_type=1，未冻结）
+	RegularStockCount  int64                  `json:"regular_stock_count"`   // 普号库存合计（account_type=1，未冻结）
 	RegularStockByType []SubscriptionTypeStat `json:"regular_stock_by_type"` // 普号按订阅类型细分
 	RevenueUSD         float64                `json:"revenue_usd"`
 	RevenueCNY         float64                `json:"revenue_cny"`
@@ -671,7 +698,7 @@ type BatchUpgradeRequest struct {
 	IDs                       []int
 	SubscriptionType          string
 	SubscriptionTime          *int64
-	SubscriptionRemainingDays *int // 订阅剩余天数，用于计算 subscription_expired_time（同批量导入）
+	SubscriptionRemainingDays *int     // 订阅剩余天数，用于计算 subscription_expired_time（同批量导入）
 	PurchasePrice             *float64 // 追加到现有购买价格
 	PurchaseFrom              string
 	PurchaseDate              *int64
@@ -803,6 +830,7 @@ func GetUnsoldCardsWithToken(tableName string, limit int) ([]*AccountCard, error
 	now := time.Now()
 	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).Unix()
 	err := DB.Table(tableName).
+		Where("status NOT IN ?", []int{CardStatusDeleted, CardStatusBanned}).
 		Where("sell_status = ? AND account_type=2 AND token IS NOT NULL AND token != ''", 1).
 		Where("subscription_status != ?", -2).
 		Where("check_time IS NULL OR check_time < ?", todayStart).
@@ -812,6 +840,24 @@ func GetUnsoldCardsWithToken(tableName string, limit int) ([]*AccountCard, error
 		return nil, err
 	}
 	return cards, nil
+}
+
+// GetQuickMailUncheckedCards 获取指定表中已配置快捷邮件取件（account+mail_password+code_link 均齐全）
+// 且尚未标记 Cursor 50% off 召回邮件的记录，按 id 升序游标分页（避免同一批记录被重复取出）
+func GetQuickMailUncheckedCards(tableName string, afterID, limit int) ([]*AccountCard, error) {
+	var cards []*AccountCard
+	err := DB.Table(tableName).
+		Where("status NOT IN ?", []int{CardStatusDeleted, CardStatusBanned}).
+		Where("account != ''").
+		Where("mail_password IS NOT NULL AND mail_password != ''").
+		Where("promo_50off_time IS NULL").
+		Where("promo_50off_skip != 1").
+		Where("(code_link LIKE ? OR code_link LIKE ?)", "%lqqq.cc%", "%toolsvip.cc%").
+		Where("id > ?", afterID).
+		Order("id ASC").
+		Limit(limit).
+		Find(&cards).Error
+	return cards, err
 }
 
 // UpdateCardCheckResult 更新卡密检查结果
@@ -843,6 +889,12 @@ func MigrateCardTableColumns() error {
 		{"freeze_time", "bigint(20) NULL COMMENT '冻结时间'"},
 		{"freeze_remark", "varchar(200) NULL COMMENT '冻结备注'"},
 		{"client_id", "varchar(200) NULL COMMENT 'client_id'"},
+		{"promo_50off_time", "bigint(20) NULL COMMENT '检测到Cursor 50%off召回邮件的时间'"},
+		{"promo_50off_info", "varchar(300) NULL COMMENT '命中的Cursor 50%off召回邮件信息(位置|日期|标题)'"},
+		{"promo_50off_check_time", "bigint(20) NULL COMMENT '最近一次检测50%off召回邮件的时间(无论成功失败)'"},
+		{"promo_50off_last_error", "varchar(300) NULL COMMENT '最近一次检测50%off召回邮件失败的错误信息'"},
+		{"promo_50off_skip", "tinyint(2) NOT NULL DEFAULT 0 COMMENT '是否永久跳过50%off召回邮件检测 0否 1是'"},
+		{"check_fail_count", "tinyint(2) NOT NULL DEFAULT 0 COMMENT '连续检查失败次数'"},
 	}
 
 	for _, tableName := range tableNames {

@@ -101,9 +101,13 @@ export const deleteMicrosoftMail = (id: number): Promise<ApiResponse> => {
 }
 
 export const batchImportMicrosoftMails = (
-  mails: MicrosoftMailRequest[]
+  mails: MicrosoftMailRequest[],
+  accountCardTable?: string
 ): Promise<ApiResponse> => {
-  return http.post('/admin/microsoft-mails/batch-import', { mails }) as Promise<ApiResponse>
+  return http.post('/admin/microsoft-mails/batch-import', {
+    mails,
+    account_card_table: accountCardTable || '',
+  }) as Promise<ApiResponse>
 }
 
 export const exportMicrosoftMails = (
@@ -150,4 +154,14 @@ export const batchDeleteMicrosoftMails = (ids: number[]): Promise<ApiResponse<nu
 
 export const updateMicrosoftMailRemark = (id: number, remark: string): Promise<ApiResponse> => {
   return http.post('/admin/microsoft-mails/update-remark', { id, remark }) as Promise<ApiResponse>
+}
+
+// 根据所属卡密表+ID 查询关联的微软邮箱记录（原生取件使用）
+export const getMicrosoftMailByCard = (
+  table: string,
+  cardId: number
+): Promise<ApiResponse<MicrosoftMail>> => {
+  return http.get('/admin/microsoft-mails/by-card', {
+    params: { table, card_id: cardId },
+  }) as Promise<ApiResponse<MicrosoftMail>>
 }

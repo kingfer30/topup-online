@@ -151,6 +151,40 @@ func GetMicrosoftMailById(id int) (*MicrosoftMail, error) {
 	return &mail, err
 }
 
+// GetMicrosoftMailByCard 按所属账号卡密表名+ID 查找关联的微软邮箱记录
+func GetMicrosoftMailByCard(table string, cardId int) (*MicrosoftMail, error) {
+	if table == "" || cardId == 0 {
+		return nil, errors.New("参数缺失")
+	}
+	var mail MicrosoftMail
+	err := DB.Where("account_card_table = ? AND account_card_id = ? AND status != ?", table, cardId, CardStatusDeleted).
+		First(&mail).Error
+	if err != nil {
+		return nil, err
+	}
+	return &mail, nil
+}
+
+// FindCardIdByAccount 在指定 cards_* 表中按账号查找记录ID，未找到返回 (0, false, nil)
+func FindCardIdByAccount(tableName, account string) (int, bool, error) {
+	if tableName == "" || account == "" {
+		return 0, false, nil
+	}
+	if !CheckTableExists(tableName) {
+		return 0, false, nil
+	}
+	var ids []int
+	err := DB.Table(tableName).Where("account = ? AND status != ?", account, CardStatusDeleted).
+		Limit(1).Pluck("id", &ids).Error
+	if err != nil {
+		return 0, false, err
+	}
+	if len(ids) == 0 {
+		return 0, false, nil
+	}
+	return ids[0], true, nil
+}
+
 // GetMicrosoftMailsByIds 按 ID 列表获取（需有 token）
 func GetMicrosoftMailsByIds(ids []int) ([]*MicrosoftMail, error) {
 	if len(ids) == 0 {
