@@ -3,7 +3,7 @@
     <!-- 顶部预留区域：后续用于展示与 web 主站关联的菜单，暂不实现 -->
     <div class="h-14 bg-white border-b border-gray-200"></div>
 
-    <div class="flex-1 flex items-center justify-center px-4 py-10">
+    <div class="flex-1 flex flex-col items-center justify-center px-4 py-10">
       <n-card class="w-full max-w-lg shadow-md" :bordered="false">
         <h1 class="text-2xl font-bold text-gray-800 mb-1">Cursor 短信验证码查询</h1>
         <p class="text-gray-400 text-sm mb-6" v-if="account">账号：{{ account }}</p>
@@ -54,6 +54,12 @@
           </div>
         </template>
       </n-card>
+
+      <div class="w-full max-w-lg text-center text-sm text-gray-400 mt-4">
+        <a href="https://plati.market/itm/5957989" target="_blank" rel="noopener noreferrer" class="hover:text-primary-600">购买产品</a>
+        <span class="mx-2">|</span>
+        <a href="https://t.me/aiguoguo199" target="_blank" rel="noopener noreferrer" class="hover:text-primary-600">联系我们</a>
+      </div>
     </div>
   </div>
 </template>
@@ -69,7 +75,7 @@ const POLL_SECONDS = 10
 const message = useMessage()
 
 const account = ref('')
-const pass = ref('')
+const rawQuery = ref('')
 const paramError = ref('')
 
 const loading = ref(false)
@@ -79,19 +85,27 @@ const result = ref<CursorSmsQueryResult | null>(null)
 const countdown = ref(0)
 let countdownTimer: ReturnType<typeof setInterval> | null = null
 
-// 从地址栏解析 account----pass，例如 /sms/cursor?account----pass
-function parseParams() {
+// 还原地址栏 ? 后面的原始整串内容。
+// 密码中若包含 # 会被浏览器当作 fragment 分隔符，导致 location.search 被截断，
+// 因此需要把 location.hash 拼回去才能还原出完整的原始字符串。
+function getRawQueryFromUrl(): string {
   const search = window.location.search.replace(/^\?/, '')
-  if (!search) {
+  const hash = window.location.hash.replace(/^#/, '')
+  const raw = hash ? `${search}#${hash}` : search
+  try {
+    return decodeURIComponent(raw)
+  } catch {
+    return raw
+  }
+}
+
+// 解析地址栏 account----pass，例如 /sms/cursor?account----pass
+// 这里只做基本校验和展示用的账号提取，真正的拆分以后端为准（整串原样传给后端）
+function parseParams() {
+  const raw = getRawQueryFromUrl()
+  if (!raw) {
     paramError.value = '查询链接缺少账号信息，请检查链接后重试。'
     return
-  }
-
-  let raw = search
-  try {
-    raw = decodeURIComponent(search)
-  } catch {
-    raw = search
   }
 
   const sepIndex = raw.indexOf('----')
@@ -100,10 +114,10 @@ function parseParams() {
     return
   }
 
+  rawQuery.value = raw
   account.value = raw.slice(0, sepIndex).trim()
-  pass.value = raw.slice(sepIndex + 4).trim()
 
-  if (!account.value || !pass.value) {
+  if (!account.value || raw.slice(sepIndex + 4).trim() === '') {
     paramError.value = '查询链接缺少账号或密码，请检查链接后重试。'
   }
 }
@@ -145,14 +159,18 @@ async function fetchCode() {
   stopCountdown()
   loading.value = true
   try {
-    const res = await queryCursorSms(account.value, pass.value)
+    const res = await queryCursorSms(rawQuery.value)
     result.value = res.data
+    if (res.data.account) {
+      account.value = res.data.account
+    }
     if (res.data.status === 'received') {
       return
     }
     startCountdown()
   } catch (err: any) {
     result.value = {
+      account: account.value,
       status: 'error',
       code: '',
       message: err?.message || '网络异常，请稍后重试。',

@@ -13,12 +13,24 @@ import (
 const cursorCardTable = "cards_cursor"
 
 // GetCursorSmsCode 独立取码页专用接口（公开，无需管理员认证）
-// GET /api/sms/cursor/query?account=xxx&pass=xxx
+// GET /api/sms/cursor/query?q=account----pass
+// q 为地址栏 ? 后面的原始整串内容（未做任何拆分），由后端统一按 ---- 拆分为 account/pass，
+// 避免前端拆分时因密码中包含 # 等字符被浏览器截断导致拆分错误。
 // 依据 account 在 cards_cursor 表中查找记录，校验 pass 后取出 phone_link 并抓取短信验证码
 func GetCursorSmsCode(c *gin.Context) {
-	account := strings.TrimSpace(c.Query("account"))
-	pass := strings.TrimSpace(c.Query("pass"))
+	raw := strings.TrimSpace(c.Query("q"))
+	if raw == "" {
+		c.JSON(http.StatusOK, gin.H{"code": 400, "message": "查询参数不能为空"})
+		return
+	}
 
+	sepIndex := strings.Index(raw, "----")
+	if sepIndex == -1 {
+		c.JSON(http.StatusOK, gin.H{"code": 400, "message": "查询参数格式错误，缺少 ---- 分隔符"})
+		return
+	}
+	account := strings.TrimSpace(raw[:sepIndex])
+	pass := strings.TrimSpace(raw[sepIndex+len("----"):])
 	if account == "" || pass == "" {
 		c.JSON(http.StatusOK, gin.H{"code": 400, "message": "账号或密码不能为空"})
 		return
@@ -36,7 +48,7 @@ func GetCursorSmsCode(c *gin.Context) {
 	}
 
 	if strings.TrimSpace(card.PhoneLink) == "" {
-		c.JSON(http.StatusOK, gin.H{"code": 400, "message": "账号不存在或已失效"})
+		c.JSON(http.StatusOK, gin.H{"code": 400, "message": "该账号未配置接码地址"})
 		return
 	}
 
@@ -49,6 +61,12 @@ func GetCursorSmsCode(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"code":    200,
 		"message": "成功",
-		"data":    result,
+		"data": gin.H{
+			"account":    account,
+			"status":     result.Status,
+			"code":       result.Code,
+			"message":    result.Message,
+			"expires_at": result.ExpiresAt,
+		},
 	})
 }

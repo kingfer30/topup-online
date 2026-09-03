@@ -1008,7 +1008,7 @@ const cursorAutoLoginField = (card: Card, sep: string): string => {
   // token 为空时无法通过 token 登录，不展示该提示
   const token = (card.token || '').trim()
   if (!token) return ''
-  return `${sep}Account restrictions triggering SMS verification have been frequent recently; logging in via token is strongly recommended. Please refer to the following: ${CURSOR_AUTO_LOGIN_URL}`
+  return `${sep}В последнее время часто возникают ограничения на доступ к аккаунту, вызывающие SMS-верификацию; настоятельно рекомендуется входить в систему с помощью токена. Пожалуйста, ознакомьтесь со следующим: ${CURSOR_AUTO_LOGIN_URL}`
 }
 
 const hasPhoneReceive = (card: Card): boolean => {
@@ -1019,7 +1019,7 @@ const hasPhoneReceive = (card: Card): boolean => {
 const phoneFields = (card: Card, sep: string): string => {
   if (!hasPhoneReceive(card)) return ''
   const phoneLoginUrl = `${CURSOR_SMS_QUERY_BASE_URL}?${card.account}----${(card.password || '').trim()}`
-  return `${sep}phone-login: ${phoneLoginUrl}`
+  return `${sep}Когда на странице появится запрос на ввод кода подтверждения по SMS, пожалуйста, перейдите по ссылке, чтобы получить код подтверждения: ${phoneLoginUrl}`
 }
 
 const phoneDashSuffix = (card: Card): string => {
@@ -1037,12 +1037,13 @@ const domesticPhoneSuffix = (card: Card): string => {
   return `----${(card.phone || '').trim()}----${(card.phone_link || '').trim()}`
 }
 
+// 字段顺序：account, pass, mail-pass, mail-login, phone-login, token, Auto-Login 提示词
 const formatDigiseller = (card: Card): string => {
-  return `account: ${card.account}\npass: ${card.password || ''}\nmail-pass: ${card.mail_password || ''}${sessionTokenField(card, '\n')}\n\nmail-login: ${card.mail_url || ''}${cursorAutoLoginField(card, '\n')}${phoneFields(card, '\n')}`
+  return `account: ${card.account}\npass: ${card.password || ''}\nmail-pass: ${card.mail_password || ''}\nmail-login: ${card.mail_url || ''}${phoneFields(card, '\n')}${sessionTokenField(card, '\n')}${cursorAutoLoginField(card, '\n')}`
 }
 
 const formatDigisellerAuto = (card: Card): string => {
-  return `account: ${card.account}<br>pass: ${card.password || ''}<br>mail-pass: ${card.mail_password || ''}${sessionTokenField(card, '<br>')}<br>mail-login: ${card.mail_url || ''}${cursorAutoLoginField(card, '<br>')}${phoneFields(card, '<br>')}<br>Если вам удобно, не могли бы вы оставить нам хороший отзыв? https://ibb.co/tTgSNRLP<br>Подписывайтесь на наш канал, чтобы получать больше выгодных предложений: https://t.me/AI_GUO_GUO`
+  return `account: ${card.account}<br>pass: ${card.password || ''}<br>mail-pass: ${card.mail_password || ''}<br>mail-login: ${card.mail_url || ''}${phoneFields(card, '<br>')}${sessionTokenField(card, '<br>')}${cursorAutoLoginField(card, '<br>')}<br>Если вам удобно, не могли бы вы оставить нам хороший отзыв? https://ibb.co/tTgSNRLP<br>Подписывайтесь на наш канал, чтобы получать больше выгодных предложений: https://t.me/AI_GUO_GUO`
 }
 
 // digiseller 格式下，密码和邮箱密码均为空时改用邮箱验证码登录话术；
@@ -1194,12 +1195,12 @@ const exportPreview = computed(() => {
   const cursorHint = isCursorCategory.value ? ' / session-token（有 token 才带出）' : ''
   const autoLoginHint = isCursorCategory.value ? ' / Auto-Login' : ''
   if (exportFormatMode.value === 'digiseller') {
-    return `account / pass / mail-pass${cursorHint} / mail-login${autoLoginHint} / phone / phone-login（有则带出）`
+    return `account / pass / mail-pass / mail-login / phone-login（有则带出）${cursorHint}${autoLoginHint}`
   }
   if (exportFormatMode.value === 'digiseller_auto') {
     const autoCursor = isCursorCategory.value ? '<br>session-token（有 token 才带出）' : ''
     const autoLogin = isCursorCategory.value ? '<br>Auto-Login' : ''
-    return `account<br>pass<br>mail-pass${autoCursor}<br>mail-login${autoLogin}<br>phone / phone-login（有则带出）<br>评价引导<br>频道订阅`
+    return `account<br>pass<br>mail-pass<br>mail-login<br>phone-login（有则带出）${autoCursor}${autoLogin}<br>评价引导<br>频道订阅`
   }
   return exportSelectedFields.value
     .map(v => {

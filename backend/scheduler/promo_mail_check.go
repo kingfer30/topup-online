@@ -24,15 +24,15 @@ const (
 	promoMailMissingInfoText = "邮箱获取失败，请检查是否有信息没填对"
 )
 
-// promoMailNativeFallbackTriggers 快捷取件服务返回以下文案时，尝试走原生 Outlook 取件兜底
-var promoMailNativeFallbackTriggers = []string{
+// promoMailAccountInvalidTexts 快捷取件服务返回以下文案时，视为账号信息本身有问题（而非网络等临时故障）
+var promoMailAccountInvalidTexts = []string{
 	promoMailWrongPasswdText,
 	promoMailMissingInfoText,
 }
 
-// shouldFallbackToNativeMail 判断快捷取件错误是否应触发原生取件兜底
-func shouldFallbackToNativeMail(errMsg string) bool {
-	for _, kw := range promoMailNativeFallbackTriggers {
+// isAccountInvalidError 判断快捷取件错误是否明确指向账号信息有误
+func isAccountInvalidError(errMsg string) bool {
+	for _, kw := range promoMailAccountInvalidTexts {
 		if strings.Contains(errMsg, kw) {
 			return true
 		}
@@ -223,23 +223,34 @@ func CheckSinglePromoMail(card *model.AccountCard) (matched bool, info string, s
 		return false, "", false, fmt.Errorf("暂不支持的快捷取件服务: %s", card.CodeLink)
 	}
 
-	if err != nil && shouldFallbackToNativeMail(err.Error()) {
-		nMatched, nInfo, nSkip, nErr := checkPromoMailNative(card, err)
-		return nMatched, nInfo, nSkip, nErr
+	if err != nil {
+		// 快捷取件失败（无论具体原因），只要该卡密在 MicrosoftMail 表中存在可用 refresh_token，就尝试原生取件兜底
+		return checkPromoMailNative(card, err)
 	}
 	return matched, info, false, err
 }
 
-// checkPromoMailNative 快捷取件服务提示"邮箱或者密码有误"/"邮箱获取失败，请检查是否有信息没填对"时的原生取件兜底：
-// 若关联的 MicrosoftMail 记录不存在、或 token/client_id 不可用，则标记该卡密永久停止检测；
-// 若 token 可用但收件箱/垃圾箱中未找到召回邮件，视为普通未命中，不冷却、下次继续检测。
+// checkPromoMailNative 快捷取件失败时的原生取件兜底：
+// 无论快捷取件失败的具体原因，只要该卡密在 MicrosoftMail 表中存在记录且 refresh_token/client_id 齐全，
+// 就尝试走 Graph（失败则回退 IMAP）原生取件，取件结果（命中/未命中）以原生结果为准；
+// 仅当快捷取件的错误明确指向账号信息有误（如"邮箱或者密码有误"/"邮箱获取失败，请检查是否有信息没填对"），
+// 且原生邮件也不可用（无记录/缺 token/token 失效）时，才标记该卡密永久停止检测；
+// 其余情况（如网络抖动等临时故障）下原生邮件不可用，仅按普通失败处理，不冷却、下次继续重试。
 func checkPromoMailNative(card *model.AccountCard, quickMailErr error) (matched bool, info string, skip bool, err error) {
+	accountInvalid := isAccountInvalidError(quickMailErr.Error())
+
 	mail, ferr := model.GetMicrosoftMailByCard(promoMailCardTable, card.Id)
 	if ferr != nil {
-		return false, "", true, fmt.Errorf("%v；且未找到关联的原生邮箱记录: %v", quickMailErr, ferr)
+		if accountInvalid {
+			return false, "", true, fmt.Errorf("%v；且未找到关联的原生邮箱记录: %v", quickMailErr, ferr)
+		}
+		return false, "", false, quickMailErr
 	}
 	if strings.TrimSpace(mail.Token) == "" || strings.TrimSpace(mail.ClientId) == "" {
-		return false, "", true, fmt.Errorf("%v；原生邮箱记录缺少 token 或 client_id", quickMailErr)
+		if accountInvalid {
+			return false, "", true, fmt.Errorf("%v；原生邮箱记录缺少 token 或 client_id", quickMailErr)
+		}
+		return false, "", false, quickMailErr
 	}
 
 	httpClient := client.HTTPClient
@@ -264,11 +275,17 @@ func checkPromoMailNative(card *model.AccountCard, quickMailErr error) (matched 
 		graphFailErr := err
 		accessTokens, imapTokenErr := outlook.RefreshAccessTokens(httpClient, acc.ClientID, acc.RefreshToken)
 		if imapTokenErr != nil {
-			return false, "", true, fmt.Errorf("%v；原生 token 不可用: Graph=%v；IMAP OAuth=%v", quickMailErr, graphFailErr, imapTokenErr)
+			if accountInvalid {
+				return false, "", true, fmt.Errorf("%v；原生 token 不可用: Graph=%v；IMAP OAuth=%v", quickMailErr, graphFailErr, imapTokenErr)
+			}
+			return false, "", false, fmt.Errorf("%v；原生取件亦失败: Graph=%v；IMAP OAuth=%v", quickMailErr, graphFailErr, imapTokenErr)
 		}
 		inbox, junk, err = outlook.FetchViaIMAP(acc, accessTokens)
 		if err != nil {
-			return false, "", true, fmt.Errorf("%v；原生取件不可用: Graph=%v；IMAP=%v", quickMailErr, graphFailErr, err)
+			if accountInvalid {
+				return false, "", true, fmt.Errorf("%v；原生取件不可用: Graph=%v；IMAP=%v", quickMailErr, graphFailErr, err)
+			}
+			return false, "", false, fmt.Errorf("%v；原生取件亦失败: Graph=%v；IMAP=%v", quickMailErr, graphFailErr, err)
 		}
 	}
 
