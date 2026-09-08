@@ -18,6 +18,7 @@ export interface Card {
   purchase_price?: number
   purchase_from?: string
   purchase_by?: string
+  payer?: string
   sell_price?: number
   sell_date?: number
   sell_to?: string
@@ -90,6 +91,7 @@ export interface CardRequest {
   purchase_price?: number
   purchase_from?: string
   purchase_by?: string
+  payer?: string
   sell_price?: number
   sell_date?: number
   sell_to?: string
@@ -278,6 +280,7 @@ export interface BatchUpgradeRequest {
   purchase_price?: number      // 追加金额
   purchase_from?: string
   purchase_date?: number       // Unix 秒
+  payer?: string
 }
 
 // 批量升级为成品接口

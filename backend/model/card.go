@@ -35,6 +35,7 @@ type AccountCard struct {
 	PurchasePrice           *float64       `json:"purchase_price" gorm:"type:decimal(10,2);comment:购买价格(成本)"`
 	PurchaseFrom            string         `json:"purchase_from" gorm:"type:varchar(50);comment:购买平台"`
 	PurchaseBy              string         `json:"purchase_by" gorm:"type:varchar(100);comment:卖家名称"`
+	Payer                   string         `json:"payer" gorm:"column:payer;type:varchar(50);comment:代付人"`
 	SellPrice               *float64       `json:"sell_price" gorm:"type:decimal(10,2);comment:出售价格"`
 	SellDate                *int64         `json:"sell_date" gorm:"type:bigint(20);comment:出售时间"`
 	SellTo                  string         `json:"sell_to" gorm:"type:varchar(50);comment:出售对方"`
@@ -356,6 +357,7 @@ func UpdateCard(tableName string, id int, card *AccountCard) error {
 		"purchase_price":            card.PurchasePrice,
 		"purchase_from":             card.PurchaseFrom,
 		"purchase_by":               card.PurchaseBy,
+		"payer":                     card.Payer,
 		"sell_price":                card.SellPrice,
 		"sell_to":                   card.SellTo,
 		"sell_status":               card.SellStatus,
@@ -708,6 +710,7 @@ type BatchUpgradeRequest struct {
 	PurchasePrice             *float64 // 追加到现有购买价格
 	PurchaseFrom              string
 	PurchaseDate              *int64
+	Payer                     string
 }
 
 // BatchUpgradeToProduct 批量将普号升级为成品
@@ -752,6 +755,9 @@ func BatchUpgradeToProduct(tableName string, req BatchUpgradeRequest) (int64, er
 	}
 	if req.PurchaseDate != nil {
 		updates["purchase_date"] = req.PurchaseDate
+	}
+	if payer := strings.TrimSpace(req.Payer); payer != "" {
+		updates["payer"] = payer
 	}
 	// 订阅过期时间：当前时间 + 剩余天数（逻辑同批量导入，默认 30 天）
 	remainingDays := 30
@@ -901,6 +907,7 @@ func MigrateCardTableColumns() error {
 		{"promo_50off_last_error", "varchar(300) NULL COMMENT '最近一次检测50%off召回邮件失败的错误信息'"},
 		{"promo_50off_skip", "tinyint(2) NOT NULL DEFAULT 0 COMMENT '是否永久跳过50%off召回邮件检测 0否 1是'"},
 		{"check_fail_count", "tinyint(2) NOT NULL DEFAULT 0 COMMENT '连续检查失败次数'"},
+		{"payer", "varchar(50) NULL COMMENT '代付人'"},
 	}
 
 	for _, tableName := range tableNames {

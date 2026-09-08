@@ -184,6 +184,11 @@
               filterable tag clearable />
           </n-form-item-gi>
 
+          <n-form-item-gi label="代付人" path="payer">
+            <n-select v-model:value="formData.payer" :options="payerOptions" placeholder="选择或输入代付人"
+              filterable tag clearable />
+          </n-form-item-gi>
+
           <n-form-item-gi label="卖家名称" path="purchase_by">
             <n-input v-model:value="formData.purchase_by" placeholder="请输入卖家名称" />
           </n-form-item-gi>
@@ -303,6 +308,11 @@
           <n-form-item-gi label="购买平台">
             <n-select v-model:value="upgradeForm.purchase_from" :options="purchasePlatformOptions"
               placeholder="选择或输入购买平台" filterable tag clearable />
+          </n-form-item-gi>
+
+          <n-form-item-gi label="代付人">
+            <n-select v-model:value="upgradeForm.payer" :options="payerOptions"
+              placeholder="选择或输入代付人" filterable tag clearable />
           </n-form-item-gi>
 
           <n-form-item-gi label="购买时间" :span="2">
@@ -795,7 +805,14 @@
     </n-modal>
 
     <!-- 提链结果弹窗 -->
-    <n-modal v-model:show="showGotoProModal" :title="`提链成功 - ${gotoProAccount || '付款链接'}`" preset="card" style="width: 640px">
+    <n-modal
+      v-model:show="showGotoProModal"
+      :title="`提链成功 - ${gotoProAccount || '付款链接'}`"
+      preset="card"
+      :mask-closable="false"
+      :close-on-esc="false"
+      style="width: 640px"
+    >
       <n-space vertical :size="12">
         <n-alert type="success">付款链接已生成，正在自动提交 USD + Alipay 账单</n-alert>
         <n-input v-model:value="gotoProLink" type="textarea" :rows="3" placeholder="粘贴或覆盖 Stripe 结账链接"
@@ -875,6 +892,11 @@
           <n-form-item-gi label="购买平台">
             <n-select v-model:value="upgradeForm.purchase_from" :options="purchasePlatformOptions"
               placeholder="选择或输入购买平台" filterable tag clearable />
+          </n-form-item-gi>
+
+          <n-form-item-gi label="代付人">
+            <n-select v-model:value="upgradeForm.payer" :options="payerOptions"
+              placeholder="选择或输入代付人" filterable tag clearable />
           </n-form-item-gi>
 
           <n-form-item-gi label="购买时间" :span="2">
@@ -1042,7 +1064,7 @@ const pageTitle = computed(() => {
 // 仅 cards_cursor 才带出 session-token / Auto-Login 说明字段
 const isCursorCategory = computed(() => category.value === 'cursor')
 const CURSOR_AUTO_LOGIN_URL = 'https://docs.aiguoguo199.com/doc-9320337'
-// Digiseller 发货格式下，phone-login 固定指向独立取码页，账号/密码由页面自行拼接查询
+// 对外发货的短信接码地址统一指向独立取码页，账号/密码由页面自行拼接查询
 const CURSOR_SMS_QUERY_BASE_URL = 'https://chatgpt-topup.com/sms/cursor'
 
 const sessionTokenField = (card: Card, sep: string): string => {
@@ -1064,18 +1086,24 @@ const hasPhoneReceive = (card: Card): boolean => {
   return !!(card.phone_link || '').trim()
 }
 
-const phoneFields = (card: Card, sep: string): string => {
+// 对外展示的固定取码链接。库里仍保存各平台原始 phone_link，发货时统一换成独立取码页。
+const cursorSmsQueryUrl = (card: Card): string => {
   if (!hasPhoneReceive(card)) return ''
   // account/pass 提前做 URL 编码，避免密码里的 # & 等特殊字符被浏览器当作分隔符处理
   const encodedAccount = encodeURIComponent(card.account)
   const encodedPass = encodeURIComponent((card.password || '').trim())
-  const phoneLoginUrl = `${CURSOR_SMS_QUERY_BASE_URL}?${encodedAccount}----${encodedPass}`
+  return `${CURSOR_SMS_QUERY_BASE_URL}?${encodedAccount}----${encodedPass}`
+}
+
+const phoneFields = (card: Card, sep: string): string => {
+  const phoneLoginUrl = cursorSmsQueryUrl(card)
+  if (!phoneLoginUrl) return ''
   return `${sep}Когда на странице появится запрос на ввод кода подтверждения по SMS, пожалуйста, перейдите по ссылке, чтобы получить код подтверждения: ${phoneLoginUrl}`
 }
 
 const phoneDashSuffix = (card: Card): string => {
   if (!hasPhoneReceive(card)) return ''
-  return `----${(card.phone || '').trim()}----${(card.phone_link || '').trim()}`
+  return `----${(card.phone || '').trim()}----${cursorSmsQueryUrl(card)}`
 }
 
 const phoneDashTitle = (card: Card): string => {
@@ -1085,7 +1113,7 @@ const phoneDashTitle = (card: Card): string => {
 // 国内格式固定追加两列（空值也占位）
 const domesticPhoneTitle = '----手机号----短信接码地址'
 const domesticPhoneSuffix = (card: Card): string => {
-  return `----${(card.phone || '').trim()}----${(card.phone_link || '').trim()}`
+  return `----${(card.phone || '').trim()}----${cursorSmsQueryUrl(card)}`
 }
 
 // 字段顺序：account, pass, mail-pass, mail-login, phone-login, token, Auto-Login 提示词
@@ -1154,7 +1182,8 @@ const searchSellTo = ref('')
 const searchPurchaseBy = ref('')
 const searchIsCheck = ref(0)
 const searchFreezeStatus = ref(0)
-const searchPromo50Off = ref(0)
+const defaultPromo50Off = () => (category.value === 'cursor' && cardType.value === 'all' ? 1 : 0)
+const searchPromo50Off = ref(defaultPromo50Off())
 // 购买日期 / 冻结时间筛选（n-date-picker 返回毫秒）
 const searchPurchaseDate = ref<number | null>(null)
 const searchFreezeTime = ref<number | null>(null)
@@ -1219,6 +1248,7 @@ const exportFieldOptions = [
   { label: '购买价格', value: 'purchase_price' },
   { label: '购买平台', value: 'purchase_from' },
   { label: '卖家名称', value: 'purchase_by' },
+  { label: '代付人', value: 'payer' },
   { label: '出售价格', value: 'sell_price' },
   { label: '出售时间', value: 'sell_date' },
   { label: '售出对方', value: 'sell_to' },
@@ -1311,6 +1341,7 @@ const upgradeForm = ref({
   purchase_price: undefined as number | undefined,
   purchase_from: '支付宝',
   purchase_date: Date.now() as number | undefined,       // 毫秒（n-date-picker）
+  payer: null as string | null,
 })
 
 // 新增代充弹窗
@@ -1644,6 +1675,7 @@ const formData = ref<CardRequest>({
   sell_price: 0,
   purchase_from: '',
   purchase_by: '',
+  payer: '',
   sell_to: '',
   api_key: '',
   '2fa': '',
@@ -1717,6 +1749,17 @@ const purchasePlatformOptions = [
   { label: '闲鱼', value: '闲鱼' },
   { label: '淘宝', value: '淘宝' },
   { label: '卡充', value: '卡充' },
+]
+
+const payerOptions = [
+  { label: '蓝脖积泥', value: '蓝脖积泥' },
+  { label: '柄', value: '柄' },
+  { label: '孤单光量子', value: '孤单光量子' },
+  { label: 'H', value: 'H' },
+  { label: 'SUN', value: 'SUN' },
+  { label: 'rabbit', value: 'rabbit' },
+  { label: 'Zee', value: 'Zee' },
+  { label: '一枕清卓', value: '一枕清卓' },
 ]
 
 // 邮箱地址选项（支持手动输入）
@@ -2010,6 +2053,12 @@ const columns = computed<DataTableColumns<Card>>(() => {
       title: '价格',
       key: 'purchase_price',
       width: 80,
+    },
+    {
+      title: '代付人',
+      key: 'payer',
+      width: 100,
+      render: (row: Card) => row.payer || '—',
     },
     // 普号列表：删除订阅时间/剩余天数，改为显示创建时间
     ...(isAll ? [{
@@ -2710,6 +2759,7 @@ const handleGotoProSuccess = async () => {
     purchase_price: undefined,
     purchase_from: '支付宝',
     purchase_date: Date.now(),
+    payer: null,
   }
   gotoProUpgraded.value = false
   gotoProUpgrading.value = true
@@ -2799,6 +2849,7 @@ const handleGotoProSuccessSubmit = async () => {
       purchase_price: upgradeForm.value.purchase_price,
       purchase_from: upgradeForm.value.purchase_from || undefined,
       purchase_date: purchaseDate,
+      payer: upgradeForm.value.payer || undefined,
     })
 
     if (response.code === 200) {
@@ -2856,7 +2907,7 @@ const handleReset = () => {
   searchPurchaseDate.value = null
   searchFreezeStatus.value = 0
   searchFreezeTime.value = null
-  searchPromo50Off.value = 0
+  searchPromo50Off.value = defaultPromo50Off()
   pagination.value.page = 1
   loadCards()
 }
@@ -2921,6 +2972,7 @@ const handleAdd = () => {
     sell_price: 0,
     purchase_from: '',
     purchase_by: '',
+    payer: '',
     sell_to: '',
     api_key: '',
     '2fa': '',
@@ -2958,6 +3010,7 @@ const handleEdit = (card: Card) => {
     sell_price: card.sell_price || 0,
     purchase_from: card.purchase_from || '',
     purchase_by: card.purchase_by || '',
+    payer: card.payer || '',
     sell_to: card.sell_to || '',
     api_key: card.api_key || '',
     '2fa': card['2fa'] || '',
@@ -3148,6 +3201,8 @@ const getFieldValue = (card: Card, field: string): string => {
     case 'code_method':
       // 接码方式：接码链接----账号----邮箱密码
       return `${card.code_link || ''}----${card.account || ''}----${card.mail_password || ''}`
+    case 'phone_link':
+      return cursorSmsQueryUrl(card)
     case 'subscription_time':
     case 'subscription_expired_time':
     case 'purchase_date':
@@ -3240,6 +3295,7 @@ const handleOpenUpgradeModal = () => {
     purchase_price: undefined,
     purchase_from: '支付宝',
     purchase_date: Date.now(),
+    payer: null,
   }
   showUpgradeModal.value = true
 }
@@ -3275,6 +3331,7 @@ const handleBatchUpgrade = async () => {
       purchase_price: upgradeForm.value.purchase_price,
       purchase_from: upgradeForm.value.purchase_from || undefined,
       purchase_date: purchaseDate,
+      payer: upgradeForm.value.payer || undefined,
     })
 
     if (response.code === 200) {
@@ -3289,6 +3346,7 @@ const handleBatchUpgrade = async () => {
         purchase_price: undefined,
         purchase_from: '支付宝',
         purchase_date: Date.now(),
+        payer: null,
       }
       await loadCards()
     } else {
@@ -3819,7 +3877,7 @@ watch(
       searchPurchaseDate.value = null
       searchFreezeStatus.value = 0
       searchFreezeTime.value = null
-      searchPromo50Off.value = 0
+      searchPromo50Off.value = defaultPromo50Off()
       checkedRowKeys.value = []
       selectedCardsMap.value.clear()
 

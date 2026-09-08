@@ -27,6 +27,7 @@ type CardRequest struct {
 	PurchasePrice           *float64 `json:"purchase_price"`
 	PurchaseFrom            string   `json:"purchase_from"`
 	PurchaseBy              string   `json:"purchase_by"`
+	Payer                   string   `json:"payer"`
 	SellPrice               *float64 `json:"sell_price"`
 	SellDate                *int64   `json:"sell_date"`
 	SellTo                  string   `json:"sell_to"`
@@ -280,6 +281,7 @@ func CreateCard(c *gin.Context) {
 		PurchasePrice:           req.PurchasePrice,
 		PurchaseFrom:            req.PurchaseFrom,
 		PurchaseBy:              req.PurchaseBy,
+		Payer:                   req.Payer,
 		SellPrice:               req.SellPrice,
 		SellDate:                req.SellDate,
 		SellTo:                  req.SellTo,
@@ -381,6 +383,7 @@ func UpdateCard(c *gin.Context) {
 		PurchasePrice:           req.PurchasePrice,
 		PurchaseFrom:            req.PurchaseFrom,
 		PurchaseBy:              req.PurchaseBy,
+		Payer:                   req.Payer,
 		SellPrice:               req.SellPrice,
 		SellDate:                req.SellDate,
 		SellTo:                  req.SellTo,
@@ -504,6 +507,7 @@ func BatchImportCards(c *gin.Context) {
 			PurchasePrice:           cardReq.PurchasePrice,
 			PurchaseFrom:            cardReq.PurchaseFrom,
 			PurchaseBy:              cardReq.PurchaseBy,
+			Payer:                   cardReq.Payer,
 			SellPrice:               cardReq.SellPrice,
 			SellDate:                cardReq.SellDate,
 			SellTo:                  cardReq.SellTo,
@@ -976,6 +980,7 @@ func BatchUpgradeToProduct(c *gin.Context) {
 		PurchasePrice             *float64 `json:"purchase_price"`
 		PurchaseFrom              string   `json:"purchase_from"`
 		PurchaseDate              *int64   `json:"purchase_date"`
+		Payer                     string   `json:"payer"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -1013,6 +1018,7 @@ func BatchUpgradeToProduct(c *gin.Context) {
 		PurchasePrice:             req.PurchasePrice,
 		PurchaseFrom:              req.PurchaseFrom,
 		PurchaseDate:              req.PurchaseDate,
+		Payer:                     req.Payer,
 	})
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
