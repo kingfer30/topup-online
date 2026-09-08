@@ -37,7 +37,7 @@ export interface Card {
   freeze_status?: number
   freeze_time?: number
   freeze_remark?: string
-  promo_50off_time?: number
+  is_promo_50off?: number
   promo_50off_info?: string
   promo_50off_check_time?: number
   promo_50off_last_error?: string
@@ -66,7 +66,7 @@ export interface CardListParams {
   subscription_time?: string   // 订阅时间精确查询（保留兼容）
   freeze_status?: number       // 冻结状态过滤 -1未冻结 1已冻结（仅普号列表）
   freeze_time?: string         // 冻结时间筛选 YYYY-MM-DD（仅普号列表，按当天范围）
-  promo_50off?: number         // Cursor 50% off 召回邮件命中筛选：1=仅命中，不传/0=不过滤
+  is_promo_50off?: number      // 是否半价号筛选：1=仅半价，不传/0=不过滤
 }
 
 // 卡密列表响应
@@ -107,6 +107,7 @@ export interface CardRequest {
   phone?: string
   phone_link?: string
   subscription_credits?: number
+  is_promo_50off?: number
 }
 
 // 获取卡密列表
@@ -122,6 +123,25 @@ export const getCardById = (
   return http.get(`/admin/cards/${id}`, {
     params: { category },
   }) as Promise<ApiResponse<Card>>
+}
+
+// 短信取码结果
+export interface CardSmsCodeResult {
+  account: string
+  status: 'received' | 'waiting' | 'error'
+  code: string
+  message: string
+  expires_at: string
+}
+
+// 抓取短信验证码（列表页"接码-短信接码"弹窗）
+export const getCardSmsCode = (
+  category: string,
+  id: number
+): Promise<ApiResponse<CardSmsCodeResult>> => {
+  return http.get(`/admin/cards/${id}/sms-code`, {
+    params: { category },
+  }) as Promise<ApiResponse<CardSmsCodeResult>>
 }
 
 // 创建卡密
@@ -332,15 +352,9 @@ export const pollCardSubscription = (category: string, id: number): Promise<ApiR
 }
 
 export const halfPriceCheckout = (data: {
-  url: string
   token: string
-  tier: string
 }): Promise<ApiResponse<string>> => {
   return http.post('/admin/cards/half-price-checkout', data) as Promise<ApiResponse<string>>
-}
-
-export const getHalfPriceQuota = (url: string): Promise<ApiResponse<string>> => {
-  return http.get('/admin/cards/half-price-quota', { params: { url } }) as Promise<ApiResponse<string>>
 }
 
 // 单独更新卡密备注

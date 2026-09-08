@@ -5,17 +5,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"mime/multipart"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
-	"regexp"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/kingfer30/topup-online/model"
 	"github.com/kingfer30/topup-online/utils/client"
+	"github.com/kingfer30/topup-online/utils/logger"
 )
 
 // GotoProRequest 提链请求
@@ -242,70 +241,30 @@ func GotoPro(c *gin.Context) {
 	})
 }
 
-const halfPriceCheckoutBase = "https://cursor.120.hk"
-
 type HalfPriceCheckoutRequest struct {
-	URL   string `json:"url"`
-	UID   string `json:"uid"`
 	Token string `json:"token" binding:"required"`
-	Tier  string `json:"tier" binding:"required"`
 }
 
-type halfPricePage struct {
-	PageURL string
-	Origin  string
-	UID     string
+type welcomeBackOfferResp struct {
+	CanActivate      bool   `json:"canActivate"`
+	PromoTypeID      string `json:"promoTypeId"`
+	PreviousPlanTier string `json:"previousPlanTier"`
+	CouponID         string `json:"couponId"`
 }
 
-func parseHalfPricePage(raw string) (*halfPricePage, error) {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return nil, fmt.Errorf("请输入活动链接")
-	}
-	if !strings.Contains(raw, "://") {
-		raw = halfPriceCheckoutBase + "?uid=" + url.QueryEscape(raw)
-	}
-	u, err := url.Parse(raw)
-	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
-		return nil, fmt.Errorf("活动链接格式不正确")
-	}
-	uid := strings.TrimSpace(u.Query().Get("uid"))
-	if uid == "" {
-		return nil, fmt.Errorf("链接中未找到 uid")
-	}
-	return &halfPricePage{
-		PageURL: raw,
-		Origin:  u.Scheme + "://" + u.Host,
-		UID:     uid,
-	}, nil
-}
-
-type halfPriceAPIResp struct {
-	Status   string `json:"status"`
-	Message  string `json:"message"`
-	URL      string `json:"url"`
-	Email    string `json:"email"`
-	BillUsed int    `json:"bill_used"`
-	BillMax  int    `json:"bill_max"`
-}
-
-func normalizeWorkosCookie(raw string) string {
+func parseWorkosSessionToken(raw string) (workosID, sessionToken string, err error) {
 	token := strings.TrimSpace(raw)
-	if decoded, err := url.QueryUnescape(token); err == nil && decoded != "" {
+	if decoded, uerr := url.QueryUnescape(token); uerr == nil && decoded != "" {
 		token = decoded
 	}
-	const key = "WorkosCursorSessionToken="
-	if idx := strings.Index(token, key); idx >= 0 {
-		token = token[idx+len(key):]
-		if i := strings.Index(token, ";"); i >= 0 {
-			token = token[:i]
-		}
+	parts := strings.SplitN(token, "::", 2)
+	if len(parts) != 2 || strings.TrimSpace(parts[0]) == "" || strings.TrimSpace(parts[1]) == "" {
+		return "", "", fmt.Errorf("token 格式错误，应为 user_xxx::JWT")
 	}
-	token = strings.Trim(token, "\"' \t")
-	return key + token
+	return strings.TrimSpace(parts[0]), token, nil
 }
 
-func halfPriceHTTPClient(timeout time.Duration) *http.Client {
+func cursorAuthHTTPClient(timeout time.Duration, followRedirect bool) *http.Client {
 	transport := &http.Transport{
 		Proxy: http.ProxyFromEnvironment,
 	}
@@ -316,34 +275,47 @@ func halfPriceHTTPClient(timeout time.Duration) *http.Client {
 			transport.Proxy = t.Proxy
 		}
 	}
-	return &http.Client{
+	c := &http.Client{
 		Timeout:   timeout,
 		Transport: transport,
 	}
-}
-
-func postHalfPriceForm(httpClient *http.Client, page *halfPricePage, apiPath string, fields map[string]string) (*halfPriceAPIResp, error) {
-	var buf bytes.Buffer
-	writer := multipart.NewWriter(&buf)
-	for k, v := range fields {
-		if err := writer.WriteField(k, v); err != nil {
-			return nil, err
+	if !followRedirect {
+		c.CheckRedirect = func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
 		}
 	}
-	if err := writer.Close(); err != nil {
-		return nil, err
-	}
+	return c
+}
 
-	req, err := http.NewRequest(http.MethodPost, page.Origin+apiPath, &buf)
+func setCursorWelcomeBackHeaders(req *http.Request, workosID, sessionToken string, htmlNav bool) {
+	encodedToken := strings.ReplaceAll(sessionToken, "::", "%3A%3A")
+	req.Header.Set("cookie", fmt.Sprintf("workos_id=%s; WorkosCursorSessionToken=%s", workosID, encodedToken))
+	req.Header.Set("accept-language", "en")
+	req.Header.Set("cache-control", "no-cache")
+	req.Header.Set("pragma", "no-cache")
+	req.Header.Set("origin", "https://cursor.com")
+	req.Header.Set("referer", "https://cursor.com/activate/welcome-back/offer")
+	req.Header.Set("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36")
+	req.Header.Set("sec-fetch-site", "same-origin")
+	if htmlNav {
+		req.Header.Set("accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8")
+		req.Header.Set("sec-fetch-dest", "document")
+		req.Header.Set("sec-fetch-mode", "navigate")
+		req.Header.Set("sec-fetch-user", "?1")
+		req.Header.Set("upgrade-insecure-requests", "1")
+	} else {
+		req.Header.Set("accept", "*/*")
+		req.Header.Set("sec-fetch-dest", "empty")
+		req.Header.Set("sec-fetch-mode", "cors")
+	}
+}
+
+func fetchWelcomeBackOffer(httpClient *http.Client, workosID, sessionToken string) (*welcomeBackOfferResp, error) {
+	req, err := http.NewRequest(http.MethodGet, "https://cursor.com/api/auth/welcome-back-offer", nil)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Content-Type", writer.FormDataContentType())
-	req.Header.Set("Accept", "application/json, text/plain, */*")
-	req.Header.Set("Origin", page.Origin)
-	req.Header.Set("Referer", page.PageURL)
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36")
-
+	setCursorWelcomeBackHeaders(req, workosID, sessionToken, false)
 	resp, err := httpClient.Do(req)
 	if err != nil {
 		return nil, err
@@ -353,19 +325,55 @@ func postHalfPriceForm(httpClient *http.Client, page *halfPricePage, apiPath str
 	if err != nil {
 		return nil, err
 	}
-
-	var data halfPriceAPIResp
-	if err := json.Unmarshal(body, &data); err != nil {
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		preview := strings.TrimSpace(string(body))
 		if len(preview) > 200 {
 			preview = preview[:200]
 		}
-		return nil, fmt.Errorf("解析活动接口响应失败: %s", preview)
+		return nil, fmt.Errorf("offer 接口 HTTP %d: %s", resp.StatusCode, preview)
 	}
-	return &data, nil
+	var offer welcomeBackOfferResp
+	if err := json.Unmarshal(body, &offer); err != nil {
+		return nil, fmt.Errorf("解析 offer 响应失败")
+	}
+	return &offer, nil
 }
 
-// HalfPriceCheckout 走半价活动页预检 + 开单，返回官方支付链接
+func fetchWelcomeBackCheckoutLink(httpClient *http.Client, workosID, sessionToken string) (string, error) {
+	req, err := http.NewRequest(http.MethodGet, "https://cursor.com/api/auth/welcome-back?checkout=1", nil)
+	if err != nil {
+		return "", err
+	}
+	setCursorWelcomeBackHeaders(req, workosID, sessionToken, true)
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+
+	link := strings.TrimSpace(resp.Header.Get("Location"))
+	if link == "" {
+		link = strings.TrimSpace(string(body))
+		var jsonStr string
+		if err := json.Unmarshal(body, &jsonStr); err == nil {
+			link = strings.TrimSpace(jsonStr)
+		}
+	}
+	if strings.HasPrefix(link, "/") {
+		link = "https://cursor.com" + link
+	}
+	if !strings.Contains(link, "checkout.stripe.com") {
+		preview := strings.TrimSpace(string(body))
+		if len(preview) > 200 {
+			preview = preview[:200]
+		}
+		return "", fmt.Errorf("未跳转到 Stripe（HTTP %d）: %s", resp.StatusCode, preview)
+	}
+	return link, nil
+}
+
+// HalfPriceCheckout 通过官方 welcome-back 接口提半价链，302 到 Stripe 结账页
 func HalfPriceCheckout(c *gin.Context) {
 	var req HalfPriceCheckoutRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -373,87 +381,25 @@ func HalfPriceCheckout(c *gin.Context) {
 		return
 	}
 
-	pageRaw := strings.TrimSpace(req.URL)
-	if pageRaw == "" {
-		pageRaw = strings.TrimSpace(req.UID)
-	}
-	page, err := parseHalfPricePage(pageRaw)
+	workosID, sessionToken, err := parseWorkosSessionToken(req.Token)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{"code": 400, "message": err.Error()})
 		return
 	}
-	uid := page.UID
-	tier := strings.TrimSpace(req.Tier)
-	switch tier {
-	case "pro", "pro_plus", "ultra":
-	default:
-		c.JSON(http.StatusOK, gin.H{"code": 400, "message": "套餐仅支持 pro / pro_plus / ultra"})
+
+	offerClient := cursorAuthHTTPClient(30*time.Second, true)
+	offer, offerErr := fetchWelcomeBackOffer(offerClient, workosID, sessionToken)
+	if offerErr != nil {
+		logger.SysLog("半价提链 offer 预检失败，继续尝试 checkout: " + offerErr.Error())
+	} else if !offer.CanActivate {
+		c.JSON(http.StatusOK, gin.H{"code": 400, "message": "当前账号无法激活半价优惠"})
 		return
 	}
 
-	cookie := normalizeWorkosCookie(req.Token)
-	if strings.TrimPrefix(cookie, "WorkosCursorSessionToken=") == "" {
-		c.JSON(http.StatusOK, gin.H{"code": 400, "message": "token 为空或格式不正确"})
-		return
-	}
-
-	httpClient := halfPriceHTTPClient(90 * time.Second)
-
-	pre, err := postHalfPriceForm(httpClient, page, "/api/precheck", map[string]string{
-		"uid":    uid,
-		"cookie": cookie,
-	})
+	checkoutClient := cursorAuthHTTPClient(45*time.Second, false)
+	link, err := fetchWelcomeBackCheckoutLink(checkoutClient, workosID, sessionToken)
 	if err != nil {
-		c.JSON(http.StatusOK, gin.H{"code": 500, "message": "预检请求失败: " + err.Error()})
-		return
-	}
-	switch pre.Status {
-	case "blocked":
-		email := strings.TrimSpace(pre.Email)
-		msg := "该号无资格"
-		if email != "" {
-			msg = email + " 已被标记为无资格账号，请更换账号后再试"
-		}
-		c.JSON(http.StatusOK, gin.H{"code": 400, "message": msg})
-		return
-	case "limit":
-		email := strings.TrimSpace(pre.Email)
-		msg := fmt.Sprintf("邮箱开单已达上限 %d/%d，请更换账号", pre.BillUsed, pre.BillMax)
-		if email != "" {
-			msg = fmt.Sprintf("%s 已开单 %d/%d 次，请更换账号", email, pre.BillUsed, pre.BillMax)
-		}
-		c.JSON(http.StatusOK, gin.H{"code": 400, "message": msg})
-		return
-	case "success":
-	default:
-		msg := strings.TrimSpace(pre.Message)
-		if msg == "" {
-			msg = "预检未通过，请稍后再试"
-		}
-		c.JSON(http.StatusOK, gin.H{"code": 400, "message": msg})
-		return
-	}
-
-	result, err := postHalfPriceForm(httpClient, page, "/api/checkout", map[string]string{
-		"uid":    uid,
-		"cookie": cookie,
-		"tier":   tier,
-	})
-	if err != nil {
-		c.JSON(http.StatusOK, gin.H{"code": 500, "message": "开单请求失败: " + err.Error()})
-		return
-	}
-	if result.Status != "success" {
-		msg := strings.TrimSpace(result.Message)
-		if msg == "" {
-			msg = "申请暂未通过，请稍后再试"
-		}
-		c.JSON(http.StatusOK, gin.H{"code": 400, "message": msg})
-		return
-	}
-	link := strings.TrimSpace(result.URL)
-	if link == "" {
-		c.JSON(http.StatusOK, gin.H{"code": 500, "message": "后台已成功但未返回支付地址"})
+		c.JSON(http.StatusOK, gin.H{"code": 500, "message": "官方半价提链失败: " + err.Error()})
 		return
 	}
 
@@ -462,66 +408,4 @@ func HalfPriceCheckout(c *gin.Context) {
 		"message": "成功",
 		"data":    link,
 	})
-}
-
-var (
-	halfPriceNavPillRe  = regexp.MustCompile(`(?is)class=["']nav-pill["'][^>]*>([^<]+)`)
-	halfPriceQuotaNumRe = regexp.MustCompile(`(\d+)\s*/\s*(\d+)`)
-)
-
-func extractHalfPriceQuota(html string) string {
-	text := html
-	if m := halfPriceNavPillRe.FindStringSubmatch(html); len(m) >= 2 {
-		text = m[1]
-	}
-	if n := halfPriceQuotaNumRe.FindStringSubmatch(text); len(n) >= 3 {
-		return n[1] + "/" + n[2]
-	}
-	return ""
-}
-
-func fetchHalfPriceQuota(raw string) string {
-	page, err := parseHalfPricePage(raw)
-	if err != nil {
-		return ""
-	}
-	httpClient := halfPriceHTTPClient(20 * time.Second)
-	req, err := http.NewRequest(http.MethodGet, page.PageURL, nil)
-	if err != nil {
-		return ""
-	}
-	req.Header.Set("Accept", "text/html,application/xhtml+xml")
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36")
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		return ""
-	}
-	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return ""
-	}
-	return extractHalfPriceQuota(string(body))
-}
-
-// GetHalfPriceQuota 抓取活动页 nav-pill 中的已提交 xx/xx
-func GetHalfPriceQuota(c *gin.Context) {
-	raw := strings.TrimSpace(c.Query("url"))
-	if raw == "" {
-		raw = strings.TrimSpace(c.Query("uid"))
-	}
-	if raw == "" {
-		c.JSON(http.StatusOK, gin.H{"code": 400, "message": "请输入活动链接"})
-		return
-	}
-	if _, err := parseHalfPricePage(raw); err != nil {
-		c.JSON(http.StatusOK, gin.H{"code": 400, "message": err.Error()})
-		return
-	}
-	quota := fetchHalfPriceQuota(raw)
-	if quota == "" {
-		c.JSON(http.StatusOK, gin.H{"code": 400, "message": "未能读取活动余量"})
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"code": 200, "message": "成功", "data": quota})
 }

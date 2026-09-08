@@ -85,24 +85,12 @@ const result = ref<CursorSmsQueryResult | null>(null)
 const countdown = ref(0)
 let countdownTimer: ReturnType<typeof setInterval> | null = null
 
-// 还原地址栏 ? 后面的原始整串内容。
-// 密码中若包含 # 会被浏览器当作 fragment 分隔符，导致 location.search 被截断，
-// 因此需要把 location.hash 拼回去才能还原出完整的原始字符串。
-function getRawQueryFromUrl(): string {
-  const search = window.location.search.replace(/^\?/, '')
-  const hash = window.location.hash.replace(/^#/, '')
-  const raw = hash ? `${search}#${hash}` : search
-  try {
-    return decodeURIComponent(raw)
-  } catch {
-    return raw
-  }
-}
-
 // 解析地址栏 account----pass，例如 /sms/cursor?account----pass
-// 这里只做基本校验和展示用的账号提取，真正的拆分以后端为准（整串原样传给后端）
+// 链接是后台生成时就已经对 account/pass 做过 URL 编码的，所以这里直接取 location.search 原文即可，
+// 不会再有 # 被浏览器当成 fragment 分隔符截断的问题；真正的解码+拆分交给后端处理，
+// 这里的 account 仅用于页面展示，尽量解码一下，解码失败就展示原文。
 function parseParams() {
-  const raw = getRawQueryFromUrl()
+  const raw = window.location.search.replace(/^\?/, '')
   if (!raw) {
     paramError.value = '查询链接缺少账号信息，请检查链接后重试。'
     return
@@ -115,7 +103,13 @@ function parseParams() {
   }
 
   rawQuery.value = raw
-  account.value = raw.slice(0, sepIndex).trim()
+
+  const accountPart = raw.slice(0, sepIndex)
+  try {
+    account.value = decodeURIComponent(accountPart).trim()
+  } catch {
+    account.value = accountPart.trim()
+  }
 
   if (!account.value || raw.slice(sepIndex + 4).trim() === '') {
     paramError.value = '查询链接缺少账号或密码，请检查链接后重试。'

@@ -44,6 +44,7 @@ type CardRequest struct {
 	Phone                   string   `json:"phone"`
 	PhoneLink               string   `json:"phone_link"`
 	SubscriptionCredits     *float64 `json:"subscription_credits"`
+	IsPromo50Off            int      `json:"is_promo_50off"`
 }
 
 // parseAccountsFromQuery 解析账号搜索参数（accounts 优先，兼容 keyword）
@@ -80,7 +81,7 @@ func GetCardList(c *gin.Context) {
 	freezeTimeStr := c.Query("freeze_time")
 	sellTo := strings.TrimSpace(c.Query("sell_to"))
 	purchaseBy := strings.TrimSpace(c.Query("purchase_by"))
-	promo50OffStr := c.DefaultQuery("promo_50off", "0")
+	promo50OffStr := c.DefaultQuery("is_promo_50off", "0")
 
 	page, _ := strconv.Atoi(pageStr)
 	pageSize, _ := strconv.Atoi(pageSizeStr)
@@ -520,6 +521,7 @@ func BatchImportCards(c *gin.Context) {
 			Phone:                   cardReq.Phone,
 			PhoneLink:               cardReq.PhoneLink,
 			SubscriptionCredits:     cardReq.SubscriptionCredits,
+			IsPromo50Off:            cardReq.IsPromo50Off,
 		}
 
 		// 设置默认值
@@ -918,7 +920,7 @@ func ExportCards(c *gin.Context) {
 	purchaseBy := strings.TrimSpace(c.Query("purchase_by"))
 	subscriptionStatus, _ := strconv.Atoi(subscriptionStatusStr)
 	isCheck, _ := strconv.Atoi(isCheckStr)
-	promo50Off, _ := strconv.Atoi(c.DefaultQuery("promo_50off", "0"))
+	promo50Off, _ := strconv.Atoi(c.DefaultQuery("is_promo_50off", "0"))
 
 	// purchase_date / freeze_time：统一解析到当天零点（UTC+8）
 	cst := time.FixedZone("CST", 8*3600)

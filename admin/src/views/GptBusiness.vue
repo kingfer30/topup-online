@@ -16,14 +16,18 @@
                 <code class="rounded bg-gray-100 px-1">account----token</code> 时，将 account 赋值到
                 <code class="rounded bg-gray-100 px-1">user.email</code>，token 作为
                 <code class="rounded bg-gray-100 px-1">accessToken</code>。③ 合法 JSON
-                会填充 <code class="rounded bg-gray-100 px-1">accessToken</code>、<code class="rounded bg-gray-100 px-1">account.structure</code>、<code class="rounded bg-gray-100 px-1">user.email</code>。
-                ④ 非合法 JSON 时用正则从文本中提取上述字段。
+                会按会话结构提取字段。④ 非合法 JSON 时用正则从文本中提取上述字段。
                 <br />
-                <strong>account.id / account.planType / user.id / user.email</strong> 会优先从
-                <code class="rounded bg-gray-100 px-1">accessToken</code> 的 JWT claims 中解码填充（更准确）；JWT 未提供时才回退默认/随机值。
-                <code class="rounded bg-gray-100 px-1">account.structure</code> 不在 JWT 内，默认
-                <code class="rounded bg-gray-100 px-1">personal</code>。
-                注意：<code class="rounded bg-gray-100 px-1">sessionToken</code> 由服务端加密签发（NextAuth JWE），本地无法伪造，如需真实值请走登录获取 cookie。
+                输出为完整会话 JSON（含
+                <code class="rounded bg-gray-100 px-1">WARNING_BANNER</code>、
+                <code class="rounded bg-gray-100 px-1">user</code>、
+                <code class="rounded bg-gray-100 px-1">expires</code>、
+                <code class="rounded bg-gray-100 px-1">account</code>、
+                <code class="rounded bg-gray-100 px-1">accessToken</code>、
+                <code class="rounded bg-gray-100 px-1">authProvider</code>、
+                <code class="rounded bg-gray-100 px-1">sessionToken</code>、
+                <code class="rounded bg-gray-100 px-1">rumViewTags</code>）。
+                JWT claims 能解出的字段优先使用，其余缺失字段用默认/随机值补齐。
               </n-text>
 
               <n-form label-placement="left" label-width="88px">
@@ -105,11 +109,8 @@
               <n-text depth="3" class="text-sm">
                 每行一条
                 <code class="rounded bg-gray-100 px-1">account----access_token</code>，
-                生成规则与「卡密充值token生成」相同：将 account 写入
-                <code class="rounded bg-gray-100 px-1">user.email</code>，token 作为
-                <code class="rounded bg-gray-100 px-1">accessToken</code>，
-                并从 JWT claims 补全 account / user 字段。
-                输出格式为 <code class="rounded bg-gray-100 px-1">account----json</code>（每行一条）。
+                生成规则与「卡密充值token生成」相同，输出完整会话 JSON。
+                格式为 <code class="rounded bg-gray-100 px-1">account----json</code>（每行一条）。
               </n-text>
 
               <n-form label-placement="left" label-width="88px">
@@ -188,11 +189,38 @@ import {
 const activeTab = ref<'token' | 'payment-link' | 'batch-token' | 'bill-link'>('token')
 const message = useMessage()
 
-/** 与后端输出一致的载荷结构 */
+const WARNING_BANNER =
+  '!!!!!!!!!!!!!!!!!!!! DO NOT SHARE ANY PART OF THE INFORMATION YOU SEE HERE. THIS INFORMATION IS SENSITIVE AND CAN GRANT ACCESS TO YOUR ACCOUNT. SHARING THIS INFORMATION IS LIKE SHARING YOUR PASSWORD. !!!!!!!!!!!!!!!!!!!!'
+
+/** 与 ChatGPT 会话 JSON 一致的载荷结构 */
 interface TokenPayload {
+  WARNING_BANNER: string
+  user: {
+    id: string
+    name: string
+    email: string
+    iat: number
+    amr: string[]
+    mfa: boolean
+  }
+  expires: string
+  account: {
+    id: string
+    createdTime: number
+    planType: string
+    structure: string
+    isUsageBasedSeatEnabled: boolean
+    isConversationClassifierEnabledForWorkspace: boolean
+    hasFloraFeature: boolean
+    isFedrampCompliantWorkspace: boolean
+    isDelinquent: boolean
+    residencyRegion: string
+    computeResidency: string
+  }
   accessToken: string
-  account: { id: string; planType: string; structure: string }
-  user: { id: string; name: string; email: string }
+  authProvider: string
+  sessionToken: string
+  rumViewTags: { light_account: { fetched: boolean } }
 }
 
 function generateUuid(): string {
@@ -210,11 +238,53 @@ function generateUserId(): string {
   return 'user-' + s
 }
 
+function randomBase64Url(byteLen: number): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'
+  let s = ''
+  for (let i = 0; i < byteLen; i++) s += chars[Math.floor(Math.random() * chars.length)]
+  return s
+}
+
+/** 占位 sessionToken（JWE 形态），输入未提供时补齐 */
+function generateSessionToken(): string {
+  return `eyJhbGciOiJkaXIiLCJlbmMiOiJBMjU2R0NNIn0..${randomBase64Url(16)}.${randomBase64Url(800)}.${randomBase64Url(22)}`
+}
+
+function unixToIso(sec: number): string {
+  const ms = sec > 1e12 ? sec : sec * 1000
+  const d = new Date(ms)
+  return Number.isNaN(d.getTime()) ? new Date(Date.now() + 10 * 24 * 3600 * 1000).toISOString() : d.toISOString()
+}
+
 function defaultPayload(accessToken: string): TokenPayload {
   return {
+    WARNING_BANNER,
+    user: {
+      id: '',
+      name: '',
+      email: '',
+      iat: 0,
+      amr: ['otp', 'urn:openai:amr:otp_email'],
+      mfa: false,
+    },
+    expires: '',
+    account: {
+      id: '',
+      createdTime: 0,
+      planType: 'free',
+      structure: 'personal',
+      isUsageBasedSeatEnabled: false,
+      isConversationClassifierEnabledForWorkspace: true,
+      hasFloraFeature: false,
+      isFedrampCompliantWorkspace: false,
+      isDelinquent: false,
+      residencyRegion: 'no_constraint',
+      computeResidency: 'no_constraint',
+    },
     accessToken,
-    account: { id: '', planType: 'free', structure: 'personal' },
-    user: { id: '', name: '', email: '' },
+    authProvider: 'openai',
+    sessionToken: '',
+    rumViewTags: { light_account: { fetched: false } },
   }
 }
 
@@ -241,14 +311,29 @@ function decodeJwtPayload(token: string): Record<string, unknown> | null {
   }
 }
 
-/** 从 access_token(JWT) 的 claims 中提取真实账号信息（无 structure，该字段不在 JWT 内） */
+/** 从 access_token(JWT) 的 claims 中提取真实账号信息 */
 function extractClaims(token: string): {
   accountId: string
   planType: string
   userId: string
   email: string
+  name: string
+  iat: number
+  exp: number
+  amr: string[]
+  computeResidency: string
 } {
-  const result = { accountId: '', planType: '', userId: '', email: '' }
+  const result = {
+    accountId: '',
+    planType: '',
+    userId: '',
+    email: '',
+    name: '',
+    iat: 0,
+    exp: 0,
+    amr: [] as string[],
+    computeResidency: '',
+  }
   const payload = decodeJwtPayload(token)
   if (!payload) return result
 
@@ -258,118 +343,183 @@ function extractClaims(token: string): {
     if (a.chatgpt_account_id != null) result.accountId = String(a.chatgpt_account_id)
     if (a.chatgpt_plan_type != null) result.planType = String(a.chatgpt_plan_type)
     if (a.chatgpt_user_id != null) result.userId = String(a.chatgpt_user_id)
+    if (a.chatgpt_compute_residency != null) result.computeResidency = String(a.chatgpt_compute_residency)
+    if (Array.isArray(a.amr)) result.amr = a.amr.map((x) => String(x))
   }
 
   const profile = payload['https://api.openai.com/profile']
   if (profile !== null && typeof profile === 'object' && !Array.isArray(profile)) {
     const p = profile as Record<string, unknown>
     if (p.email != null) result.email = String(p.email)
+    if (p.name != null) result.name = String(p.name)
   }
+
+  if (typeof payload.iat === 'number') result.iat = payload.iat
+  if (typeof payload.exp === 'number') result.exp = payload.exp
 
   return result
 }
 
 /**
- * 填充字段：优先用 accessToken(JWT) 中的真实信息（account.id / planType / user.id / user.email），
- * JWT 未提供的字段再回退到随机/派生值（account.id → UUID，user.id → user-XXXX，user.name → email 前缀）。
+ * 填充字段：优先用 accessToken(JWT) / 输入已有值，缺失项用默认或随机值补齐。
  */
 function fillMissingId(payload: TokenPayload): TokenPayload {
   const claims = extractClaims(payload.accessToken)
-  if (claims.accountId) payload.account.id = claims.accountId
-  if (claims.planType) payload.account.planType = claims.planType
-  if (claims.userId) payload.user.id = claims.userId
-  if (claims.email && !payload.user.email) payload.user.email = claims.email
+  if (!payload.account.id && claims.accountId) payload.account.id = claims.accountId
+  if (payload.account.planType === 'free' && claims.planType) payload.account.planType = claims.planType
+  if (!payload.user.id && claims.userId) payload.user.id = claims.userId
+  if (!payload.user.email && claims.email) payload.user.email = claims.email
+  if (!payload.user.name && claims.name) payload.user.name = claims.name
+  if (!payload.user.iat && claims.iat) payload.user.iat = claims.iat
+  if (claims.amr.length > 0) payload.user.amr = claims.amr
+  if (payload.account.computeResidency === 'no_constraint' && claims.computeResidency) {
+    payload.account.computeResidency = claims.computeResidency
+  }
+  if (!payload.expires && claims.exp) payload.expires = unixToIso(claims.exp)
 
-  if (!payload.account.id) {
-    payload.account.id = generateUuid()
-  }
-  if (!payload.user.id) {
-    payload.user.id = generateUserId()
-  }
-  if (!payload.user.name && payload.user.email) {
-    payload.user.name = payload.user.email.split('@')[0]
+  const nowSec = Math.floor(Date.now() / 1000)
+  if (!payload.account.id) payload.account.id = generateUuid()
+  if (!payload.user.id) payload.user.id = generateUserId()
+  if (!payload.user.name && payload.user.email) payload.user.name = payload.user.email.split('@')[0]
+  if (!payload.user.name) payload.user.name = 'user' + Math.floor(Math.random() * 10000)
+  if (!payload.user.email) payload.user.email = `${payload.user.name}@example.com`
+  if (!payload.user.iat) payload.user.iat = nowSec
+  if (!payload.sessionToken) payload.sessionToken = generateSessionToken()
+  if (!payload.WARNING_BANNER) payload.WARNING_BANNER = WARNING_BANNER
+  if (!payload.authProvider) payload.authProvider = 'openai'
+  if (!payload.expires) payload.expires = unixToIso(payload.user.iat + 10 * 24 * 3600)
+  if (!payload.account.createdTime) {
+    payload.account.createdTime = Number(((claims.iat || payload.user.iat) - 2965384 + Math.random()).toFixed(3))
   }
   return payload
 }
 
-/** 合法 JSON：按输出结构提取 accessToken、account、user */
+function asBool(v: unknown, fallback: boolean): boolean {
+  if (typeof v === 'boolean') return v
+  if (v === 'true') return true
+  if (v === 'false') return false
+  return fallback
+}
+
+function asNum(v: unknown, fallback: number): number {
+  if (typeof v === 'number' && !Number.isNaN(v)) return v
+  if (typeof v === 'string' && v.trim() !== '') {
+    const n = Number(v)
+    if (!Number.isNaN(n)) return n
+  }
+  return fallback
+}
+
+function asAmr(v: unknown, fallback: string[]): string[] {
+  if (Array.isArray(v) && v.length > 0) return v.map((x) => String(x))
+  return fallback
+}
+
+/** 合法 JSON：按会话结构提取字段 */
 function parseJsonToPayload(obj: unknown): TokenPayload | null {
   if (obj === null || typeof obj !== 'object' || Array.isArray(obj)) return null
   const rec = obj as Record<string, unknown>
   if (rec.accessToken == null || String(rec.accessToken).length === 0) return null
 
-  const accessToken = String(rec.accessToken)
+  const payload = defaultPayload(String(rec.accessToken))
 
-  let id = ''
-  let planType = 'free'
-  let structure = 'personal'
+  if (rec.WARNING_BANNER != null) payload.WARNING_BANNER = String(rec.WARNING_BANNER)
+  if (rec.expires != null) payload.expires = String(rec.expires)
+  if (rec.authProvider != null) payload.authProvider = String(rec.authProvider)
+  if (rec.sessionToken != null) payload.sessionToken = String(rec.sessionToken)
+
   if (rec.account !== null && typeof rec.account === 'object' && !Array.isArray(rec.account)) {
     const acc = rec.account as Record<string, unknown>
-    if (acc.id != null) id = String(acc.id)
-    if ('planType' in acc) {
-      planType = acc.planType == null ? '' : String(acc.planType)
+    if (acc.id != null) payload.account.id = String(acc.id)
+    if ('planType' in acc) payload.account.planType = acc.planType == null ? '' : String(acc.planType)
+    if ('structure' in acc) payload.account.structure = acc.structure == null ? 'personal' : String(acc.structure)
+    if ('createdTime' in acc) payload.account.createdTime = asNum(acc.createdTime, payload.account.createdTime)
+    if ('isUsageBasedSeatEnabled' in acc) {
+      payload.account.isUsageBasedSeatEnabled = asBool(acc.isUsageBasedSeatEnabled, false)
     }
-    if ('structure' in acc) {
-      structure = acc.structure == null ? 'personal' : String(acc.structure)
+    if ('isConversationClassifierEnabledForWorkspace' in acc) {
+      payload.account.isConversationClassifierEnabledForWorkspace = asBool(
+        acc.isConversationClassifierEnabledForWorkspace,
+        true,
+      )
     }
+    if ('hasFloraFeature' in acc) payload.account.hasFloraFeature = asBool(acc.hasFloraFeature, false)
+    if ('isFedrampCompliantWorkspace' in acc) {
+      payload.account.isFedrampCompliantWorkspace = asBool(acc.isFedrampCompliantWorkspace, false)
+    }
+    if ('isDelinquent' in acc) payload.account.isDelinquent = asBool(acc.isDelinquent, false)
+    if (acc.residencyRegion != null) payload.account.residencyRegion = String(acc.residencyRegion)
+    if (acc.computeResidency != null) payload.account.computeResidency = String(acc.computeResidency)
   }
 
-  let userId = ''
-  let userName = ''
-  let email = ''
   if (rec.user !== null && typeof rec.user === 'object' && !Array.isArray(rec.user)) {
     const u = rec.user as Record<string, unknown>
-    if (u.id != null) userId = String(u.id)
-    if (u.name != null) userName = String(u.name)
-    if (u.email != null) email = String(u.email)
+    if (u.id != null) payload.user.id = String(u.id)
+    if (u.name != null) payload.user.name = String(u.name)
+    if (u.email != null) payload.user.email = String(u.email)
+    if ('iat' in u) payload.user.iat = asNum(u.iat, payload.user.iat)
+    if ('amr' in u) payload.user.amr = asAmr(u.amr, payload.user.amr)
+    if ('mfa' in u) payload.user.mfa = asBool(u.mfa, false)
   }
 
-  return {
-    accessToken,
-    account: { id, planType, structure },
-    user: { id: userId, name: userName, email },
+  if (rec.rumViewTags !== null && typeof rec.rumViewTags === 'object' && !Array.isArray(rec.rumViewTags)) {
+    const tags = rec.rumViewTags as Record<string, unknown>
+    const light = tags.light_account
+    if (light !== null && typeof light === 'object' && !Array.isArray(light)) {
+      const l = light as Record<string, unknown>
+      payload.rumViewTags = { light_account: { fetched: asBool(l.fetched, false) } }
+    }
   }
+
+  return payload
 }
 
 /** 非合法 JSON：正则提取（与输出结构对应字段） */
 function parseRegexToPayload(s: string): TokenPayload | null {
   const accessM = s.match(/"accessToken"\s*:\s*"([^"]*)"/)
   if (!accessM) return null
-  const accessToken = accessM[1]
+  const payload = defaultPayload(accessM[1])
 
-  let id = ''
-  let planType = 'free'
-  let structure = 'personal'
+  const sessionM = s.match(/"sessionToken"\s*:\s*"([^"]*)"/)
+  if (sessionM) payload.sessionToken = sessionM[1]
+  const expiresM = s.match(/"expires"\s*:\s*"([^"]*)"/)
+  if (expiresM) payload.expires = expiresM[1]
+  const authM = s.match(/"authProvider"\s*:\s*"([^"]*)"/)
+  if (authM) payload.authProvider = authM[1]
+
   const accountBlock = s.match(/"account"\s*:\s*\{([^}]*)\}/)
   if (accountBlock) {
     const inner = accountBlock[1]
     const idM = inner.match(/"id"\s*:\s*"([^"]*)"/)
     const ptM = inner.match(/"planType"\s*:\s*"([^"]*)"/)
     const stM = inner.match(/"structure"\s*:\s*"([^"]*)"/)
-    if (idM) id = idM[1]
-    if (ptM) planType = ptM[1]
-    if (stM) structure = stM[1]
+    const ctM = inner.match(/"createdTime"\s*:\s*([0-9.]+)/)
+    const crM = inner.match(/"computeResidency"\s*:\s*"([^"]*)"/)
+    const rrM = inner.match(/"residencyRegion"\s*:\s*"([^"]*)"/)
+    if (idM) payload.account.id = idM[1]
+    if (ptM) payload.account.planType = ptM[1]
+    if (stM) payload.account.structure = stM[1]
+    if (ctM) payload.account.createdTime = Number(ctM[1])
+    if (crM) payload.account.computeResidency = crM[1]
+    if (rrM) payload.account.residencyRegion = rrM[1]
   }
 
-  let userId = ''
-  let userName = ''
-  let email = ''
   const userBlock = s.match(/"user"\s*:\s*\{([^}]*)\}/)
   if (userBlock) {
     const inner = userBlock[1]
     const uIdM = inner.match(/"id"\s*:\s*"([^"]*)"/)
     const uNameM = inner.match(/"name"\s*:\s*"([^"]*)"/)
     const emM = inner.match(/"email"\s*:\s*"([^"]*)"/)
-    if (uIdM) userId = uIdM[1]
-    if (uNameM) userName = uNameM[1]
-    if (emM) email = emM[1]
+    const iatM = inner.match(/"iat"\s*:\s*([0-9.]+)/)
+    const mfaM = inner.match(/"mfa"\s*:\s*(true|false)/)
+    if (uIdM) payload.user.id = uIdM[1]
+    if (uNameM) payload.user.name = uNameM[1]
+    if (emM) payload.user.email = emM[1]
+    if (iatM) payload.user.iat = Number(iatM[1])
+    if (mfaM) payload.user.mfa = mfaM[1] === 'true'
   }
 
-  return {
-    accessToken,
-    account: { id, planType, structure },
-    user: { id: userId, name: userName, email },
-  }
+  return payload
 }
 
 /** 从输入解析为固定输出结构 */

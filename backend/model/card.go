@@ -54,7 +54,7 @@ type AccountCard struct {
 	FreezeStatus            int            `json:"freeze_status" gorm:"type:tinyint(2);default:-1;comment:冻结状态 -1未冻结 1已冻结"`
 	FreezeTime              *int64         `json:"freeze_time" gorm:"type:bigint(20);comment:冻结时间"`
 	FreezeRemark            string         `json:"freeze_remark" gorm:"type:varchar(200);comment:冻结备注"`
-	Promo50OffTime          *int64         `json:"promo_50off_time" gorm:"column:promo_50off_time;type:bigint(20);comment:检测到Cursor 50%off召回邮件的时间"`
+	IsPromo50Off            int            `json:"is_promo_50off" gorm:"column:is_promo_50off;type:tinyint(2);default:0;comment:是否半价号 0否 1是"`
 	Promo50OffInfo          string         `json:"promo_50off_info" gorm:"column:promo_50off_info;type:varchar(300);comment:命中的Cursor 50%off召回邮件信息(位置|日期|标题)"`
 	Promo50OffCheckTime     *int64         `json:"promo_50off_check_time" gorm:"column:promo_50off_check_time;type:bigint(20);comment:最近一次检测50%off召回邮件的时间(无论成功失败)"`
 	Promo50OffLastError     string         `json:"promo_50off_last_error" gorm:"column:promo_50off_last_error;type:varchar(300);comment:最近一次检测50%off召回邮件失败的错误信息"`
@@ -173,9 +173,9 @@ func GetAllCardsForExport(tableName string, cardType string, accounts []string, 
 		query = query.Where("purchase_by LIKE ?", "%"+pb+"%")
 	}
 
-	// Cursor 50% off 召回邮件命中筛选（1=仅命中，0=不过滤）
+	// 是否半价号筛选（1=仅半价，0=不过滤）
 	if promo50Off == 1 {
-		query = query.Where("promo_50off_time IS NOT NULL")
+		query = query.Where("is_promo_50off = ?", 1)
 	}
 
 	query = applyAccountSearchFilter(query, accounts)
@@ -252,9 +252,9 @@ func GetCardList(tableName string, cardType string, page, pageSize int, accounts
 		query = query.Where("purchase_by LIKE ?", "%"+pb+"%")
 	}
 
-	// Cursor 50% off 召回邮件命中筛选（1=仅命中，0=不过滤）
+	// 是否半价号筛选（1=仅半价，0=不过滤）
 	if promo50Off == 1 {
-		query = query.Where("promo_50off_time IS NOT NULL")
+		query = query.Where("is_promo_50off = ?", 1)
 	}
 
 	// 账号搜索（单行模糊，多行精确 IN）
@@ -413,6 +413,12 @@ func BatchCreateCards(tableName string, cards []AccountCard) error {
 			// 使用 struct 更新，仅覆盖非零值字段，避免空字符串/0误清空已有数据
 			if err := tx.Table(tableName).Where("id = ?", existed.Id).Updates(&card).Error; err != nil {
 				return fmt.Errorf("更新卡密失败: %s, %v", card.Account, err)
+			}
+			// is_promo_50off 允许显式写入 0（否），不能走 struct 的非零更新
+			if tableName == "cards_cursor" {
+				if err := tx.Table(tableName).Where("id = ?", existed.Id).Update("is_promo_50off", card.IsPromo50Off).Error; err != nil {
+					return fmt.Errorf("更新卡密失败: %s, %v", card.Account, err)
+				}
 			}
 		}
 		return nil
@@ -850,7 +856,7 @@ func GetQuickMailUncheckedCards(tableName string, afterID, limit int) ([]*Accoun
 		Where("status NOT IN ?", []int{CardStatusDeleted, CardStatusBanned}).
 		Where("account != ''").
 		Where("mail_password IS NOT NULL AND mail_password != ''").
-		Where("promo_50off_time IS NULL").
+		Where("is_promo_50off != ?", 1).
 		Where("promo_50off_skip != 1").
 		Where("(code_link LIKE ? OR code_link LIKE ?)", "%lqqq.cc%", "%toolsvip.cc%").
 		Where("id > ?", afterID).
@@ -889,7 +895,7 @@ func MigrateCardTableColumns() error {
 		{"freeze_time", "bigint(20) NULL COMMENT '冻结时间'"},
 		{"freeze_remark", "varchar(200) NULL COMMENT '冻结备注'"},
 		{"client_id", "varchar(200) NULL COMMENT 'client_id'"},
-		{"promo_50off_time", "bigint(20) NULL COMMENT '检测到Cursor 50%off召回邮件的时间'"},
+		{"is_promo_50off", "tinyint(2) NOT NULL DEFAULT 0 COMMENT '是否半价号 0否 1是'"},
 		{"promo_50off_info", "varchar(300) NULL COMMENT '命中的Cursor 50%off召回邮件信息(位置|日期|标题)'"},
 		{"promo_50off_check_time", "bigint(20) NULL COMMENT '最近一次检测50%off召回邮件的时间(无论成功失败)'"},
 		{"promo_50off_last_error", "varchar(300) NULL COMMENT '最近一次检测50%off召回邮件失败的错误信息'"},
@@ -911,6 +917,20 @@ func MigrateCardTableColumns() error {
 				if err := DB.Exec(sql).Error; err != nil {
 					return fmt.Errorf("迁移表 %s 列 %s 失败: %w", tableName, col.name, err)
 				}
+			}
+		}
+
+		// 旧字段 promo_50off_time 有值的记录回填为半价号
+		var oldCol int64
+		DB.Raw(
+			"SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?",
+			tableName, "promo_50off_time",
+		).Scan(&oldCol)
+		if oldCol > 0 {
+			if err := DB.Exec(
+				fmt.Sprintf("UPDATE `%s` SET `is_promo_50off` = 1 WHERE `promo_50off_time` IS NOT NULL AND `is_promo_50off` != 1", tableName),
+			).Error; err != nil {
+				return fmt.Errorf("回填表 %s is_promo_50off 失败: %w", tableName, err)
 			}
 		}
 	}

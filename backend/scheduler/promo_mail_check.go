@@ -16,12 +16,13 @@ import (
 )
 
 const (
-	promoMailCardTable       = "cards_cursor"
-	promoMailPageSize        = 50
-	promoMailSubjectMatch    = "come back to cursor for 50% off"
-	promoMailBodyMatch       = "get 50% off"
-	promoMailWrongPasswdText = "邮箱或者密码有误"
-	promoMailMissingInfoText = "邮箱获取失败，请检查是否有信息没填对"
+	promoMailCardTable        = "cards_cursor"
+	promoMailPageSize         = 50
+	promoMailSubjectMatch     = "come back to cursor for 50% off"
+	promoMailBodyMatch        = "get 50% off"
+	promoMailWrongPasswdText  = "邮箱或者密码有误"
+	promoMailMissingInfoText  = "邮箱获取失败，请检查是否有信息没填对"
+	promoMailAccountClosedTxt = "your cursor account has been closed"
 )
 
 // promoMailAccountInvalidTexts 快捷取件服务返回以下文案时，视为账号信息本身有问题（而非网络等临时故障）
@@ -109,7 +110,7 @@ func (s *PromoMailCheckScheduler) checkAll() {
 
 	logger.SysLog(fmt.Sprintf("开始检测 %s 表 Cursor 50%% off 召回邮件...", promoMailCardTable))
 
-	total, hit, fail, miss, skipped := 0, 0, 0, 0, 0
+	total, hit, fail, miss, skipped, closedCnt := 0, 0, 0, 0, 0, 0
 	afterID := 0
 	for {
 		cards, err := model.GetQuickMailUncheckedCards(promoMailCardTable, afterID, promoMailPageSize)
@@ -124,7 +125,7 @@ func (s *PromoMailCheckScheduler) checkAll() {
 		for _, card := range cards {
 			total++
 			now := time.Now().Unix()
-			matched, info, skip, err := CheckSinglePromoMail(card)
+			matched, info, closed, skip, err := CheckSinglePromoMail(card)
 			switch {
 			case skip:
 				logger.SysError(fmt.Sprintf("卡密 [ID:%d, Account:%s] 标记为不再检测半价召回邮件: %v", card.Id, card.Account, err))
@@ -149,16 +150,25 @@ func (s *PromoMailCheckScheduler) checkAll() {
 				}
 				fail++
 			case matched:
-				if err := model.UpdateCardCheckResult(promoMailCardTable, card.Id, map[string]interface{}{
-					"promo_50off_time":       now,
+				updates := map[string]interface{}{
+					"is_promo_50off":         1,
 					"promo_50off_info":       info,
 					"promo_50off_check_time": now,
 					"promo_50off_last_error": "",
-				}); err != nil {
+				}
+				if closed {
+					updates["promo_50off_skip"] = 1
+					updates["status"] = model.CardStatusDisabled
+				}
+				if err := model.UpdateCardCheckResult(promoMailCardTable, card.Id, updates); err != nil {
 					logger.SysError(fmt.Sprintf("卡密 [ID:%d] 标记优惠邮件失败: %v", card.Id, err))
 				} else {
 					logger.SysLog(fmt.Sprintf("卡密 [ID:%d, Account:%s] 命中 Cursor 50%% off 召回邮件: %s", card.Id, card.Account, info))
 					hit++
+					if closed {
+						logger.SysLog(fmt.Sprintf("卡密 [ID:%d, Account:%s] 同时发现账号关闭邮件，已禁用并停止检测", card.Id, card.Account))
+						closedCnt++
+					}
 				}
 			default:
 				if updErr := model.UpdateCardCheckResult(promoMailCardTable, card.Id, map[string]interface{}{
@@ -179,7 +189,7 @@ func (s *PromoMailCheckScheduler) checkAll() {
 		}
 	}
 
-	logger.SysLog(fmt.Sprintf("Cursor 50%% off 召回邮件检测完成，共检测 %d 条，命中 %d 条，未命中 %d 条，失败 %d 条，停止检测 %d 条", total, hit, miss, fail, skipped))
+	logger.SysLog(fmt.Sprintf("Cursor 50%% off 召回邮件检测完成，共检测 %d 条，命中 %d 条，未命中 %d 条，失败 %d 条，停止检测 %d 条，关户禁用 %d 条", total, hit, miss, fail, skipped, closedCnt))
 }
 
 // detectQuickMailProvider 根据 code_link 判断快捷取件服务商
@@ -202,32 +212,72 @@ func matchPromoContent(subject, body string) bool {
 	return strings.Contains(s, promoMailSubjectMatch) || strings.Contains(b, promoMailBodyMatch)
 }
 
+// isAccountClosedMail 标题或正文包含 "Your Cursor account has been closed" 即视为账号已关闭通知
+func isAccountClosedMail(subject, body string) bool {
+	s := strings.ToLower(subject)
+	b := strings.ToLower(body)
+	return strings.Contains(s, promoMailAccountClosedTxt) || strings.Contains(b, promoMailAccountClosedTxt)
+}
+
+// promoScanItem 统一各服务商邮件条目结构，供 scanPromoItems 统一扫描
+type promoScanItem struct {
+	Subject string
+	Body    string
+	Mailbox string
+	Date    string
+}
+
+// scanPromoItems 在给定邮件列表中查找 Cursor 50% off 召回邮件；
+// 一旦命中，再在同一批邮件中查找是否存在 "Your Cursor account has been closed" 账号关闭通知，
+// closed=true 表示账号已被关闭，调用方应据此停止后续检测并将账号标记为禁用。
+func scanPromoItems(items []promoScanItem) (matched bool, info string, closed bool) {
+	for _, item := range items {
+		if matchPromoContent(item.Subject, item.Body) {
+			matched = true
+			info = formatPromoInfo(item.Mailbox, item.Date, item.Subject)
+			break
+		}
+	}
+	if !matched {
+		return false, "", false
+	}
+	for _, item := range items {
+		if isAccountClosedMail(item.Subject, item.Body) {
+			closed = true
+			break
+		}
+	}
+	return matched, info, closed
+}
+
 // CheckSinglePromoMail 检测单张卡密的收件箱/垃圾箱是否存在 Cursor 50% off 召回邮件
-// 返回 matched 及命中详情（位置|日期|标题），skip 表示该记录应永久停止检测，供外部（定时任务/手动触发）复用
-func CheckSinglePromoMail(card *model.AccountCard) (matched bool, info string, skip bool, err error) {
+// 返回 matched 及命中详情（位置|日期|标题）；closed 表示命中半价邮件的同时还发现账号已关闭通知
+// （"Your Cursor account has been closed"），调用方应据此停止检测并将账号禁用；
+// skip 表示该记录应永久停止检测，供外部（定时任务/手动触发）复用
+func CheckSinglePromoMail(card *model.AccountCard) (matched bool, info string, closed bool, skip bool, err error) {
 	if card == nil {
-		return false, "", false, fmt.Errorf("card 为空")
+		return false, "", false, false, fmt.Errorf("card 为空")
 	}
 	email := strings.TrimSpace(card.Account)
 	password := card.MailPassword
 	if email == "" || password == "" {
-		return false, "", false, fmt.Errorf("邮箱账号或邮箱密码为空")
+		return false, "", false, false, fmt.Errorf("邮箱账号或邮箱密码为空")
 	}
 
 	switch detectQuickMailProvider(card.CodeLink) {
 	case "lqqq":
-		matched, info, err = checkPromoMailLqqq(email, password)
+		matched, info, closed, err = checkPromoMailLqqq(email, password)
 	case "toolsvip":
-		matched, info, err = checkPromoMailToolsvip(email, password)
+		matched, info, closed, err = checkPromoMailToolsvip(email, password)
 	default:
-		return false, "", false, fmt.Errorf("暂不支持的快捷取件服务: %s", card.CodeLink)
+		return false, "", false, false, fmt.Errorf("暂不支持的快捷取件服务: %s", card.CodeLink)
 	}
 
 	if err != nil {
 		// 快捷取件失败（无论具体原因），只要该卡密在 MicrosoftMail 表中存在可用 refresh_token，就尝试原生取件兜底
 		return checkPromoMailNative(card, err)
 	}
-	return matched, info, false, err
+	return matched, info, closed, false, err
 }
 
 // checkPromoMailNative 快捷取件失败时的原生取件兜底：
@@ -236,21 +286,21 @@ func CheckSinglePromoMail(card *model.AccountCard) (matched bool, info string, s
 // 仅当快捷取件的错误明确指向账号信息有误（如"邮箱或者密码有误"/"邮箱获取失败，请检查是否有信息没填对"），
 // 且原生邮件也不可用（无记录/缺 token/token 失效）时，才标记该卡密永久停止检测；
 // 其余情况（如网络抖动等临时故障）下原生邮件不可用，仅按普通失败处理，不冷却、下次继续重试。
-func checkPromoMailNative(card *model.AccountCard, quickMailErr error) (matched bool, info string, skip bool, err error) {
+func checkPromoMailNative(card *model.AccountCard, quickMailErr error) (matched bool, info string, closed bool, skip bool, err error) {
 	accountInvalid := isAccountInvalidError(quickMailErr.Error())
 
 	mail, ferr := model.GetMicrosoftMailByCard(promoMailCardTable, card.Id)
 	if ferr != nil {
 		if accountInvalid {
-			return false, "", true, fmt.Errorf("%v；且未找到关联的原生邮箱记录: %v", quickMailErr, ferr)
+			return false, "", false, true, fmt.Errorf("%v；且未找到关联的原生邮箱记录: %v", quickMailErr, ferr)
 		}
-		return false, "", false, quickMailErr
+		return false, "", false, false, quickMailErr
 	}
 	if strings.TrimSpace(mail.Token) == "" || strings.TrimSpace(mail.ClientId) == "" {
 		if accountInvalid {
-			return false, "", true, fmt.Errorf("%v；原生邮箱记录缺少 token 或 client_id", quickMailErr)
+			return false, "", false, true, fmt.Errorf("%v；原生邮箱记录缺少 token 或 client_id", quickMailErr)
 		}
-		return false, "", false, quickMailErr
+		return false, "", false, false, quickMailErr
 	}
 
 	httpClient := client.HTTPClient
@@ -276,66 +326,60 @@ func checkPromoMailNative(card *model.AccountCard, quickMailErr error) (matched 
 		accessTokens, imapTokenErr := outlook.RefreshAccessTokens(httpClient, acc.ClientID, acc.RefreshToken)
 		if imapTokenErr != nil {
 			if accountInvalid {
-				return false, "", true, fmt.Errorf("%v；原生 token 不可用: Graph=%v；IMAP OAuth=%v", quickMailErr, graphFailErr, imapTokenErr)
+				return false, "", false, true, fmt.Errorf("%v；原生 token 不可用: Graph=%v；IMAP OAuth=%v", quickMailErr, graphFailErr, imapTokenErr)
 			}
-			return false, "", false, fmt.Errorf("%v；原生取件亦失败: Graph=%v；IMAP OAuth=%v", quickMailErr, graphFailErr, imapTokenErr)
+			return false, "", false, false, fmt.Errorf("%v；原生取件亦失败: Graph=%v；IMAP OAuth=%v", quickMailErr, graphFailErr, imapTokenErr)
 		}
 		inbox, junk, err = outlook.FetchViaIMAP(acc, accessTokens)
 		if err != nil {
 			if accountInvalid {
-				return false, "", true, fmt.Errorf("%v；原生取件不可用: Graph=%v；IMAP=%v", quickMailErr, graphFailErr, err)
+				return false, "", false, true, fmt.Errorf("%v；原生取件不可用: Graph=%v；IMAP=%v", quickMailErr, graphFailErr, err)
 			}
-			return false, "", false, fmt.Errorf("%v；原生取件亦失败: Graph=%v；IMAP=%v", quickMailErr, graphFailErr, err)
+			return false, "", false, false, fmt.Errorf("%v；原生取件亦失败: Graph=%v；IMAP=%v", quickMailErr, graphFailErr, err)
 		}
 	}
 
+	items := make([]promoScanItem, 0, len(inbox)+len(junk))
 	for _, item := range inbox {
-		if matchPromoContent(item.Subject, item.Body+" "+item.HtmlBody) {
-			return true, formatPromoInfo("收件箱(原生)", item.ReceivedAt, item.Subject), false, nil
-		}
+		items = append(items, promoScanItem{Subject: item.Subject, Body: item.Body + " " + item.HtmlBody, Mailbox: "收件箱(原生)", Date: item.ReceivedAt})
 	}
 	for _, item := range junk {
-		if matchPromoContent(item.Subject, item.Body+" "+item.HtmlBody) {
-			return true, formatPromoInfo("垃圾箱(原生)", item.ReceivedAt, item.Subject), false, nil
-		}
+		items = append(items, promoScanItem{Subject: item.Subject, Body: item.Body + " " + item.HtmlBody, Mailbox: "垃圾箱(原生)", Date: item.ReceivedAt})
 	}
-	return false, "", false, nil
+	matched, info, closed = scanPromoItems(items)
+	return matched, info, closed, false, nil
 }
 
-func checkPromoMailLqqq(email, password string) (bool, string, error) {
+func checkPromoMailLqqq(email, password string) (matched bool, info string, closed bool, err error) {
 	inbox, junk, err := webmail.FetchLqqqMails(email, password)
 	if err != nil {
-		return false, "", err
+		return false, "", false, err
 	}
+	items := make([]promoScanItem, 0, len(inbox)+len(junk))
 	for _, item := range inbox {
-		if matchPromoContent(item.Subject, "") {
-			return true, formatPromoInfo(item.Mailbox, item.Date, item.Subject), nil
-		}
+		items = append(items, promoScanItem{Subject: item.Subject, Mailbox: item.Mailbox, Date: item.Date})
 	}
 	for _, item := range junk {
-		if matchPromoContent(item.Subject, "") {
-			return true, formatPromoInfo(item.Mailbox, item.Date, item.Subject), nil
-		}
+		items = append(items, promoScanItem{Subject: item.Subject, Mailbox: item.Mailbox, Date: item.Date})
 	}
-	return false, "", nil
+	matched, info, closed = scanPromoItems(items)
+	return matched, info, closed, nil
 }
 
-func checkPromoMailToolsvip(email, password string) (bool, string, error) {
+func checkPromoMailToolsvip(email, password string) (matched bool, info string, closed bool, err error) {
 	inbox, junk, err := webmail.FetchToolsvipMails(email, password)
 	if err != nil {
-		return false, "", err
+		return false, "", false, err
 	}
+	items := make([]promoScanItem, 0, len(inbox)+len(junk))
 	for _, item := range inbox {
-		if matchPromoContent(item.Subject, item.Body+" "+item.HtmlBody) {
-			return true, formatPromoInfo(item.Mailbox, item.Date, item.Subject), nil
-		}
+		items = append(items, promoScanItem{Subject: item.Subject, Body: item.Body + " " + item.HtmlBody, Mailbox: item.Mailbox, Date: item.Date})
 	}
 	for _, item := range junk {
-		if matchPromoContent(item.Subject, item.Body+" "+item.HtmlBody) {
-			return true, formatPromoInfo(item.Mailbox, item.Date, item.Subject), nil
-		}
+		items = append(items, promoScanItem{Subject: item.Subject, Body: item.Body + " " + item.HtmlBody, Mailbox: item.Mailbox, Date: item.Date})
 	}
-	return false, "", nil
+	matched, info, closed = scanPromoItems(items)
+	return matched, info, closed, nil
 }
 
 // formatPromoInfo 拼接命中信息并按 promo_50off_info 字段长度（varchar(300)）截断，避免写库报错

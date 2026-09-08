@@ -113,7 +113,7 @@
           ]" placeholder="冻结状态" style="width: 150px" />
           <n-select v-if="category === 'cursor'" v-model:value="searchPromo50Off" :options="[
             { label: '全部', value: 0 },
-            { label: '仅命中半价优惠', value: 1 },
+            { label: '仅半价号', value: 1 },
           ]" placeholder="半价优惠" style="width: 150px" />
           <n-date-picker
             v-if="cardType === 'all'"
@@ -264,7 +264,8 @@
           </n-form-item-gi>
 
           <n-form-item-gi :span="2" label="短信接码地址" path="phone_link">
-            <n-input v-model:value="formData.phone_link" placeholder="请输入手机号接码地址" />
+            <n-select v-model:value="formData.phone_link" :options="phoneLinkOptions" placeholder="选择或输入短信接码地址"
+              filterable tag clearable />
           </n-form-item-gi>
 
           <n-form-item-gi :span="2" label="备注" path="remark">
@@ -439,7 +440,15 @@
             </n-form-item-gi>
 
             <n-form-item-gi label="短信接码地址">
-              <n-input v-model:value="batchConfig.phone_link" placeholder="批量默认手机号接码地址（选填）" />
+              <n-select v-model:value="batchConfig.phone_link" :options="phoneLinkOptions" placeholder="选择或输入短信接码地址"
+                filterable tag clearable />
+            </n-form-item-gi>
+
+            <n-form-item-gi v-if="category === 'cursor'" label="是否半价号">
+              <n-select v-model:value="batchConfig.is_promo_50off" :options="[
+                { label: '否', value: 0 },
+                { label: '是', value: 1 },
+              ]" />
             </n-form-item-gi>
 
             <n-form-item-gi label="备注">
@@ -669,7 +678,7 @@
     <!-- 原生取件弹窗 -->
     <n-modal v-model:show="showNativeFetchModal" preset="card" title="原生取件" style="width: 960px; max-width: 96vw"
       :bordered="false">
-      <n-spin :show="nativeFetchLoading" description="正在通过 refresh_token 取件…">
+      <n-spin :show="nativeFetchLoading" description="正在通过 refresh_token 取件…" style="min-height: 200px">
         <template v-if="nativeFetchData">
           <n-text depth="3" style="font-size: 13px">
             当前邮箱：<strong>{{ nativeFetchData.email }}</strong>
@@ -706,6 +715,7 @@
           </div>
         </template>
         <n-empty v-else-if="!nativeFetchLoading" description="暂无数据" />
+        <div v-else style="height: 200px" />
       </n-spin>
     </n-modal>
 
@@ -745,6 +755,45 @@
       </template>
     </n-modal>
 
+    <!-- 短信接码弹窗 -->
+    <n-modal v-model:show="showSmsCodeModal" preset="card" title="短信接码"
+      style="width: 480px; max-width: 96vw" :bordered="false">
+      <n-text depth="3" style="font-size: 13px" v-if="smsCodeRow">
+        账号：<strong>{{ smsCodeRow.account }}</strong>
+      </n-text>
+      <n-spin :show="smsCodeLoading" style="min-height: 140px; margin-top: 12px">
+        <div v-if="smsCodeResult?.status === 'received'"
+          style="border-left: 4px solid #18a058; background: rgba(24,160,88,0.1); border-radius: 6px; padding: 20px; text-align: center">
+          <div style="font-size: 13px; color: var(--n-text-color-3); margin-bottom: 8px">验证码</div>
+          <div style="font-size: 32px; font-weight: 700; letter-spacing: 4px; color: #18a058; font-family: monospace">
+            {{ smsCodeResult.code || '——' }}
+          </div>
+          <n-button size="small" style="margin-top: 12px" @click="handleCopySmsCode" v-if="smsCodeResult.code">
+            复制验证码
+          </n-button>
+        </div>
+        <n-alert v-else :type="smsCodeResult && smsCodeResult.status === 'error' ? 'error' : 'info'" :bordered="false">
+          {{ smsCodeStatusMessage }}
+        </n-alert>
+
+        <div v-if="smsCodeResult?.expires_at" style="margin-top: 12px">
+          <n-alert type="warning" :bordered="false">
+            当前号码有效期至：{{ smsCodeResult.expires_at }}
+          </n-alert>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 12px; margin-top: 16px">
+          <n-button type="primary" size="small" :loading="smsCodeLoading"
+            :disabled="smsCodeResult?.status === 'received'" @click="manualRefreshSmsCode">
+            立即刷新
+          </n-button>
+          <span v-if="smsCodeResult?.status !== 'received' && smsCodeCountdown > 0" style="font-size: 13px; color: #999">
+            {{ smsCodeCountdown }} 秒后自动刷新
+          </span>
+        </div>
+      </n-spin>
+    </n-modal>
+
     <!-- 提链结果弹窗 -->
     <n-modal v-model:show="showGotoProModal" :title="`提链成功 - ${gotoProAccount || '付款链接'}`" preset="card" style="width: 640px">
       <n-space vertical :size="12">
@@ -779,35 +828,29 @@
       </template>
     </n-modal>
 
-    <!-- 半价提链：填写 uid 与套餐 -->
-    <n-modal v-model:show="showHalfPriceModal" title="半价提链" preset="dialog" positive-text="下一步"
-      negative-text="取消" :positive-button-props="{ loading: halfPriceLoading, disabled: halfPriceLoading }"
-      @positive-click="handleHalfPriceNext" style="width: 480px">
-      <n-form label-placement="left" label-width="90px" style="margin-top: 20px">
-        <n-form-item label="活动链接" required>
-          <n-input v-model:value="halfPriceForm.url" placeholder="https://cursor.120.hk?uid=xx"
-            @blur="loadHalfPriceQuota(halfPriceForm.url)" />
-        </n-form-item>
-        <n-form-item label="当前余量">
-          <span>{{ halfPriceQuota || '—' }}</span>
-        </n-form-item>
-        <n-form-item label="选择套餐" required>
-          <n-radio-group v-model:value="halfPriceForm.tier">
-            <n-space>
-              <n-radio value="pro">Pro 半价注册</n-radio>
-              <n-radio value="pro_plus">Pro Plus 半价注册</n-radio>
-              <n-radio value="ultra">Ultra 半价注册</n-radio>
-            </n-space>
-          </n-radio-group>
-        </n-form-item>
-      </n-form>
-    </n-modal>
-
-    <!-- 提链-支付成功：单卡升级成品弹窗 -->
-    <n-modal v-model:show="showGotoProSuccessModal" title="支付成功 - 更新为成品" preset="dialog" positive-text="确认更新"
-      negative-text="取消" :auto-focus="false" @positive-click="handleGotoProSuccessSubmit" style="width: 600px">
+    <!-- 提链-支付成功：先自动更新成品，再补充价格等信息 -->
+    <n-modal
+      :show="showGotoProSuccessModal"
+      :title="`支付成功 - ${gotoProAccount || '更新为成品'}`"
+      preset="dialog"
+      positive-text="确认保存"
+      negative-text="关闭"
+      :closable="false"
+      :mask-closable="false"
+      :close-on-esc="false"
+      :auto-focus="false"
+      :positive-button-props="{ loading: gotoProSuccessSubmitting || gotoProUpgrading, disabled: gotoProUpgrading }"
+      @update:show="handleGotoProSuccessModalShow"
+      @positive-click="handleGotoProSuccessSubmit"
+      @negative-click="handleGotoProSuccessClose"
+      style="width: 600px"
+    >
       <n-form label-placement="left" label-width="120px" style="margin-top: 20px">
         <n-grid :cols="2" :x-gap="24" :y-gap="12">
+          <n-form-item-gi label="账号" :span="2">
+            <n-text strong>{{ gotoProAccount || '—' }}</n-text>
+          </n-form-item-gi>
+
           <n-form-item-gi label="订阅类型">
             <n-select v-model:value="upgradeForm.subscription_type" :options="subscriptionTypeOptions"
               placeholder="选择或输入订阅类型" filterable tag clearable />
@@ -840,8 +883,12 @@
           </n-form-item-gi>
         </n-grid>
 
-        <n-alert type="info" style="margin-top: 12px">
-          将为该账号更新为成品，订阅状态设置为"已订阅"、账号类型设置为"成品"。
+        <n-alert :type="gotoProUpgraded ? 'success' : (gotoProUpgrading ? 'info' : 'warning')" style="margin-top: 12px">
+          {{ gotoProUpgrading
+            ? `正在将账号 ${gotoProAccount || ''} 更新为成品…`
+            : gotoProUpgraded
+              ? `账号 ${gotoProAccount || ''} 已更新为成品，请补充购买价格等信息后保存。`
+              : `账号 ${gotoProAccount || ''} 尚未更新为成品，请确认保存。` }}
         </n-alert>
       </n-form>
     </n-modal>
@@ -947,12 +994,13 @@ import {
   submitStripeAlipay,
   pollCardSubscription,
   halfPriceCheckout,
-  getHalfPriceQuota,
   updateCardRemark,
   batchFreezeCards,
   batchDeleteCards,
+  getCardSmsCode,
   type Card,
   type CardRequest,
+  type CardSmsCodeResult,
 } from '@/api/card'
 import { getDigisellerPrices, type DigisellerPrice } from '@/api/digiseller'
 import { getMicrosoftMailByCard } from '@/api/microsoft-mail'
@@ -1018,7 +1066,10 @@ const hasPhoneReceive = (card: Card): boolean => {
 
 const phoneFields = (card: Card, sep: string): string => {
   if (!hasPhoneReceive(card)) return ''
-  const phoneLoginUrl = `${CURSOR_SMS_QUERY_BASE_URL}?${card.account}----${(card.password || '').trim()}`
+  // account/pass 提前做 URL 编码，避免密码里的 # & 等特殊字符被浏览器当作分隔符处理
+  const encodedAccount = encodeURIComponent(card.account)
+  const encodedPass = encodeURIComponent((card.password || '').trim())
+  const phoneLoginUrl = `${CURSOR_SMS_QUERY_BASE_URL}?${encodedAccount}----${encodedPass}`
   return `${sep}Когда на странице появится запрос на ввод кода подтверждения по SMS, пожалуйста, перейдите по ссылке, чтобы получить код подтверждения: ${phoneLoginUrl}`
 }
 
@@ -1298,6 +1349,8 @@ const gotoProSubscriptionType = ref('')
 const showGotoProSuccessModal = ref(false)
 const gotoProPurchasePriceRef = ref<{ focus: () => void } | null>(null)
 const gotoProSuccessSubmitting = ref(false)
+const gotoProUpgrading = ref(false)
+const gotoProUpgraded = ref(false)
 const showGotoProFailModal = ref(false)
 const gotoProFailRemark = ref('')
 const stripeAlipayLoading = ref(false)
@@ -1309,22 +1362,6 @@ const stripeAlipaySigned = ref(false)
 const stripeAlipayCompleted = ref(false)
 const stripePollStatus = ref('')
 const stripePollStatusType = ref<'default' | 'info' | 'success' | 'warning' | 'error'>('info')
-const showHalfPriceModal = ref(false)
-const halfPriceLoading = ref(false)
-const halfPriceCard = ref<Card | null>(null)
-const halfPriceForm = ref({
-  url: '',
-  tier: 'pro' as 'pro' | 'pro_plus' | 'ultra',
-})
-const HALF_PRICE_UID_COOKIE = 'cursor_half_price_uid'
-
-const normalizeHalfPricePageUrl = (raw: string) => {
-  const value = raw.trim()
-  if (!value) return ''
-  if (/^https?:\/\//i.test(value)) return value
-  return `https://cursor.120.hk?uid=${encodeURIComponent(value)}`
-}
-const halfPriceQuota = ref('')
 
 // 已售列表：批量提链结果弹窗
 const showBatchGotoProModal = ref(false)
@@ -1455,6 +1492,103 @@ const copyNativeCode = async (text: string) => {
   }
 }
 
+// ---- 短信接码弹窗（参考 web 端 SmsCursor.vue 的取码+自动轮询方式） ----
+const SMS_CODE_POLL_SECONDS = 10
+const showSmsCodeModal = ref(false)
+const smsCodeLoading = ref(false)
+const smsCodeResult = ref<CardSmsCodeResult | null>(null)
+const smsCodeRow = ref<Card | null>(null)
+const smsCodeCountdown = ref(0)
+let smsCodeCountdownTimer: ReturnType<typeof setInterval> | null = null
+
+const smsCodeStatusMessage = computed(() => {
+  if (!smsCodeResult.value) return '正在查询短信，请稍候……'
+  return smsCodeResult.value.message || (smsCodeResult.value.status === 'waiting' ? '暂未收到短信，请等待。' : '查询失败，请稍后重试。')
+})
+
+function stopSmsCodeCountdown() {
+  if (smsCodeCountdownTimer !== null) {
+    clearInterval(smsCodeCountdownTimer)
+    smsCodeCountdownTimer = null
+  }
+  smsCodeCountdown.value = 0
+}
+
+function startSmsCodeCountdown() {
+  stopSmsCodeCountdown()
+  smsCodeCountdown.value = SMS_CODE_POLL_SECONDS
+  smsCodeCountdownTimer = setInterval(() => {
+    smsCodeCountdown.value -= 1
+    if (smsCodeCountdown.value <= 0) {
+      stopSmsCodeCountdown()
+      fetchSmsCode()
+    }
+  }, 1000)
+}
+
+const fetchSmsCode = async () => {
+  if (!smsCodeRow.value) return
+  stopSmsCodeCountdown()
+  smsCodeLoading.value = true
+  try {
+    const res = await getCardSmsCode(category.value, smsCodeRow.value.id)
+    if (res.code !== 200) {
+      smsCodeResult.value = {
+        account: smsCodeRow.value.account,
+        status: 'error',
+        code: '',
+        message: res.message || '取码失败',
+        expires_at: '',
+      }
+      startSmsCodeCountdown()
+      return
+    }
+    smsCodeResult.value = res.data
+    if (res.data.status === 'received') {
+      return
+    }
+    startSmsCodeCountdown()
+  } catch (e: any) {
+    smsCodeResult.value = {
+      account: smsCodeRow.value.account,
+      status: 'error',
+      code: '',
+      message: e?.message || '网络异常，请稍后重试。',
+      expires_at: '',
+    }
+    startSmsCodeCountdown()
+  } finally {
+    smsCodeLoading.value = false
+  }
+}
+
+const handleSmsCode = (row: Card) => {
+  smsCodeRow.value = row
+  smsCodeResult.value = null
+  showSmsCodeModal.value = true
+  fetchSmsCode()
+}
+
+const manualRefreshSmsCode = () => {
+  fetchSmsCode()
+}
+
+const handleCopySmsCode = async () => {
+  if (!smsCodeResult.value?.code) return
+  try {
+    await navigator.clipboard.writeText(smsCodeResult.value.code)
+    message.success('已复制到剪贴板')
+  } catch {
+    message.error('复制失败，请手动选择')
+  }
+}
+
+watch(showSmsCodeModal, (show) => {
+  if (!show) {
+    stopSmsCodeCountdown()
+  }
+})
+
 // 批量导入配置
 const batchConfig = ref({
   subscription_type: 'pro',
@@ -1470,6 +1604,7 @@ const batchConfig = ref({
   code_link: 'https://tool.toolsvip.cc/easy-mailbox/frontend',
   phone_link: '',
   remark: '',
+  is_promo_50off: 0,
   field_mapping: {
     account: 1,
     password: 2,
@@ -1599,6 +1734,11 @@ const codeLinkOptions = [
   { label: 'https://emails.520952.xyz/', value: 'https://emails.520952.xyz/' },
 ]
 
+const phoneLinkOptions = [
+  { label: 'https://lurentool.cn/sms', value: 'https://lurentool.cn/sms' },
+  { label: 'https://shiyi.xyz/email/code', value: 'https://shiyi.xyz/email/code' },
+]
+
 const getSubscriptionTypeTagType = (subscriptionType?: string): 'default' | 'primary' | 'info' | 'success' | 'warning' | 'error' => {
   const t = (subscriptionType || '').toLowerCase()
   const map: Record<string, 'default' | 'primary' | 'info' | 'success' | 'warning' | 'error'> = {
@@ -1707,7 +1847,7 @@ const buildCardQueryParams = () => {
     ...(purchaseDateParam ? { purchase_date: purchaseDateParam } : {}),
     ...(searchFreezeStatus.value !== 0 ? { freeze_status: searchFreezeStatus.value } : {}),
     ...(searchFreezeTime.value != null ? { freeze_time: formatYYYYMMDD(searchFreezeTime.value) } : {}),
-    ...(searchPromo50Off.value !== 0 ? { promo_50off: searchPromo50Off.value } : {}),
+    ...(searchPromo50Off.value !== 0 ? { is_promo_50off: searchPromo50Off.value } : {}),
   }
 }
 
@@ -1733,7 +1873,7 @@ const columns = computed<DataTableColumns<Card>>(() => {
         const tags: any[] = []
         // 仅 cursor 类别显示：是否命中 Cursor 半价召回邮件
         if (category.value === 'cursor') {
-          const isHit = !!row.promo_50off_time
+          const isHit = !!row.is_promo_50off
           const isSkip = !isHit && !!row.promo_50off_skip
           const promoTag = h(
             NTag,
@@ -1742,17 +1882,16 @@ const columns = computed<DataTableColumns<Card>>(() => {
           )
           if (isHit) {
             tags.push(
-              h(
-                NTooltip,
-                { trigger: 'hover' },
-                {
-                  trigger: () => promoTag,
-                  default: () => [
-                    h('div', {}, formatTimestamp(row.promo_50off_time)),
-                    row.promo_50off_info ? h('div', {}, row.promo_50off_info) : null,
-                  ],
-                }
-              )
+              row.promo_50off_info
+                ? h(
+                    NTooltip,
+                    { trigger: 'hover' },
+                    {
+                      trigger: () => promoTag,
+                      default: () => row.promo_50off_info,
+                    }
+                  )
+                : promoTag
             )
           } else if (row.promo_50off_last_error) {
             tags.push(
@@ -2105,7 +2244,7 @@ const columns = computed<DataTableColumns<Card>>(() => {
                   message.warning('未配置短信接码地址')
                   return
                 }
-                window.open(row.phone_link, '_blank')
+                handleSmsCode(row)
               },
             },
             {
@@ -2363,92 +2502,27 @@ const handleGotoProWithType = async (row: Card, subscriptionType: string) => {
   }
 }
 
-const readCookie = (name: string): string => {
-  const match = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'))
-  return match ? decodeURIComponent(match[1]) : ''
-}
-
-const writeCookie = (name: string, value: string) => {
-  document.cookie = `${name}=${encodeURIComponent(value)}; path=/; max-age=31536000`
-}
-
-const handleOpenHalfPrice = (row: Card) => {
-  if (!row.token) return
-  halfPriceCard.value = row
-  halfPriceForm.value = {
-    url: normalizeHalfPricePageUrl(readCookie(HALF_PRICE_UID_COOKIE)),
-    tier: 'pro',
-  }
-  showHalfPriceModal.value = true
-  loadHalfPriceQuota(halfPriceForm.value.url)
-}
-
-const loadHalfPriceQuota = async (raw: string) => {
-  const pageUrl = normalizeHalfPricePageUrl(raw)
-  if (!pageUrl) {
-    halfPriceQuota.value = ''
+const handleOpenHalfPrice = async (row: Card) => {
+  if (!row.token) {
+    message.error('当前卡密没有 Token')
     return
   }
-  try {
-    const res = await getHalfPriceQuota(pageUrl)
-    if (res.code === 200 && res.data) {
-      halfPriceQuota.value = res.data
-    } else {
-      halfPriceQuota.value = ''
-    }
-  } catch {
-    // 余量读取失败不影响提链
-  }
-}
-
-let halfPriceQuotaTimer: ReturnType<typeof setTimeout> | null = null
-watch(
-  () => halfPriceForm.value.url,
-  (pageUrl) => {
-    if (!showHalfPriceModal.value) return
-    if (halfPriceQuotaTimer) clearTimeout(halfPriceQuotaTimer)
-    halfPriceQuotaTimer = setTimeout(() => loadHalfPriceQuota(pageUrl), 400)
-  }
-)
-
-const handleHalfPriceNext = async () => {
-  const row = halfPriceCard.value
-  const pageUrl = normalizeHalfPricePageUrl(halfPriceForm.value.url)
-  if (!row?.token) {
-    message.error('当前卡密没有 Token')
-    return false
-  }
-  if (!pageUrl) {
-    message.warning('请输入活动链接')
-    return false
-  }
-
-  writeCookie(HALF_PRICE_UID_COOKIE, pageUrl)
-  halfPriceLoading.value = true
   gotoProLoading.value[row.id] = true
   try {
-    const response = await halfPriceCheckout({
-      url: pageUrl,
-      token: row.token,
-      tier: halfPriceForm.value.tier,
-    })
+    const response = await halfPriceCheckout({ token: row.token })
     if (response.code === 200 && response.data) {
       gotoProCardId.value = row.id
       gotoProAccount.value = row.account || ''
-      gotoProSubscriptionType.value = halfPriceForm.value.tier
+      gotoProSubscriptionType.value = 'pro'
       gotoProLink.value = response.data
-      showHalfPriceModal.value = false
       showGotoProModal.value = true
       runStripeAlipay(response.data)
-      return true
+      return
     }
     message.error(response.message || '半价提链失败')
-    return false
   } catch (error: any) {
     message.error(error.response?.data?.message || '半价提链失败')
-    return false
   } finally {
-    halfPriceLoading.value = false
     gotoProLoading.value[row.id] = false
   }
 }
@@ -2622,20 +2696,69 @@ onUnmounted(() => {
   stopSubscriptionPoll()
 })
 
-// 支付成功：关闭提链弹窗，打开升级成品弹窗
-const handleGotoProSuccess = () => {
+// 支付成功：先立刻更新为成品，再打开补充价格弹窗
+const handleGotoProSuccess = async () => {
   stopSubscriptionPoll()
   closeAlipayPayWindow()
   showGotoProModal.value = false
+
+  const subscriptionType = (gotoProSubscriptionType.value || '').trim()
   upgradeForm.value = {
-    subscription_type: gotoProSubscriptionType.value,
+    subscription_type: subscriptionType,
     subscription_time: Date.now(),
     subscription_remaining_days: 30,
     purchase_price: undefined,
     purchase_from: '支付宝',
     purchase_date: Date.now(),
   }
+  gotoProUpgraded.value = false
+  gotoProUpgrading.value = true
   showGotoProSuccessModal.value = true
+
+  if (!gotoProCardId.value || !subscriptionType) {
+    gotoProUpgrading.value = false
+    message.warning(`账号 ${gotoProAccount.value || ''} 未能自动更新为成品，请确认订阅类型后保存`)
+    return
+  }
+
+  try {
+    const now = Math.floor(Date.now() / 1000)
+    const response = await batchUpgradeToProduct({
+      category: category.value,
+      ids: [gotoProCardId.value],
+      subscription_type: subscriptionType,
+      subscription_time: now,
+    })
+    if (response.code === 200) {
+      gotoProUpgraded.value = true
+      message.success(`账号 ${gotoProAccount.value || ''} 已更新为成品，请补充价格等信息`)
+      await loadCards()
+    } else {
+      message.error(response.message || `账号 ${gotoProAccount.value || ''} 自动更新为成品失败，请确认保存`)
+    }
+  } catch (error: any) {
+    message.error(error.response?.data?.message || `账号 ${gotoProAccount.value || ''} 自动更新为成品失败，请确认保存`)
+  } finally {
+    gotoProUpgrading.value = false
+  }
+}
+
+const handleGotoProSuccessModalShow = (show: boolean) => {
+  if (show) {
+    showGotoProSuccessModal.value = true
+    return
+  }
+  // 点遮罩 / ESC 不关弹窗，避免还没变成品就关掉后找不到账号
+  if (gotoProUpgrading.value || !gotoProUpgraded.value) {
+    message.warning(`账号 ${gotoProAccount.value || ''} 尚未更新为成品，请先确认保存`)
+  }
+}
+
+const handleGotoProSuccessClose = () => {
+  if (!gotoProUpgraded.value) {
+    message.warning(`账号 ${gotoProAccount.value || ''} 尚未更新为成品，请留意该账号`)
+  }
+  showGotoProSuccessModal.value = false
 }
 
 watch(showGotoProSuccessModal, (show) => {
@@ -2649,7 +2772,7 @@ watch(showGotoProSuccessModal, (show) => {
 
 // 支付成功确认：单卡升级为成品
 const handleGotoProSuccessSubmit = async () => {
-  if (gotoProSuccessSubmitting.value) return false
+  if (gotoProSuccessSubmitting.value || gotoProUpgrading.value) return false
 
   const subscriptionType = (upgradeForm.value.subscription_type || gotoProSubscriptionType.value || '').trim()
   if (!subscriptionType) {
@@ -2679,7 +2802,8 @@ const handleGotoProSuccessSubmit = async () => {
     })
 
     if (response.code === 200) {
-      message.success(response.message || '更新成功')
+      gotoProUpgraded.value = true
+      message.success(response.message || '保存成功')
       showGotoProSuccessModal.value = false
       await loadCards()
     } else {
@@ -3196,6 +3320,7 @@ const handleBatchImport = () => {
     code_link: 'https://tool.toolsvip.cc/easy-mailbox/frontend',
     phone_link: '',
     remark: '',
+    is_promo_50off: 0,
     field_mapping: currentMapping,
   }
   showBatchModal.value = true
@@ -3304,6 +3429,7 @@ const handleBatchSubmit = async () => {
         phone: phone || undefined,
         phone_link: phoneLink || undefined,
         remark: batchConfig.value.remark || undefined,
+        is_promo_50off: category.value === 'cursor' ? batchConfig.value.is_promo_50off : 0,
       }
 
       cards.push(cardData)

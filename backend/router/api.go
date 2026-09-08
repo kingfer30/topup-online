@@ -78,6 +78,7 @@ func SetApiRouter(router *gin.Engine) {
 			// 卡密管理接口（管理员专用）
 			adminGroup.GET("/cards", controller.GetCardList)                                             // 获取卡密列表
 			adminGroup.GET("/cards/:id", controller.GetCardById)                                         // 获取卡密详情
+			adminGroup.GET("/cards/:id/sms-code", controller.GetCardSmsCode)                             // 抓取短信验证码（列表页"接码-短信接码"弹窗）
 			adminGroup.POST("/cards", controller.CreateCard)                                             // 创建卡密
 			adminGroup.PUT("/cards/:id", controller.UpdateCard)                                          // 更新卡密
 			adminGroup.DELETE("/cards/:id", controller.DeleteCard)                                       // 删除卡密
@@ -98,8 +99,7 @@ func SetApiRouter(router *gin.Engine) {
 			adminGroup.POST("/cards/goto-pro", controller.GotoPro)                                       // 提链：获取 Cursor Pro 付款链接
 			adminGroup.POST("/cards/stripe-alipay", controller.SubmitStripeAlipay)                       // 自动提交 Stripe Alipay 账单并返回付款页
 			adminGroup.POST("/cards/poll-subscription", controller.PollCardSubscription)                 // 轮询卡密当前订阅类型
-			adminGroup.POST("/cards/half-price-checkout", controller.HalfPriceCheckout)                  // 半价提链：活动页预检+开单
-			adminGroup.GET("/cards/half-price-quota", controller.GetHalfPriceQuota)                      // 半价提链：抓取活动页余量
+			adminGroup.POST("/cards/half-price-checkout", controller.HalfPriceCheckout)                  // 半价提链：官方 welcome-back 302 Stripe
 			adminGroup.POST("/cards/batch-freeze", controller.BatchFreezeCards)                          // 批量冻结/解冻普号
 			adminGroup.POST("/cards/batch-delete", controller.BatchDeleteCards)                          // 批量删除（status=-1）
 			adminGroup.GET("/cards/table-names", controller.GetCardTableNames)                           // 获取所有 cards_* 表名

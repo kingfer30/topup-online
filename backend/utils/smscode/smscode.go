@@ -1,8 +1,9 @@
 // Package smscode 用于从第三方接码平台抓取 Cursor 账号的短信验证码。
-// 目前支持三套 phone_link 格式：
+// 目前支持四套 phone_link 格式：
 //  1. api1997.com   —— 直接 GET phone_link，返回纯文本/HTML 页面
 //  2. sms.toolsvip.cc —— 页面本身是静态壳子，真实数据来自 /api/query 接口，返回 JSON
 //  3. lurentool.cn  —— 固定入口页，真实数据通过 POST /api/sms/fetch 提交 "账号-密码" 获取
+//  4. sms-555.com   —— 直接 GET phone_link，返回纯文本 "短信内容|到期日期"
 package smscode
 
 import (
@@ -35,7 +36,9 @@ var (
 	htmlTagRe = regexp.MustCompile(`(?s)<[^>]*>`)
 	// 各平台转发的短信原文基本都是 "123456 is your verification code for Cursor. Do not share it."
 	verificationCodeRe = regexp.MustCompile(`(?i)(\d{6})\s+is\s+your\s+verification\s+code`)
+	sixDigitRe         = regexp.MustCompile(`\d{6}`)
 	dateTimeRe         = regexp.MustCompile(`\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}`)
+	dateOnlyRe         = regexp.MustCompile(`\d{4}-\d{2}-\d{2}`)
 )
 
 func httpClient() *http.Client {
@@ -76,6 +79,8 @@ func FetchCode(phoneLink, account, password string) (*Result, error) {
 		return fetchLurentool(account, password)
 	case strings.Contains(host, "api1997.com"):
 		return fetchApi1997(phoneLink)
+	case strings.Contains(host, "sms-555.com"):
+		return fetchSms555(phoneLink)
 	default:
 		// 未识别的平台，按纯文本页面尝试通用解析
 		return fetchGenericPage(phoneLink)
@@ -108,6 +113,48 @@ func fetchApi1997(link string) (*Result, error) {
 // fetchGenericPage 未识别平台时的兜底解析：直接 GET 页面并做通用文本提取
 func fetchGenericPage(link string) (*Result, error) {
 	return fetchApi1997(link)
+}
+
+// fetchSms555 直接 GET phone_link，返回纯文本 "短信内容|到期日期"。
+// 未收到短信时：No message|2026-09-29
+// 收到短信时：337080 is your verification code for Cursor. Do not share it.|2026-09-29
+func fetchSms555(link string) (*Result, error) {
+	body, err := httpGetBody(link)
+	if err != nil {
+		return nil, err
+	}
+	text := strings.TrimSpace(stripHTML(body))
+
+	message := text
+	expiresAt := ""
+	if idx := strings.LastIndex(text, "|"); idx >= 0 {
+		message = strings.TrimSpace(text[:idx])
+		expiresAt = strings.TrimSpace(text[idx+1:])
+	}
+	if expiresAt != "" && !dateOnlyRe.MatchString(expiresAt) && !dateTimeRe.MatchString(expiresAt) {
+		expiresAt = ""
+	}
+
+	result := &Result{Message: message, ExpiresAt: expiresAt}
+	if message == "" || strings.EqualFold(message, "No message") {
+		result.Status = StatusWaiting
+		result.Message = "暂未收到短信，请等待。"
+		return result, nil
+	}
+
+	if code := extractCode(message); code != "" {
+		result.Status = StatusReceived
+		result.Code = code
+		return result, nil
+	}
+	if code := sixDigitRe.FindString(message); code != "" {
+		result.Status = StatusReceived
+		result.Code = code
+		return result, nil
+	}
+
+	result.Status = StatusWaiting
+	return result, nil
 }
 
 type toolsvipQueryResponse struct {
@@ -146,9 +193,7 @@ func fetchToolsvip(link string) (*Result, error) {
 		code := extractCode(resp.Message)
 		if code == "" {
 			// 兜底：消息本身可能就是纯验证码
-			if m := regexp.MustCompile(`\d{6}`).FindString(resp.Message); m != "" {
-				code = m
-			}
+			code = sixDigitRe.FindString(resp.Message)
 		}
 		result.Code = code
 		return result, nil
