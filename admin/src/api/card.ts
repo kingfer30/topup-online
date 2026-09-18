@@ -7,6 +7,9 @@ export interface Card {
   account: string
   password?: string
   mail_password?: string
+  recovery_mail?: string
+  recovery_mail_pass?: string
+  recovery_mail_host?: string
   subscription_status: number
   subscription_type?: string
   subscription_time?: number
@@ -83,6 +86,9 @@ export interface CardRequest {
   account?: string
   password?: string
   mail_password?: string
+  recovery_mail?: string
+  recovery_mail_pass?: string
+  recovery_mail_host?: string
   subscription_status?: number
   subscription_type?: string
   subscription_time?: number

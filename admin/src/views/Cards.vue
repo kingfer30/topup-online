@@ -161,6 +161,19 @@
             <n-input v-model:value="formData.mail_password" placeholder="请输入邮箱密码" />
           </n-form-item-gi>
 
+          <n-form-item-gi label="辅助邮箱" path="recovery_mail">
+            <n-input v-model:value="formData.recovery_mail" placeholder="请输入辅助邮箱" />
+          </n-form-item-gi>
+
+          <n-form-item-gi label="辅助邮箱密码" path="recovery_mail_pass">
+            <n-input v-model:value="formData.recovery_mail_pass" placeholder="请输入辅助邮箱密码" />
+          </n-form-item-gi>
+
+          <n-form-item-gi :span="2" label="辅助邮箱地址" path="recovery_mail_host">
+            <n-select v-model:value="formData.recovery_mail_host" :options="recoveryMailHostOptions"
+              placeholder="选择或输入辅助邮箱地址" filterable tag clearable />
+          </n-form-item-gi>
+
           <n-form-item-gi label="邮箱地址" path="mail_url">
             <n-input v-model:value="formData.mail_url" placeholder="请输入邮箱地址" />
           </n-form-item-gi>
@@ -186,7 +199,7 @@
 
           <n-form-item-gi label="代付人" path="payer">
             <n-select v-model:value="formData.payer" :options="payerOptions" placeholder="选择或输入代付人"
-              filterable tag clearable />
+              filterable tag clearable @update:value="rememberPayer" />
           </n-form-item-gi>
 
           <n-form-item-gi label="卖家名称" path="purchase_by">
@@ -241,6 +254,13 @@
 
           <n-form-item-gi label="状态" path="status">
             <n-select v-model:value="formData.status" :options="statusOptions" />
+          </n-form-item-gi>
+
+          <n-form-item-gi v-if="category === 'cursor'" label="是否半价号" path="is_promo_50off">
+            <n-select v-model:value="formData.is_promo_50off" :options="[
+              { label: '否', value: 0 },
+              { label: '是', value: 1 },
+            ]" />
           </n-form-item-gi>
 
           <n-form-item-gi :span="2" label="API Key" path="api_key">
@@ -312,7 +332,7 @@
 
           <n-form-item-gi label="代付人">
             <n-select v-model:value="upgradeForm.payer" :options="payerOptions"
-              placeholder="选择或输入代付人" filterable tag clearable />
+              placeholder="选择或输入代付人" filterable tag clearable @update:value="rememberPayer" />
           </n-form-item-gi>
 
           <n-form-item-gi label="购买时间" :span="2">
@@ -449,6 +469,11 @@
                 filterable tag clearable />
             </n-form-item-gi>
 
+            <n-form-item-gi label="辅助邮箱地址">
+              <n-select v-model:value="batchConfig.recovery_mail_host" :options="recoveryMailHostOptions"
+                placeholder="选择或输入辅助邮箱地址" filterable tag clearable />
+            </n-form-item-gi>
+
             <n-form-item-gi label="短信接码地址">
               <n-select v-model:value="batchConfig.phone_link" :options="phoneLinkOptions" placeholder="选择或输入短信接码地址"
                 filterable tag clearable />
@@ -485,6 +510,16 @@
 
             <n-form-item-gi label="邮箱密码">
               <n-input-number v-model:value="batchConfig.field_mapping.mail_password" :min="0" placeholder="0=不导入"
+                style="width: 100%" />
+            </n-form-item-gi>
+
+            <n-form-item-gi label="辅助邮箱">
+              <n-input-number v-model:value="batchConfig.field_mapping.recovery_mail" :min="0" placeholder="0=不导入"
+                style="width: 100%" />
+            </n-form-item-gi>
+
+            <n-form-item-gi label="辅助邮箱密码">
+              <n-input-number v-model:value="batchConfig.field_mapping.recovery_mail_pass" :min="0" placeholder="0=不导入"
                 style="width: 100%" />
             </n-form-item-gi>
 
@@ -765,6 +800,168 @@
       </template>
     </n-modal>
 
+    <!-- lurentool 快捷取件弹窗 -->
+    <n-modal v-model:show="showQuickFetchModal" preset="card" title="快捷取件" style="width: 960px; max-width: 96vw"
+      :bordered="false">
+      <n-spin :show="quickFetchLoading" description="正在通过 lurentool 取件…" style="min-height: 200px">
+        <template v-if="quickFetchData">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+            <n-text depth="3" style="font-size: 13px">
+              当前邮箱：<strong>{{ quickFetchData.email }}</strong>
+              <n-tag v-if="quickFetchData.message" size="small" type="info" style="margin-left:8px">
+                {{ quickFetchData.message }}
+              </n-tag>
+            </n-text>
+            <n-button size="small" :loading="quickFetchLoading" @click="refreshQuickFetch">刷新</n-button>
+          </div>
+          <div class="native-fetch-panels" style="grid-template-columns: 1fr">
+            <n-card :bordered="false" size="small" class="native-fetch-card">
+              <template #header>
+                <div style="display:flex;align-items:center;gap:8px">
+                  <span style="font-weight:600;font-size:14px">📧 邮件</span>
+                  <n-tag size="small" :type="quickFetchData.mails.length ? 'info' : 'default'">
+                    {{ quickFetchData.mails.length }} 封
+                  </n-tag>
+                </div>
+              </template>
+              <n-empty v-if="quickFetchData.mails.length === 0" description="暂无邮件" />
+              <n-list v-else hoverable clickable>
+                <n-list-item v-for="(mail, idx) in quickFetchData.mails" :key="`${idx}-${mail.received_at}`"
+                  @click="openQuickFetchDetail(mail)">
+                  <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;width:100%">
+                    <div style="display:flex;flex-direction:column;gap:2px;min-width:0;flex:1">
+                      <span style="font-size:14px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ mail.subject }}</span>
+                      <span style="font-size:12px;color:var(--n-text-color-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ mail.from }}</span>
+                      <span style="font-size:11px;color:var(--n-text-color-4,#aaa)">{{ mail.received_at }}</span>
+                    </div>
+                    <div style="flex-shrink:0" @click.stop>
+                      <n-button v-if="mail.code" type="success" size="small" round @click="copyNativeCode(mail.code)">
+                        {{ mail.code }}
+                      </n-button>
+                      <n-button v-else type="warning" size="small" round @click="openQuickFetchDetail(mail)">详情</n-button>
+                    </div>
+                  </div>
+                </n-list-item>
+              </n-list>
+            </n-card>
+          </div>
+        </template>
+        <n-empty v-else-if="!quickFetchLoading" description="暂无数据" />
+        <div v-else style="height: 200px" />
+      </n-spin>
+    </n-modal>
+
+    <!-- 辅助邮箱快捷取件弹窗 -->
+    <n-modal v-model:show="showRecoveryFetchModal" preset="card" title="辅助邮箱取件" style="width: 960px; max-width: 96vw"
+      :bordered="false">
+      <n-spin :show="recoveryFetchLoading" description="正在登录辅助邮箱并取件…" style="min-height: 200px">
+        <template v-if="recoveryFetchData">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+            <n-text depth="3" style="font-size: 13px">
+              当前邮箱：<strong>{{ recoveryFetchData.email }}</strong>
+            </n-text>
+            <n-button size="small" :loading="recoveryFetchLoading" @click="refreshRecoveryFetch">刷新</n-button>
+          </div>
+          <div class="native-fetch-panels">
+            <n-card v-for="folder in recoveryFetchFolders" :key="folder.title" :bordered="false" size="small"
+              class="native-fetch-card">
+              <template #header>
+                <div style="display:flex;align-items:center;gap:8px">
+                  <span style="font-weight:600;font-size:14px">{{ folder.title }}</span>
+                  <n-tag size="small" :type="folder.items.length ? 'info' : 'default'">{{ folder.items.length }} 封</n-tag>
+                </div>
+              </template>
+              <n-empty v-if="folder.items.length === 0" description="暂无邮件" />
+              <n-list v-else hoverable clickable>
+                <n-list-item v-for="mail in folder.items" :key="`${folder.title}-${mail.id}`"
+                  @click="openRecoveryDetail(mail)">
+                  <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;width:100%">
+                    <div style="display:flex;flex-direction:column;gap:2px;min-width:0;flex:1">
+                      <span style="font-size:14px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ mail.subject }}</span>
+                      <span style="font-size:12px;color:var(--n-text-color-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ mail.from }}</span>
+                      <span style="font-size:11px;color:var(--n-text-color-4,#aaa)">{{ mail.received_at }}</span>
+                    </div>
+                    <div style="flex-shrink:0" @click.stop>
+                      <n-button v-if="mail.code" type="success" size="small" round @click="copyNativeCode(mail.code)">
+                        {{ mail.code }}
+                      </n-button>
+                      <n-button v-else type="warning" size="small" round @click="openRecoveryDetail(mail)">详情</n-button>
+                    </div>
+                  </div>
+                </n-list-item>
+              </n-list>
+            </n-card>
+          </div>
+        </template>
+        <n-empty v-else-if="!recoveryFetchLoading" description="暂无数据" />
+        <div v-else style="height: 200px" />
+      </n-spin>
+    </n-modal>
+
+    <!-- 辅助邮箱快捷取件 - 邮件详情弹窗 -->
+    <n-modal v-model:show="showRecoveryDetailModal" preset="card" :title="recoveryDetailMail?.subject || '邮件详情'"
+      style="width: 860px; max-width: 96vw" :bordered="false">
+      <template v-if="recoveryDetailMail">
+        <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--n-divider-color)">
+          <div style="display:flex;align-items:center;gap:12px">
+            <span style="font-size:13px;font-weight:600;color:var(--n-text-color-3);width:56px;flex-shrink:0">发件人</span>
+            <span style="font-size:13px">{{ recoveryDetailMail.from }}</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px">
+            <span style="font-size:13px;font-weight:600;color:var(--n-text-color-3);width:56px;flex-shrink:0">时间</span>
+            <span style="font-size:13px">{{ recoveryDetailMail.received_at }}</span>
+          </div>
+          <div v-if="recoveryDetailMail.code" style="display:flex;align-items:center;gap:12px">
+            <span style="font-size:13px;font-weight:600;color:var(--n-text-color-3);width:56px;flex-shrink:0">验证码</span>
+            <n-button type="success" size="small" round @click="copyNativeCode(recoveryDetailMail.code)">
+              {{ recoveryDetailMail.code }}
+            </n-button>
+          </div>
+        </div>
+        <div style="min-height:200px">
+          <div v-if="recoveryDetailLoading" style="display:flex;align-items:center;justify-content:center;padding:40px 0">
+            <n-spin size="small" />
+            <span style="margin-left:8px;color:#999">正在加载正文…</span>
+          </div>
+          <template v-else>
+            <iframe v-if="recoveryDetailMail.html_body" :srcdoc="recoveryDetailMail.html_body"
+              sandbox="allow-same-origin" style="width:100%;height:480px;border:none;border-radius:8px;background:#fff" />
+            <pre v-else-if="recoveryDetailMail.body"
+              style="font-size:13px;line-height:1.7;white-space:pre-wrap;word-break:break-all;margin:0;background:var(--n-color-embedded,rgba(127,127,127,0.08));border-radius:8px;padding:16px;max-height:480px;overflow-y:auto">{{ recoveryDetailMail.body }}</pre>
+            <n-empty v-else description="暂无正文内容" />
+          </template>
+        </div>
+      </template>
+    </n-modal>
+
+    <!-- lurentool 快捷取件 - 邮件详情弹窗 -->
+    <n-modal v-model:show="showQuickFetchDetailModal" preset="card" :title="quickFetchDetailMail?.subject || '邮件详情'"
+      style="width: 860px; max-width: 96vw" :bordered="false">
+      <template v-if="quickFetchDetailMail">
+        <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--n-divider-color)">
+          <div style="display:flex;align-items:center;gap:12px">
+            <span style="font-size:13px;font-weight:600;color:var(--n-text-color-3);width:56px;flex-shrink:0">发件人</span>
+            <span style="font-size:13px">{{ quickFetchDetailMail.from }}</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px">
+            <span style="font-size:13px;font-weight:600;color:var(--n-text-color-3);width:56px;flex-shrink:0">时间</span>
+            <span style="font-size:13px">{{ quickFetchDetailMail.received_at }}</span>
+          </div>
+          <div v-if="quickFetchDetailMail.code" style="display:flex;align-items:center;gap:12px">
+            <span style="font-size:13px;font-weight:600;color:var(--n-text-color-3);width:56px;flex-shrink:0">验证码</span>
+            <n-button type="success" size="small" round @click="copyNativeCode(quickFetchDetailMail.code)">
+              {{ quickFetchDetailMail.code }}
+            </n-button>
+          </div>
+        </div>
+        <div style="min-height:200px">
+          <pre v-if="quickFetchDetailMail.body"
+            style="font-size:13px;line-height:1.7;white-space:pre-wrap;word-break:break-all;margin:0;background:var(--n-color-embedded,rgba(127,127,127,0.08));border-radius:8px;padding:16px;max-height:480px;overflow-y:auto">{{ quickFetchDetailMail.body }}</pre>
+          <n-empty v-else description="暂无正文内容" />
+        </div>
+      </template>
+    </n-modal>
+
     <!-- 短信接码弹窗 -->
     <n-modal v-model:show="showSmsCodeModal" preset="card" title="短信接码"
       style="width: 480px; max-width: 96vw" :bordered="false">
@@ -896,7 +1093,7 @@
 
           <n-form-item-gi label="代付人">
             <n-select v-model:value="upgradeForm.payer" :options="payerOptions"
-              placeholder="选择或输入代付人" filterable tag clearable />
+              placeholder="选择或输入代付人" filterable tag clearable @update:value="rememberPayer" />
           </n-form-item-gi>
 
           <n-form-item-gi label="购买时间" :span="2">
@@ -1032,6 +1229,15 @@ import {
   type OutlookMailItem,
   type OutlookFetchData,
 } from '@/api/outlook-oauth'
+import {
+  fetchLurentoolMails,
+  fetchOuleyxMails,
+  fetchOuleyxDetail,
+  type LurentoolMailItem,
+  type LurentoolFetchData,
+  type OuleyxMailItem,
+  type OuleyxFetchData,
+} from '@/api/webmail'
 
 const route = useRoute()
 const message = useMessage()
@@ -1061,25 +1267,8 @@ const pageTitle = computed(() => {
   return title
 })
 
-// 仅 cards_cursor 才带出 session-token / Auto-Login 说明字段
-const isCursorCategory = computed(() => category.value === 'cursor')
-const CURSOR_AUTO_LOGIN_URL = 'https://docs.aiguoguo199.com/doc-9320337'
 // 对外发货的短信接码地址统一指向独立取码页，账号/密码由页面自行拼接查询
 const CURSOR_SMS_QUERY_BASE_URL = 'https://chatgpt-topup.com/sms/cursor'
-
-const sessionTokenField = (card: Card, sep: string): string => {
-  if (!isCursorCategory.value) return ''
-  const token = (card.token || '').trim()
-  return token ? `${sep}session-token: ${token}` : ''
-}
-
-const cursorAutoLoginField = (card: Card, sep: string): string => {
-  if (!isCursorCategory.value) return ''
-  // token 为空时无法通过 token 登录，不展示该提示
-  const token = (card.token || '').trim()
-  if (!token) return ''
-  return `${sep}В последнее время часто возникают ограничения на доступ к аккаунту, вызывающие SMS-верификацию; настоятельно рекомендуется входить в систему с помощью токена. Пожалуйста, ознакомьтесь со следующим: ${CURSOR_AUTO_LOGIN_URL}`
-}
 
 const hasPhoneReceive = (card: Card): boolean => {
   // 只要配置了接码地址即可展示；手机号本身可以为空
@@ -1098,7 +1287,25 @@ const cursorSmsQueryUrl = (card: Card): string => {
 const phoneFields = (card: Card, sep: string): string => {
   const phoneLoginUrl = cursorSmsQueryUrl(card)
   if (!phoneLoginUrl) return ''
-  return `${sep}Когда на странице появится запрос на ввод кода подтверждения по SMS, пожалуйста, перейдите по ссылке, чтобы получить код подтверждения: ${phoneLoginUrl}`
+  return `${sep}Если при входе на странице потребуется ввести код подтверждения из SMS или email, перейдите по этой ссылке, чтобы быстро получить код: ${phoneLoginUrl}`
+}
+
+const hasRecoveryFields = (card: Card): boolean => {
+  return !!(card.recovery_mail || '').trim() || !!(card.recovery_mail_pass || '').trim()
+}
+
+const recoveryLabeled = (card: Card, sep: string): string => {
+  if (!hasRecoveryFields(card)) return ''
+  return `${sep}recovery-mail: ${(card.recovery_mail || '').trim()}${sep}recovery-mail-pass: ${(card.recovery_mail_pass || '').trim()}`
+}
+
+const recoveryDashSuffix = (card: Card): string => {
+  if (!hasRecoveryFields(card)) return ''
+  return `----${(card.recovery_mail || '').trim()}----${(card.recovery_mail_pass || '').trim()}`
+}
+
+const recoveryDashTitle = (card: Card): string => {
+  return hasRecoveryFields(card) ? '----辅助邮箱----辅助邮箱密码' : ''
 }
 
 const phoneDashSuffix = (card: Card): string => {
@@ -1116,13 +1323,13 @@ const domesticPhoneSuffix = (card: Card): string => {
   return `----${(card.phone || '').trim()}----${cursorSmsQueryUrl(card)}`
 }
 
-// 字段顺序：account, pass, mail-pass, mail-login, phone-login, token, Auto-Login 提示词
+// 字段顺序：account, pass, mail-pass, recovery-mail, recovery-mail-pass, mail-login, phone-login
 const formatDigiseller = (card: Card): string => {
-  return `account: ${card.account}\npass: ${card.password || ''}\nmail-pass: ${card.mail_password || ''}\nmail-login: ${card.mail_url || ''}${phoneFields(card, '\n')}${sessionTokenField(card, '\n')}${cursorAutoLoginField(card, '\n')}`
+  return `account: ${card.account}\npass: ${card.password || ''}\nmail-pass: ${card.mail_password || ''}${recoveryLabeled(card, '\n')}\nmail-login: ${card.mail_url || ''}${phoneFields(card, '\n')}`
 }
 
 const formatDigisellerAuto = (card: Card): string => {
-  return `account: ${card.account}<br>pass: ${card.password || ''}<br>mail-pass: ${card.mail_password || ''}<br>mail-login: ${card.mail_url || ''}${phoneFields(card, '<br>')}${sessionTokenField(card, '<br>')}${cursorAutoLoginField(card, '<br>')}<br>Если вам удобно, не могли бы вы оставить нам хороший отзыв? https://ibb.co/tTgSNRLP<br>Подписывайтесь на наш канал, чтобы получать больше выгодных предложений: https://t.me/AI_GUO_GUO`
+  return `account: ${card.account}<br>pass: ${card.password || ''}<br>mail-pass: ${card.mail_password || ''}${recoveryLabeled(card, '<br>')}<br>mail-login: ${card.mail_url || ''}${phoneFields(card, '<br>')}<br>Если вам удобно, не могли бы вы оставить нам хороший отзыв? https://ibb.co/tTgSNRLP<br>Подписывайтесь на наш канал, чтобы получать больше выгодных предложений: https://t.me/AI_GUO_GUO`
 }
 
 // digiseller 格式下，密码和邮箱密码均为空时改用邮箱验证码登录话术；
@@ -1133,7 +1340,7 @@ const formatDigisellerWithFallback = (card: Card): string => {
 
 ${card.account}
 
-mail-login: ${card.mail_url || ''}${phoneFields(card, '\n')}
+mail-login: ${card.mail_url || ''}${recoveryLabeled(card, '\n')}${phoneFields(card, '\n')}
 
 Пожалуйста, выполните следующие шаги заново:
 1. Введите аккаунт: ${card.account}
@@ -1159,12 +1366,12 @@ const pickupCardInfo = computed(() => {
 ${card.account}----${card.token || ''}${phoneDashSuffix(card)}`
   } else if (pickupForm.value.format === 'code_method') {
     // 接码方式：标题 账号----接码方式；数据 账号----接码链接----账号----邮箱密码
-    return `账号----接码方式${phoneDashTitle(card)}
-${card.account}----${card.code_link || ''}----${card.account}----${card.mail_password || ''}${phoneDashSuffix(card)}`
+    return `账号----接码方式${recoveryDashTitle(card)}${phoneDashTitle(card)}
+${card.account}----${card.code_link || ''}----${card.account}----${card.mail_password || ''}${recoveryDashSuffix(card)}${phoneDashSuffix(card)}`
   } else {
-    // 国内订阅格式：账号----密码----邮箱密码----token----手机号----短信接码地址
-    return `账号----密码----邮箱密码----token${domesticPhoneTitle}
-${card.account}----${card.password || ''}----${card.mail_password || ''}----${card.token || ''}${domesticPhoneSuffix(card)}`
+    // 国内订阅格式：账号----密码----邮箱密码----辅助邮箱----辅助邮箱密码----token----手机号----短信接码地址
+    return `账号----密码----邮箱密码${recoveryDashTitle(card)}----token${domesticPhoneTitle}
+${card.account}----${card.password || ''}----${card.mail_password || ''}${recoveryDashSuffix(card)}----${card.token || ''}${domesticPhoneSuffix(card)}`
   }
 })
 
@@ -1182,7 +1389,7 @@ const searchSellTo = ref('')
 const searchPurchaseBy = ref('')
 const searchIsCheck = ref(0)
 const searchFreezeStatus = ref(0)
-const defaultPromo50Off = () => (category.value === 'cursor' && cardType.value === 'all' ? 1 : 0)
+const defaultPromo50Off = () => 0
 const searchPromo50Off = ref(defaultPromo50Off())
 // 购买日期 / 冻结时间筛选（n-date-picker 返回毫秒）
 const searchPurchaseDate = ref<number | null>(null)
@@ -1239,6 +1446,9 @@ const exportFieldOptions = [
   { label: '接码方式', value: 'code_method' },
   { label: '密码', value: 'password' },
   { label: '邮箱密码', value: 'mail_password' },
+  { label: '辅助邮箱', value: 'recovery_mail' },
+  { label: '辅助邮箱密码', value: 'recovery_mail_pass' },
+  { label: '辅助邮箱地址', value: 'recovery_mail_host' },
   { label: '邮箱地址', value: 'mail_url' },
   { label: '订阅类型', value: 'subscription_type' },
   { label: '订阅状态', value: 'subscription_status' },
@@ -1266,22 +1476,16 @@ const exportFormatHint = computed(() => {
   if (exportFormatMode.value === 'fields') {
     return '选择导出字段（顺序即为列顺序，分隔符固定为 ----）'
   }
-  return isCursorCategory.value
-    ? '当前为 Digiseller 专用格式（cards_cursor 有 token 时带出 session-token，并附加 Auto-Login）'
-    : '当前为 Digiseller 专用格式'
+  return '当前为 Digiseller 专用格式'
 })
 
 // 格式预览：Digiseller 预设显示实际导出模板，其余为 ---- 字段拼接
 const exportPreview = computed(() => {
-  const cursorHint = isCursorCategory.value ? ' / session-token（有 token 才带出）' : ''
-  const autoLoginHint = isCursorCategory.value ? ' / Auto-Login' : ''
   if (exportFormatMode.value === 'digiseller') {
-    return `account / pass / mail-pass / mail-login / phone-login（有则带出）${cursorHint}${autoLoginHint}`
+    return 'account / pass / mail-pass / recovery-mail / recovery-mail-pass / mail-login / phone-login（有则带出）'
   }
   if (exportFormatMode.value === 'digiseller_auto') {
-    const autoCursor = isCursorCategory.value ? '<br>session-token（有 token 才带出）' : ''
-    const autoLogin = isCursorCategory.value ? '<br>Auto-Login' : ''
-    return `account<br>pass<br>mail-pass<br>mail-login<br>phone-login（有则带出）${autoCursor}${autoLogin}<br>评价引导<br>频道订阅`
+    return 'account<br>pass<br>mail-pass<br>recovery-mail<br>recovery-mail-pass<br>mail-login<br>phone-login（有则带出）<br>评价引导<br>频道订阅'
   }
   return exportSelectedFields.value
     .map(v => {
@@ -1302,14 +1506,12 @@ const applyExportPreset = (preset: string) => {
     case 'digiseller':
     case 'digiseller_auto':
       exportFormatMode.value = preset
-      exportSelectedFields.value = isCursorCategory.value
-        ? ['account', 'password', 'mail_password', 'token', 'mail_url']
-        : ['account', 'password', 'mail_password', 'mail_url']
+      exportSelectedFields.value = ['account', 'password', 'mail_password', 'mail_url']
       break
     case 'domestic':
       // 国内格式：账号----密码----邮箱密码----token----手机号----短信接码地址
       exportFormatMode.value = 'fields'
-      exportSelectedFields.value = ['account', 'password', 'mail_password', 'token', 'phone', 'phone_link']
+      exportSelectedFields.value = ['account', 'password', 'mail_password', 'recovery_mail', 'recovery_mail_pass', 'token', 'phone', 'phone_link']
       break
     case 'reverse':
       // 逆向格式：账号----token
@@ -1333,6 +1535,27 @@ const applyExportPreset = (preset: string) => {
 }
 
 // 批量升级为成品弹窗
+const PAYER_COOKIE_KEY = 'cards_last_payer'
+const PAYER_COOKIE_MAX_AGE = 60 * 60 * 24 * 365
+
+const lastPayer = (): string | null => {
+  const prefix = `${PAYER_COOKIE_KEY}=`
+  const raw = document.cookie.split('; ').find(item => item.startsWith(prefix))
+  if (!raw) return null
+  try {
+    const value = decodeURIComponent(raw.slice(prefix.length)).trim()
+    return value || null
+  } catch {
+    return null
+  }
+}
+
+const rememberPayer = (payer?: string | null) => {
+  const value = (payer || '').trim()
+  if (!value) return
+  document.cookie = `${PAYER_COOKIE_KEY}=${encodeURIComponent(value)}; path=/; max-age=${PAYER_COOKIE_MAX_AGE}; SameSite=Lax`
+}
+
 const showUpgradeModal = ref(false)
 const upgradeForm = ref({
   subscription_type: '',
@@ -1341,7 +1564,7 @@ const upgradeForm = ref({
   purchase_price: undefined as number | undefined,
   purchase_from: '支付宝',
   purchase_date: Date.now() as number | undefined,       // 毫秒（n-date-picker）
-  payer: null as string | null,
+  payer: lastPayer(),
 })
 
 // 新增代充弹窗
@@ -1523,6 +1746,152 @@ const copyNativeCode = async (text: string) => {
   }
 }
 
+const isLurentoolMailLink = (link?: string) => (link || '').toLowerCase().includes('lurentool.cn')
+
+const showQuickFetchModal = ref(false)
+const quickFetchLoading = ref(false)
+const quickFetchData = ref<LurentoolFetchData | null>(null)
+const quickFetchRow = ref<Card | null>(null)
+const showQuickFetchDetailModal = ref(false)
+const quickFetchDetailMail = ref<LurentoolMailItem | null>(null)
+
+const fetchQuickMails = async (row: Card) => {
+  quickFetchLoading.value = true
+  try {
+    const mailPass = (row.mail_password || row.password || '').trim()
+    if (!row.account || !mailPass) {
+      message.error('邮箱账号或邮箱密码为空')
+      return
+    }
+    const accountLine = `${row.account}----${mailPass}`
+    const res = await fetchLurentoolMails(accountLine, '1', 20)
+    if (res.code !== 200) {
+      message.error(res.message || '取件失败')
+      return
+    }
+    quickFetchData.value = res.data
+  } catch (e: any) {
+    message.error(e?.message || '取件失败')
+  } finally {
+    quickFetchLoading.value = false
+  }
+}
+
+const handleQuickFetch = (row: Card) => {
+  quickFetchRow.value = row
+  quickFetchData.value = null
+  showQuickFetchModal.value = true
+  fetchQuickMails(row)
+}
+
+const refreshQuickFetch = () => {
+  if (quickFetchRow.value) {
+    fetchQuickMails(quickFetchRow.value)
+  }
+}
+
+const openQuickFetchDetail = (mail: LurentoolMailItem) => {
+  quickFetchDetailMail.value = mail
+  showQuickFetchDetailModal.value = true
+}
+
+const isOuleyxHost = (host?: string) => (host || '').toLowerCase().includes('ouleyx.cc')
+
+const showRecoveryFetchModal = ref(false)
+const recoveryFetchLoading = ref(false)
+const recoveryFetchData = ref<OuleyxFetchData | null>(null)
+const recoveryFetchRow = ref<Card | null>(null)
+const recoveryFetchAccountLine = ref('')
+const showRecoveryDetailModal = ref(false)
+const recoveryDetailMail = ref<OuleyxMailItem | null>(null)
+const recoveryDetailLoading = ref(false)
+
+const recoveryFetchFolders = computed(() => {
+  if (!recoveryFetchData.value) return []
+  return [
+    { title: '📥 收件箱', items: recoveryFetchData.value.inbox || [] },
+    { title: '🗑️ 垃圾箱', items: recoveryFetchData.value.junk || [] },
+  ]
+})
+
+const fetchRecoveryMails = async (row: Card) => {
+  recoveryFetchLoading.value = true
+  try {
+    const email = (row.recovery_mail || '').trim()
+    const pass = (row.recovery_mail_pass || '').trim()
+    if (!email || !pass) {
+      message.error('辅助邮箱或辅助邮箱密码为空')
+      return
+    }
+    const accountLine = `${email}----${pass}`
+    recoveryFetchAccountLine.value = accountLine
+    const res = await fetchOuleyxMails(accountLine)
+    if (res.code !== 200) {
+      message.error(res.message || '取件失败')
+      return
+    }
+    recoveryFetchData.value = res.data
+  } catch (e: any) {
+    message.error(e?.message || '取件失败')
+  } finally {
+    recoveryFetchLoading.value = false
+  }
+}
+
+const handleRecoveryFetch = (row: Card) => {
+  const email = (row.recovery_mail || '').trim()
+  if (!email) {
+    message.warning('未配置辅助邮箱')
+    return
+  }
+  if (isOuleyxHost(row.recovery_mail_host)) {
+    recoveryFetchRow.value = row
+    recoveryFetchData.value = null
+    showRecoveryFetchModal.value = true
+    fetchRecoveryMails(row)
+    return
+  }
+  if (!row.recovery_mail_host) {
+    message.warning('未配置辅助邮箱地址')
+    return
+  }
+  window.open(`${row.recovery_mail_host}/${email}----${row.recovery_mail_pass || ''}`, '_blank')
+}
+
+const refreshRecoveryFetch = () => {
+  if (recoveryFetchRow.value) {
+    fetchRecoveryMails(recoveryFetchRow.value)
+  }
+}
+
+const openRecoveryDetail = async (mail: OuleyxMailItem) => {
+  recoveryDetailMail.value = mail
+  showRecoveryDetailModal.value = true
+  if (mail.body || mail.html_body) return
+
+  recoveryDetailLoading.value = true
+  try {
+    const res = await fetchOuleyxDetail(
+      recoveryFetchAccountLine.value,
+      mail.id,
+      recoveryFetchData.value?.token || '',
+    )
+    if (res.code === 200 && res.data) {
+      mail.body = res.data.body
+      mail.html_body = res.data.html_body
+      mail.code = res.data.code || mail.code
+      if (res.data.from) mail.from = res.data.from
+      if (res.data.received_at) mail.received_at = res.data.received_at
+      if (res.data.subject) mail.subject = res.data.subject
+      recoveryDetailMail.value = { ...mail }
+    }
+  } catch {
+    // 静默失败，弹窗仍展示已有信息
+  } finally {
+    recoveryDetailLoading.value = false
+  }
+}
+
 // ---- 短信接码弹窗（参考 web 端 SmsCursor.vue 的取码+自动轮询方式） ----
 const SMS_CODE_POLL_SECONDS = 10
 const showSmsCodeModal = ref(false)
@@ -1633,6 +2002,7 @@ const batchConfig = ref({
   subscription_status: 1,
   account_type: 2,
   code_link: 'https://tool.toolsvip.cc/easy-mailbox/frontend',
+  recovery_mail_host: '',
   phone_link: '',
   remark: '',
   is_promo_50off: 0,
@@ -1640,6 +2010,8 @@ const batchConfig = ref({
     account: 1,
     password: 2,
     mail_password: 3,
+    recovery_mail: 0,
+    recovery_mail_pass: 0,
     subscription_type: 0,
     subscription_time: 0,
     subscription_expired_time: 0,
@@ -1666,6 +2038,9 @@ const formData = ref<CardRequest>({
   account: '',
   password: '',
   mail_password: '',
+  recovery_mail: '',
+  recovery_mail_pass: '',
+  recovery_mail_host: '',
   subscription_status: 1,
   subscription_type: '',
   sell_status: 1,
@@ -1675,7 +2050,7 @@ const formData = ref<CardRequest>({
   sell_price: 0,
   purchase_from: '',
   purchase_by: '',
-  payer: '',
+  payer: lastPayer() || '',
   sell_to: '',
   api_key: '',
   '2fa': '',
@@ -1692,6 +2067,7 @@ const formData = ref<CardRequest>({
   subscription_expired_time: undefined as number | undefined,
   purchase_date: undefined as number | undefined,
   sell_date: undefined as number | undefined,
+  is_promo_50off: 0,
 })
 
 // 当前编辑的卡密ID
@@ -1760,6 +2136,14 @@ const payerOptions = [
   { label: 'rabbit', value: 'rabbit' },
   { label: 'Zee', value: 'Zee' },
   { label: '一枕清卓', value: '一枕清卓' },
+  { label: 'Kingfer(132)', value: 'Kingfer(132)' },
+  { label: 'Kingfer(136)', value: 'Kingfer(136)' },
+  { label: 'Easan(156)', value: 'Easan(156)' },
+  { label: 'Easan(电信)', value: 'Easan(电信)' },
+  { label: '小姑', value: '小姑' },
+  { label: '大姑', value: '大姑' },
+  { label: '大丈', value: '大丈' },
+  { label: '锐哥', value: '锐哥' },
 ]
 
 // 邮箱地址选项（支持手动输入）
@@ -1775,11 +2159,16 @@ const codeLinkOptions = [
   { label: 'https://www.xckj.site/easy-mailbox/frontend/', value: 'https://www.xckj.site/easy-mailbox/frontend/' },
   { label: 'https://ms.lqqq.cc/web/', value: 'https://ms.lqqq.cc/web/' },
   { label: 'https://emails.520952.xyz/', value: 'https://emails.520952.xyz/' },
+  { label: 'https://lurentool.cn/mail', value: 'https://lurentool.cn/mail' },
 ]
 
 const phoneLinkOptions = [
   { label: 'https://lurentool.cn/sms', value: 'https://lurentool.cn/sms' },
   { label: 'https://shiyi.xyz/email/code', value: 'https://shiyi.xyz/email/code' },
+]
+
+const recoveryMailHostOptions = [
+  { label: 'https://ouleyx.cc', value: 'https://ouleyx.cc' },
 ]
 
 const getSubscriptionTypeTagType = (subscriptionType?: string): 'default' | 'primary' | 'info' | 'success' | 'warning' | 'error' => {
@@ -2054,12 +2443,12 @@ const columns = computed<DataTableColumns<Card>>(() => {
       key: 'purchase_price',
       width: 80,
     },
-    {
+    ...((isSold || isUnsold) ? [{
       title: '代付人',
       key: 'payer',
       width: 100,
       render: (row: Card) => row.payer || '—',
-    },
+    }] as DataTableColumns<Card> : []),
     // 普号列表：删除订阅时间/剩余天数，改为显示创建时间
     ...(isAll ? [{
       title: '创建时间',
@@ -2259,9 +2648,10 @@ const columns = computed<DataTableColumns<Card>>(() => {
         )
       }
 
-      // 所有列表中，邮件接码/短信接码有地址，或当前为 cursor 表时显示下拉（原生取件仅 cursor 表支持）
+      // 所有列表中，邮件接码/短信接码/辅助邮箱有地址，或当前为 cursor 表时显示下拉（原生取件仅 cursor 表支持）
       const supportNativeFetch = category.value === 'cursor'
-      if (row.code_link || row.phone_link || supportNativeFetch) {
+      const hasRecoveryMail = !!(row.recovery_mail || '').trim()
+      if (row.code_link || row.phone_link || supportNativeFetch || hasRecoveryMail) {
         buttons.push(
           h(
             NDropdown,
@@ -2270,6 +2660,7 @@ const columns = computed<DataTableColumns<Card>>(() => {
               options: [
                 { label: '邮件接码', key: 'mail', disabled: !row.code_link },
                 { label: '短信接码', key: 'sms', disabled: !row.phone_link },
+                { label: '辅助邮箱', key: 'recovery', disabled: !hasRecoveryMail },
                 { label: '原生取件', key: 'native', disabled: !supportNativeFetch },
               ],
               onSelect: (key: string) => {
@@ -2278,7 +2669,15 @@ const columns = computed<DataTableColumns<Card>>(() => {
                     message.warning('未配置邮件接码链接')
                     return
                   }
+                  if (isLurentoolMailLink(row.code_link)) {
+                    handleQuickFetch(row)
+                    return
+                  }
                   window.open(`${row.code_link}/${row.account}----${row.mail_password || ''}`, '_blank')
+                  return
+                }
+                if (key === 'recovery') {
+                  handleRecoveryFetch(row)
                   return
                 }
                 if (key === 'native') {
@@ -2759,7 +3158,7 @@ const handleGotoProSuccess = async () => {
     purchase_price: undefined,
     purchase_from: '支付宝',
     purchase_date: Date.now(),
-    payer: null,
+    payer: lastPayer(),
   }
   gotoProUpgraded.value = false
   gotoProUpgrading.value = true
@@ -2963,6 +3362,9 @@ const handleAdd = () => {
     account: '',
     password: '',
     mail_password: '',
+    recovery_mail: '',
+    recovery_mail_pass: '',
+    recovery_mail_host: '',
     subscription_status: 1,
     subscription_type: '',
     sell_status: 1,
@@ -2972,7 +3374,7 @@ const handleAdd = () => {
     sell_price: 0,
     purchase_from: '',
     purchase_by: '',
-    payer: '',
+    payer: lastPayer() || '',
     sell_to: '',
     api_key: '',
     '2fa': '',
@@ -2989,6 +3391,7 @@ const handleAdd = () => {
     subscription_expired_time: undefined,
     purchase_date: undefined,
     sell_date: undefined,
+    is_promo_50off: 0,
   }
   showModal.value = true
 }
@@ -3001,6 +3404,9 @@ const handleEdit = (card: Card) => {
     account: card.account,
     password: card.password || '',
     mail_password: card.mail_password || '',
+    recovery_mail: card.recovery_mail || '',
+    recovery_mail_pass: card.recovery_mail_pass || '',
+    recovery_mail_host: card.recovery_mail_host || '',
     subscription_status: card.subscription_status,
     subscription_type: card.subscription_type || '',
     sell_status: card.sell_status,
@@ -3027,6 +3433,7 @@ const handleEdit = (card: Card) => {
     subscription_expired_time: card.subscription_expired_time ? card.subscription_expired_time * 1000 : undefined,
     purchase_date: card.purchase_date ? card.purchase_date * 1000 : undefined,
     sell_date: card.sell_date ? card.sell_date * 1000 : undefined,
+    is_promo_50off: card.is_promo_50off ? 1 : 0,
   }
   showModal.value = true
 }
@@ -3182,10 +3589,10 @@ const handleCopy = async (card: Card, format: string) => {
     text = `账号----token${phoneDashTitle(card)}\n${card.account}----${card.token || ''}${phoneDashSuffix(card)}`
   } else if (format === 'code_method') {
     // 接码方式：标题 账号----接码方式；数据 账号----接码链接----账号----邮箱密码
-    text = `账号----接码方式${phoneDashTitle(card)}\n${card.account}----${card.code_link || ''}----${card.account}----${card.mail_password || ''}${phoneDashSuffix(card)}`
+    text = `账号----接码方式${recoveryDashTitle(card)}${phoneDashTitle(card)}\n${card.account}----${card.code_link || ''}----${card.account}----${card.mail_password || ''}${recoveryDashSuffix(card)}${phoneDashSuffix(card)}`
   } else {
-    // 国内格式：账号----密码----邮箱密码----token----手机号----短信接码地址
-    text = `账号----密码----邮箱密码----token${domesticPhoneTitle}\n${card.account}----${card.password || ''}----${card.mail_password || ''}----${card.token || ''}${domesticPhoneSuffix(card)}`
+    // 国内格式：账号----密码----邮箱密码----辅助邮箱----辅助邮箱密码----token----手机号----短信接码地址
+    text = `账号----密码----邮箱密码${recoveryDashTitle(card)}----token${domesticPhoneTitle}\n${card.account}----${card.password || ''}----${card.mail_password || ''}${recoveryDashSuffix(card)}----${card.token || ''}${domesticPhoneSuffix(card)}`
   }
   try {
     await navigator.clipboard.writeText(text)
@@ -3200,7 +3607,7 @@ const getFieldValue = (card: Card, field: string): string => {
   switch (field) {
     case 'code_method':
       // 接码方式：接码链接----账号----邮箱密码
-      return `${card.code_link || ''}----${card.account || ''}----${card.mail_password || ''}`
+      return `${card.code_link || ''}----${card.account || ''}----${card.mail_password || ''}${recoveryDashSuffix(card)}`
     case 'phone_link':
       return cursorSmsQueryUrl(card)
     case 'subscription_time':
@@ -3295,7 +3702,7 @@ const handleOpenUpgradeModal = () => {
     purchase_price: undefined,
     purchase_from: '支付宝',
     purchase_date: Date.now(),
-    payer: null,
+    payer: lastPayer(),
   }
   showUpgradeModal.value = true
 }
@@ -3346,7 +3753,7 @@ const handleBatchUpgrade = async () => {
         purchase_price: undefined,
         purchase_from: '支付宝',
         purchase_date: Date.now(),
-        payer: null,
+        payer: lastPayer(),
       }
       await loadCards()
     } else {
@@ -3376,6 +3783,7 @@ const handleBatchImport = () => {
     subscription_status: 1,
     account_type: 2,
     code_link: 'https://tool.toolsvip.cc/easy-mailbox/frontend',
+    recovery_mail_host: '',
     phone_link: '',
     remark: '',
     is_promo_50off: 0,
@@ -3429,6 +3837,8 @@ const handleBatchSubmit = async () => {
 
       const password = mapping.password > 0 && parts[mapping.password - 1] ? parts[mapping.password - 1] : ''
       const mailPassword = mapping.mail_password > 0 && parts[mapping.mail_password - 1] ? parts[mapping.mail_password - 1] : ''
+      const recoveryMail = mapping.recovery_mail > 0 && parts[mapping.recovery_mail - 1] ? parts[mapping.recovery_mail - 1] : ''
+      const recoveryMailPass = mapping.recovery_mail_pass > 0 && parts[mapping.recovery_mail_pass - 1] ? parts[mapping.recovery_mail_pass - 1] : ''
 
       // 订阅时间：如果配置了位置则从数据中读取，为0则不设置
       let subscriptionTime: number | undefined = undefined
@@ -3467,6 +3877,9 @@ const handleBatchSubmit = async () => {
         account,
         password: password || undefined,
         mail_password: mailPassword || undefined,
+        recovery_mail: recoveryMail || undefined,
+        recovery_mail_pass: recoveryMailPass || undefined,
+        recovery_mail_host: batchConfig.value.recovery_mail_host || undefined,
         subscription_status: subscriptionMeta.subscription_status,
         subscription_type: subscriptionMeta.subscription_type,
         subscription_time: subscriptionTime,
@@ -3624,21 +4037,22 @@ const handleBatchPickup = async () => {
         return `${card.account}----${card.token || ''}${phoneDashSuffix(card)}`
       } else if (fmt === 'code_method') {
         // 接码方式：账号----接码链接----账号----邮箱密码
-        return `${card.account}----${card.code_link || ''}----${card.account}----${card.mail_password || ''}${phoneDashSuffix(card)}`
+        return `${card.account}----${card.code_link || ''}----${card.account}----${card.mail_password || ''}${recoveryDashSuffix(card)}${phoneDashSuffix(card)}`
       } else {
-        return `${card.account}----${card.password || ''}----${card.mail_password || ''}----${card.token || ''}${domesticPhoneSuffix(card)}`
+        return `${card.account}----${card.password || ''}----${card.mail_password || ''}${recoveryDashSuffix(card)}----${card.token || ''}${domesticPhoneSuffix(card)}`
       }
     })
 
     // ---- 分隔格式：标题行 + 数据行；Digiseller 多行格式用空行分隔
     const phoneTitle = cards.some(hasPhoneReceive) ? '----手机号----短信接码地址' : ''
+    const recoveryTitle = cards.some(hasRecoveryFields) ? '----辅助邮箱----辅助邮箱密码' : ''
     let clipboardText = ''
     if (fmt === 'domestic') {
-      clipboardText = `账号----密码----邮箱密码----token${domesticPhoneTitle}\n` + lines.join('\n')
+      clipboardText = `账号----密码----邮箱密码${recoveryTitle}----token${domesticPhoneTitle}\n` + lines.join('\n')
     } else if (fmt === 'reverse') {
       clipboardText = `账号----token${phoneTitle}\n` + lines.join('\n')
     } else if (fmt === 'code_method') {
-      clipboardText = `账号----接码方式${phoneTitle}\n` + lines.join('\n')
+      clipboardText = `账号----接码方式${recoveryTitle}${phoneTitle}\n` + lines.join('\n')
     } else if (fmt === 'digiseller_auto') {
       clipboardText = lines.join('\n')
     } else {

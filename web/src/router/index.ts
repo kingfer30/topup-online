@@ -21,9 +21,19 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/ComingSoon.vue'),
   },
   {
-    // 完全独立页：Cursor 短信验证码查询，例如 /sms/cursor?account----pass
+    // 完全独立页：Cursor 短信 / 邮箱 / 辅助邮箱取码，例如 /sms/cursor?account----pass
     path: '/sms/cursor',
     name: 'SmsCursor',
+    component: () => import('@/views/SmsCursor.vue'),
+  },
+  {
+    path: '/email/cursor',
+    name: 'EmailCursor',
+    component: () => import('@/views/SmsCursor.vue'),
+  },
+  {
+    path: '/recovery-mail/cursor',
+    name: 'RecoveryMailCursor',
     component: () => import('@/views/SmsCursor.vue'),
   },
   {

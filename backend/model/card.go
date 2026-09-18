@@ -23,6 +23,9 @@ type AccountCard struct {
 	Account                 string         `json:"account" gorm:"type:varchar(100);not null;uniqueIndex:idx_account"`
 	Password                string         `json:"password" gorm:"type:varchar(50)"`
 	MailPassword            string         `json:"mail_password" gorm:"type:varchar(50)"`
+	RecoveryMail            string         `json:"recovery_mail" gorm:"type:varchar(100);comment:辅助邮箱"`
+	RecoveryMailPass        string         `json:"recovery_mail_pass" gorm:"type:varchar(50);comment:辅助邮箱密码"`
+	RecoveryMailHost        string         `json:"recovery_mail_host" gorm:"type:varchar(300);comment:辅助邮箱地址"`
 	SubscriptionStatus      int            `json:"subscription_status" gorm:"type:tinyint(2);default:1;comment:订阅状态 1已订阅 2未订阅 -1掉订阅 -2已订阅需点击pro"`
 	SubscriptionType        string         `json:"subscription_type" gorm:"type:varchar(30);comment:订阅类型;index:idx_subscription_type"`
 	SubscriptionTime        *int64         `json:"subscription_time" gorm:"type:bigint(20);comment:订阅时间;index:idx_subscription_time"`
@@ -352,6 +355,9 @@ func UpdateCard(tableName string, id int, card *AccountCard) error {
 		"account":                   card.Account,
 		"password":                  card.Password,
 		"mail_password":             card.MailPassword,
+		"recovery_mail":             card.RecoveryMail,
+		"recovery_mail_pass":        card.RecoveryMailPass,
+		"recovery_mail_host":        card.RecoveryMailHost,
 		"subscription_status":       card.SubscriptionStatus,
 		"subscription_type":         card.SubscriptionType,
 		"purchase_price":            card.PurchasePrice,
@@ -378,6 +384,7 @@ func UpdateCard(tableName string, id int, card *AccountCard) error {
 		"purchase_date":             card.PurchaseDate,
 		"sell_date":                 card.SellDate,
 		"sell_order_no":             card.SellOrderNo,
+		"is_promo_50off":            card.IsPromo50Off,
 	}
 	return DB.Table(tableName).Where("id = ?", id).Updates(updates).Error
 }
@@ -864,7 +871,7 @@ func GetQuickMailUncheckedCards(tableName string, afterID, limit int) ([]*Accoun
 		Where("mail_password IS NOT NULL AND mail_password != ''").
 		Where("is_promo_50off != ?", 1).
 		Where("promo_50off_skip != 1").
-		Where("(code_link LIKE ? OR code_link LIKE ?)", "%lqqq.cc%", "%toolsvip.cc%").
+		Where("(code_link LIKE ? OR code_link LIKE ? OR code_link LIKE ?)", "%lqqq.cc%", "%toolsvip.cc%", "%lurentool.cn%").
 		Where("id > ?", afterID).
 		Order("id ASC").
 		Limit(limit).
@@ -908,6 +915,9 @@ func MigrateCardTableColumns() error {
 		{"promo_50off_skip", "tinyint(2) NOT NULL DEFAULT 0 COMMENT '是否永久跳过50%off召回邮件检测 0否 1是'"},
 		{"check_fail_count", "tinyint(2) NOT NULL DEFAULT 0 COMMENT '连续检查失败次数'"},
 		{"payer", "varchar(50) NULL COMMENT '代付人'"},
+		{"recovery_mail", "varchar(100) NULL COMMENT '辅助邮箱'"},
+		{"recovery_mail_pass", "varchar(50) NULL COMMENT '辅助邮箱密码'"},
+		{"recovery_mail_host", "varchar(300) NULL COMMENT '辅助邮箱地址'"},
 	}
 
 	for _, tableName := range tableNames {

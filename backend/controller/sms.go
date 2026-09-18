@@ -14,17 +14,12 @@ import (
 // cursorCardTable Cursor 账号卡密所在表名
 const cursorCardTable = "cards_cursor"
 
-// GetCursorSmsCode 独立取码页专用接口（公开，无需管理员认证）
-// GET /api/sms/cursor/query?q=<urlencoded account----pass>
-// 生成取码链接时（admin 后台）account/pass 已分别做过一次 URL 编码，
-// 前端不做解码，原样把 q 传回来，这里统一做最终的 URL 解码还原真实内容，再按 ---- 拆分为 account/pass。
-// 这样可以避免密码中包含 # & 等特殊字符被浏览器当作分隔符处理导致的拆分错误。
-// 依据 account 在 cards_cursor 表中查找记录，校验 pass 后取出 phone_link 并抓取短信验证码
-func GetCursorSmsCode(c *gin.Context) {
+// parseCursorPublicQuery 解析公开取码页 q=account----pass，失败时已写入响应
+func parseCursorPublicQuery(c *gin.Context) (account, pass string, ok bool) {
 	rawParam := strings.TrimSpace(c.Query("q"))
 	if rawParam == "" {
-		c.JSON(http.StatusOK, gin.H{"code": 400, "message": "查询参数不能为空"})
-		return
+		c.JSON(http.StatusOK, gin.H{"code": 400, "message": "Query parameter is required."})
+		return "", "", false
 	}
 
 	// c.Query 已经做过一次标准 URL 解码（对应前端 axios 发请求时的编码），
@@ -36,39 +31,61 @@ func GetCursorSmsCode(c *gin.Context) {
 
 	sepIndex := strings.Index(raw, "----")
 	if sepIndex == -1 {
-		c.JSON(http.StatusOK, gin.H{"code": 400, "message": "查询参数格式错误，缺少 ---- 分隔符"})
-		return
+		c.JSON(http.StatusOK, gin.H{"code": 400, "message": "Invalid query format."})
+		return "", "", false
 	}
-	account := strings.TrimSpace(raw[:sepIndex])
-	pass := strings.TrimSpace(raw[sepIndex+len("----"):])
+	account = strings.TrimSpace(raw[:sepIndex])
+	pass = strings.TrimSpace(raw[sepIndex+len("----"):])
 	if account == "" || pass == "" {
-		c.JSON(http.StatusOK, gin.H{"code": 400, "message": "账号或密码不能为空"})
-		return
+		c.JSON(http.StatusOK, gin.H{"code": 400, "message": "Account or password is required."})
+		return "", "", false
+	}
+	return account, pass, true
+}
+
+// loadCursorPublicCard 按公开取码链接定位并校验 cards_cursor 记录，失败时已写入响应
+func loadCursorPublicCard(c *gin.Context) (*model.AccountCard, bool) {
+	account, pass, ok := parseCursorPublicQuery(c)
+	if !ok {
+		return nil, false
 	}
 
 	card, err := model.GetCardByAccount(cursorCardTable, account)
 	if err != nil || card == nil {
-		c.JSON(http.StatusOK, gin.H{"code": 404, "message": "账号不存在或已失效"})
-		return
+		c.JSON(http.StatusOK, gin.H{"code": 404, "message": "Account not found or inactive."})
+		return nil, false
 	}
-
 	if card.Password != pass {
-		c.JSON(http.StatusOK, gin.H{"code": 400, "message": "账号或密码错误"})
+		c.JSON(http.StatusOK, gin.H{"code": 400, "message": "Incorrect account or password."})
+		return nil, false
+	}
+	return card, true
+}
+
+// GetCursorSmsCode 独立取码页专用接口（公开，无需管理员认证）
+// GET /api/sms/cursor/query?q=<urlencoded account----pass>
+// 生成取码链接时（admin 后台）account/pass 已分别做过一次 URL 编码，
+// 前端不做解码，原样把 q 传回来，这里统一做最终的 URL 解码还原真实内容，再按 ---- 拆分为 account/pass。
+// 这样可以避免密码中包含 # & 等特殊字符被浏览器当作分隔符处理导致的拆分错误。
+// 依据 account 在 cards_cursor 表中查找记录，校验 pass 后取出 phone_link 并抓取短信验证码
+func GetCursorSmsCode(c *gin.Context) {
+	card, ok := loadCursorPublicCard(c)
+	if !ok {
 		return
 	}
 
 	if strings.TrimSpace(card.PhoneLink) == "" {
-		c.JSON(http.StatusOK, gin.H{"code": 400, "message": "该账号未配置接码地址"})
+		c.JSON(http.StatusOK, gin.H{"code": 400, "message": "This account has no SMS inbox configured."})
 		return
 	}
 
-	result, err := smscode.FetchCode(card.PhoneLink, account, pass)
+	result, err := smscode.FetchCode(card.PhoneLink, card.Account, card.Password)
 	if err != nil {
-		c.JSON(http.StatusOK, gin.H{"code": 500, "message": "取码失败: " + err.Error()})
+		c.JSON(http.StatusOK, gin.H{"code": 500, "message": "Failed to fetch code: " + err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, smsCodeSuccessBody(account, result))
+	c.JSON(http.StatusOK, smsCodeSuccessBody(card.Account, result))
 }
 
 // GetCardSmsCode 管理端根据卡密 ID 抓取短信验证码（需要管理员认证），用于列表页"接码-短信接码"弹窗

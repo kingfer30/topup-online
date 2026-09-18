@@ -120,7 +120,7 @@ func fetchGraphFolder(httpClient *http.Client, token, wellKnown, folderLabel str
 		plain, htmlBody := "", ""
 		if m.Body != nil {
 			if strings.EqualFold(m.Body.ContentType, "html") {
-				htmlBody = m.Body.Content
+				htmlBody = wrapLeadingCSS(m.Body.Content)
 				plain = collapseSpaces(stripHTML(htmlBody))
 			} else {
 				plain = collapseSpaces(m.Body.Content)
@@ -167,7 +167,7 @@ func fetchGraphMessageBody(httpClient *http.Client, token, messageID string) (*M
 	plain, htmlBody := "", ""
 	if m.Body != nil {
 		if strings.EqualFold(m.Body.ContentType, "html") {
-			htmlBody = m.Body.Content
+			htmlBody = wrapLeadingCSS(m.Body.Content)
 			plain = collapseSpaces(stripHTML(htmlBody))
 		} else {
 			plain = collapseSpaces(m.Body.Content)

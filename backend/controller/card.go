@@ -19,6 +19,9 @@ type CardRequest struct {
 	Account                 string   `json:"account" binding:"required"`
 	Password                string   `json:"password"`
 	MailPassword            string   `json:"mail_password"`
+	RecoveryMail            string   `json:"recovery_mail"`
+	RecoveryMailPass        string   `json:"recovery_mail_pass"`
+	RecoveryMailHost        string   `json:"recovery_mail_host"`
 	SubscriptionStatus      int      `json:"subscription_status"`
 	SubscriptionType        string   `json:"subscription_type"`
 	SubscriptionTime        *int64   `json:"subscription_time"`
@@ -273,6 +276,9 @@ func CreateCard(c *gin.Context) {
 		Account:                 req.Account,
 		Password:                req.Password,
 		MailPassword:            req.MailPassword,
+		RecoveryMail:            req.RecoveryMail,
+		RecoveryMailPass:        req.RecoveryMailPass,
+		RecoveryMailHost:        req.RecoveryMailHost,
 		SubscriptionStatus:      req.SubscriptionStatus,
 		SubscriptionType:        req.SubscriptionType,
 		SubscriptionTime:        req.SubscriptionTime,
@@ -299,6 +305,7 @@ func CreateCard(c *gin.Context) {
 		Phone:                   req.Phone,
 		PhoneLink:               req.PhoneLink,
 		SubscriptionCredits:     req.SubscriptionCredits,
+		IsPromo50Off:            req.IsPromo50Off,
 	}
 
 	// 设置默认值
@@ -375,6 +382,9 @@ func UpdateCard(c *gin.Context) {
 		Account:                 req.Account,
 		Password:                req.Password,
 		MailPassword:            req.MailPassword,
+		RecoveryMail:            req.RecoveryMail,
+		RecoveryMailPass:        req.RecoveryMailPass,
+		RecoveryMailHost:        req.RecoveryMailHost,
 		SubscriptionStatus:      req.SubscriptionStatus,
 		SubscriptionType:        req.SubscriptionType,
 		SubscriptionTime:        req.SubscriptionTime,
@@ -401,6 +411,7 @@ func UpdateCard(c *gin.Context) {
 		Phone:                   req.Phone,
 		PhoneLink:               req.PhoneLink,
 		SubscriptionCredits:     req.SubscriptionCredits,
+		IsPromo50Off:            req.IsPromo50Off,
 	}
 
 	if err := model.UpdateCard(tableName, id, card); err != nil {
@@ -499,6 +510,9 @@ func BatchImportCards(c *gin.Context) {
 			Account:                 cardReq.Account,
 			Password:                cardReq.Password,
 			MailPassword:            cardReq.MailPassword,
+			RecoveryMail:            cardReq.RecoveryMail,
+			RecoveryMailPass:        cardReq.RecoveryMailPass,
+			RecoveryMailHost:        cardReq.RecoveryMailHost,
 			SubscriptionStatus:      cardReq.SubscriptionStatus,
 			SubscriptionType:        cardReq.SubscriptionType,
 			SubscriptionTime:        cardReq.SubscriptionTime,

@@ -31,8 +31,12 @@ func SetApiRouter(router *gin.Engine) {
 		apiRouter.GET("/ads/active", controller.GetActiveAds)
 		apiRouter.POST("/ads/click", controller.ClickAd)
 
-		// Cursor 短信验证码查询（公开，无需认证，供独立取码页 /sms/cursor 使用）
+		// Cursor 公开取码页（无需认证）：短信 / 邮箱 / 辅助邮箱
 		apiRouter.GET("/sms/cursor/query", controller.GetCursorSmsCode)
+		apiRouter.GET("/email/cursor/query", controller.GetCursorEmailMails)
+		apiRouter.GET("/email/cursor/detail", controller.GetCursorEmailMailDetail)
+		apiRouter.GET("/recovery-mail/cursor/query", controller.GetCursorRecoveryMails)
+		apiRouter.GET("/recovery-mail/cursor/detail", controller.GetCursorRecoveryMailDetail)
 
 		// 管理员相关（需要认证）
 		adminGroup := apiRouter.Group("/admin")
@@ -166,6 +170,9 @@ func SetApiRouter(router *gin.Engine) {
 			adminGroup.POST("/webmail/lqqq/fetch", controller.LqqqFetch)
 			adminGroup.POST("/webmail/lqqq/detail", controller.LqqqDetail)
 			adminGroup.POST("/webmail/toolsvip/fetch", controller.ToolsvipFetch)
+			adminGroup.POST("/webmail/lurentool/fetch", controller.LurentoolFetch)
+			adminGroup.POST("/webmail/ouleyx/fetch", controller.OuleyxFetch)
+			adminGroup.POST("/webmail/ouleyx/detail", controller.OuleyxDetail)
 
 			// GPT RT 许可证管理
 			adminGroup.GET("/gpt-rt-licenses", controller.ListGptRtLicenses)

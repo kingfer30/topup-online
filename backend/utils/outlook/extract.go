@@ -17,6 +17,7 @@ var (
 	codeKeywordRe = regexp.MustCompile(`(?i)(code|verification|verify|otp|passcode|验证码|安全代码|验证代码|代码)`)
 	labeledCodeRe = regexp.MustCompile(`(?i)(?:code(?:\s+is)?|verification(?:\s+code)?|passcode|otp|验证码|安全代码)[：:\s]*([0-9]{4,8})`)
 	htmlTagRe     = regexp.MustCompile(`<[^>]+>`)
+	styleScriptRe = regexp.MustCompile(`(?is)<(script|style)\b[^>]*>.*?</(script|style)>`)
 	wsRe          = regexp.MustCompile(`\s+`)
 
 	// subjectFetchRe 仅用于判断是否需要拉取邮件正文，严格匹配：code/otp/验证码/代码
@@ -127,7 +128,34 @@ func readBodies(mr *gomail.Reader) (plain string, htmlBody string) {
 	return pb.String(), hb.String()
 }
 
+func wrapLeadingCSS(htmlBody string) string {
+	raw := strings.TrimSpace(htmlBody)
+	if raw == "" {
+		return htmlBody
+	}
+	lower := strings.ToLower(raw)
+	idx := -1
+	for _, tag := range []string{"<html", "<body", "<div", "<table", "<p", "<span", "<center", "<h1", "<h2"} {
+		i := strings.Index(lower, tag)
+		if i >= 0 && (idx < 0 || i < idx) {
+			idx = i
+		}
+	}
+	if idx <= 0 {
+		return htmlBody
+	}
+	prefix := strings.TrimSpace(raw[:idx])
+	if prefix == "" || strings.Contains(strings.ToLower(prefix), "<style") {
+		return htmlBody
+	}
+	if !strings.Contains(prefix, "{") || !strings.Contains(prefix, "}") {
+		return htmlBody
+	}
+	return "<style>\n" + prefix + "\n</style>\n" + raw[idx:]
+}
+
 func stripHTML(input string) string {
+	input = styleScriptRe.ReplaceAllString(input, " ")
 	input = html.UnescapeString(input)
 	return htmlTagRe.ReplaceAllString(input, " ")
 }

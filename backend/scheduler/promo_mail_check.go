@@ -200,6 +200,8 @@ func detectQuickMailProvider(codeLink string) string {
 		return "lqqq"
 	case strings.Contains(link, "toolsvip.cc"):
 		return "toolsvip"
+	case strings.Contains(link, "lurentool.cn"):
+		return "lurentool"
 	default:
 		return ""
 	}
@@ -269,6 +271,8 @@ func CheckSinglePromoMail(card *model.AccountCard) (matched bool, info string, c
 		matched, info, closed, err = checkPromoMailLqqq(email, password)
 	case "toolsvip":
 		matched, info, closed, err = checkPromoMailToolsvip(email, password)
+	case "lurentool":
+		matched, info, closed, err = checkPromoMailLurentool(email, password)
 	default:
 		return false, "", false, false, fmt.Errorf("暂不支持的快捷取件服务: %s", card.CodeLink)
 	}
@@ -377,6 +381,28 @@ func checkPromoMailToolsvip(email, password string) (matched bool, info string, 
 	}
 	for _, item := range junk {
 		items = append(items, promoScanItem{Subject: item.Subject, Body: item.Body + " " + item.HtmlBody, Mailbox: item.Mailbox, Date: item.Date})
+	}
+	matched, info, closed = scanPromoItems(items)
+	return matched, info, closed, nil
+}
+
+func checkPromoMailLurentool(email, password string) (matched bool, info string, closed bool, err error) {
+	data, err := webmail.FetchLurentoolMails(email, password, 20)
+	if err != nil {
+		return false, "", false, err
+	}
+	items := make([]promoScanItem, 0, len(data.Mails))
+	for _, item := range data.Mails {
+		mailbox := "收件箱"
+		if item.Source != "" {
+			mailbox = item.Source
+		}
+		items = append(items, promoScanItem{
+			Subject: item.Subject,
+			Body:    item.Body + " " + item.Preview,
+			Mailbox: mailbox,
+			Date:    item.ReceivedAt,
+		})
 	}
 	matched, info, closed = scanPromoItems(items)
 	return matched, info, closed, nil
