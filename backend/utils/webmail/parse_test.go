@@ -81,6 +81,15 @@ func TestParseOuleyxListAndDetail(t *testing.T) {
 	if !strings.Contains(detail.From, "Microsoft 帐户团队") {
 		t.Fatalf("unexpected from: %q", detail.From)
 	}
+
+	applyOuleyxRender(detail, `<html><body><p>your one-time code is 778899</p></body></html>`)
+	if detail.Code != "778899" || !strings.Contains(detail.HtmlBody, "<p>") {
+		t.Fatalf("render not applied: %+v", detail)
+	}
+	applyOuleyxRender(detail, `<h1>登录您的企业邮箱</h1>`)
+	if strings.Contains(detail.HtmlBody, "登录您的企业邮箱") {
+		t.Fatal("login page should not replace mail html")
+	}
 }
 
 func TestFetchOuleyxMailsLive(t *testing.T) {

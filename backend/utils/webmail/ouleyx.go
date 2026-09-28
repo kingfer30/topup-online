@@ -31,6 +31,7 @@ var (
 	ouleyxDetailTimeRe    = regexp.MustCompile(`(?is)<div\s+class="u-meta-time"[^>]*>(.*?)</div>`)
 	ouleyxPlainRe         = regexp.MustCompile(`(?is)<div\s+class="u-mail-plaintext"[^>]*>(.*?)</div>`)
 	ouleyxBodyRe          = regexp.MustCompile(`(?is)<div\s+class="u-mail-body"[^>]*>(.*?)</div>`)
+	ouleyxStyleScriptRe   = regexp.MustCompile(`(?is)<(script|style)\b[^>]*>.*?</(script|style)>`)
 
 	ouleyxCodePatterns = []*regexp.Regexp{
 		regexp.MustCompile(`(?i)一次性代码为[:：\s]*(\d{4,8})`),
@@ -127,6 +128,36 @@ func ouleyxDo(client *http.Client, method, url, token, referer, hxTarget string)
 	if referer != "" {
 		req.Header.Set("Referer", referer)
 		req.Header.Set("HX-Current-URL", referer)
+	}
+	if token != "" {
+		req.Header.Set("Cookie", ouleyxCookie+"="+token)
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return "", fmt.Errorf("HTTP %d: %s", resp.StatusCode, toolsvipSafePrefix(string(body), 200))
+	}
+	return string(body), nil
+}
+
+// ouleyxGetPage 按普通文档请求拉取页面，供邮件 render iframe 同源内容使用
+func ouleyxGetPage(client *http.Client, pageURL, token, referer string) (string, error) {
+	req, err := http.NewRequest(http.MethodGet, pageURL, nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+	req.Header.Set("Accept", "text/html,application/xhtml+xml")
+	if referer != "" {
+		req.Header.Set("Referer", referer)
 	}
 	if token != "" {
 		req.Header.Set("Cookie", ouleyxCookie+"="+token)
@@ -284,6 +315,21 @@ func parseOuleyxDetail(pageHTML string) *OuleyxMailDetail {
 	return detail
 }
 
+func applyOuleyxRender(detail *OuleyxMailDetail, rendered string) {
+	rendered = strings.TrimSpace(rendered)
+	if detail == nil || rendered == "" || strings.Contains(rendered, "登录您的企业邮箱") {
+		return
+	}
+	detail.HtmlBody = rendered
+	plain := ouleyxStripHTML(ouleyxStyleScriptRe.ReplaceAllString(rendered, " "))
+	if plain != "" {
+		detail.Body = plain
+	}
+	if code := extractOuleyxCode(detail.Subject + " " + detail.Body); code != "" {
+		detail.Code = code
+	}
+}
+
 func fetchOuleyxMailbox(client *http.Client, token, mailbox, mailboxLabel string) ([]OuleyxMailItem, error) {
 	pageURL := fmt.Sprintf("%s/app/list?mailbox=%s", ouleyxBaseURL, mailbox)
 	referer := fmt.Sprintf("%s/app?mailbox=%s", ouleyxBaseURL, mailbox)
@@ -338,12 +384,20 @@ func FetchOuleyxMailDetail(email, password, token, mailID string) (*OuleyxMailDe
 		return nil, err
 	}
 
+	client := newOuleyxClient()
 	pageURL := fmt.Sprintf("%s/app/emails/%s/detail", ouleyxBaseURL, mailID)
-	html, err := ouleyxDo(newOuleyxClient(), http.MethodGet, pageURL, session, ouleyxBaseURL+"/app?mailbox=inbox", "uDetailScroll")
+	html, err := ouleyxDo(client, http.MethodGet, pageURL, session, ouleyxBaseURL+"/app?mailbox=inbox", "uDetailScroll")
 	if err != nil {
 		return nil, fmt.Errorf("获取邮件详情失败: %w", err)
 	}
-	return parseOuleyxDetail(html), nil
+	detail := parseOuleyxDetail(html)
+
+	renderURL := fmt.Sprintf("%s/app/emails/%s/render", ouleyxBaseURL, mailID)
+	rendered, renderErr := ouleyxGetPage(client, renderURL, session, pageURL)
+	if renderErr == nil {
+		applyOuleyxRender(detail, rendered)
+	}
+	return detail, nil
 }
 
 // IsOuleyxHost 判断辅助邮箱地址是否为已对接的 ouleyx
