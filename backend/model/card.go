@@ -1,6 +1,8 @@
 package model
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net/url"
@@ -55,6 +57,8 @@ type AccountCard struct {
 	CodeLink                string         `json:"code_link" gorm:"type:varchar(300);comment:接码链接"`
 	Phone                   string         `json:"phone" gorm:"type:varchar(30);comment:手机号"`
 	PhoneLink               string         `json:"phone_link" gorm:"type:varchar(300);comment:手机号接码地址"`
+	QueryToken              string         `json:"query_token" gorm:"type:varchar(64);comment:公开取码链接token"`
+	PublicQuery             int            `json:"public_query" gorm:"type:tinyint(2);default:1;comment:公开链接可查询 1是 0否"`
 	FreezeStatus            int            `json:"freeze_status" gorm:"type:tinyint(2);default:-1;comment:冻结状态 -1未冻结 1已冻结"`
 	FreezeTime              *int64         `json:"freeze_time" gorm:"type:bigint(20);comment:冻结时间"`
 	FreezeRemark            string         `json:"freeze_remark" gorm:"type:varchar(200);comment:冻结备注"`
@@ -331,7 +335,30 @@ func CreateCard(tableName string, card *AccountCard) error {
 		return errors.New("账号已存在")
 	}
 
+	if strings.TrimSpace(card.QueryToken) == "" {
+		card.QueryToken = NewQueryToken()
+	}
 	return DB.Table(tableName).Create(card).Error
+}
+
+// NewQueryToken 生成公开取码链接用的 token，只包含十六进制字符
+func NewQueryToken() string {
+	buf := make([]byte, 16)
+	if _, err := rand.Read(buf); err != nil {
+		return hex.EncodeToString([]byte(time.Now().Format("20060102150405.000000")))[:32]
+	}
+	return hex.EncodeToString(buf)
+}
+
+// GetCardByQueryToken 按公开取码 token 查找卡密
+func GetCardByQueryToken(tableName, token string) (*AccountCard, error) {
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return nil, errors.New("token 为空")
+	}
+	var card AccountCard
+	err := DB.Table(tableName).Where("status != ? AND query_token = ?", CardStatusDeleted, token).First(&card).Error
+	return &card, err
 }
 
 // UpdateCard 更新卡密
@@ -413,10 +440,18 @@ func BatchCreateCards(tableName string, cards []AccountCard) error {
 				if !errors.Is(err, gorm.ErrRecordNotFound) {
 					return fmt.Errorf("查询卡密失败: %s, %v", card.Account, err)
 				}
+				if strings.TrimSpace(card.QueryToken) == "" {
+					card.QueryToken = NewQueryToken()
+				}
 				if err := tx.Table(tableName).Create(&card).Error; err != nil {
 					return fmt.Errorf("创建卡密失败: %s, %v", card.Account, err)
 				}
 				continue
+			}
+			if strings.TrimSpace(existed.QueryToken) == "" {
+				if err := tx.Table(tableName).Where("id = ?", existed.Id).Update("query_token", NewQueryToken()).Error; err != nil {
+					return fmt.Errorf("更新取码 token 失败: %s, %v", card.Account, err)
+				}
 			}
 
 			// 使用 struct 更新，仅覆盖非零值字段，避免空字符串/0误清空已有数据
@@ -918,6 +953,8 @@ func MigrateCardTableColumns() error {
 		{"recovery_mail", "varchar(100) NULL COMMENT '辅助邮箱'"},
 		{"recovery_mail_pass", "varchar(50) NULL COMMENT '辅助邮箱密码'"},
 		{"recovery_mail_host", "varchar(300) NULL COMMENT '辅助邮箱地址'"},
+		{"query_token", "varchar(64) NULL COMMENT '公开取码链接token'"},
+		{"public_query", "tinyint(2) NOT NULL DEFAULT 1 COMMENT '公开链接可查询 1是 0否'"},
 	}
 
 	for _, tableName := range tableNames {
@@ -949,6 +986,34 @@ func MigrateCardTableColumns() error {
 			).Error; err != nil {
 				return fmt.Errorf("回填表 %s is_promo_50off 失败: %w", tableName, err)
 			}
+		}
+		if err := backfillQueryTokens(tableName); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func backfillQueryTokens(tableName string) error {
+	var ids []int
+	if err := DB.Table(tableName).Where("query_token IS NULL OR query_token = ''").Pluck("id", &ids).Error; err != nil {
+		return fmt.Errorf("查询表 %s 待生成 token 失败: %w", tableName, err)
+	}
+	for _, id := range ids {
+		if err := DB.Table(tableName).Where("id = ?", id).Update("query_token", NewQueryToken()).Error; err != nil {
+			return fmt.Errorf("回填表 %s query_token 失败: %w", tableName, err)
+		}
+	}
+
+	var indexCount int64
+	DB.Raw(
+		"SELECT COUNT(*) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ?",
+		tableName, "idx_query_token",
+	).Scan(&indexCount)
+	if indexCount == 0 {
+		sql := fmt.Sprintf("ALTER TABLE `%s` ADD UNIQUE INDEX `idx_query_token` (`query_token`)", tableName)
+		if err := DB.Exec(sql).Error; err != nil {
+			return fmt.Errorf("创建表 %s query_token 索引失败: %w", tableName, err)
 		}
 	}
 	return nil

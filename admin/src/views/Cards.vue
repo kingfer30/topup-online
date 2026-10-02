@@ -1170,6 +1170,7 @@ import {
   NInputNumber,
   NSelect,
   NSpace,
+  NSwitch,
   NTag,
   NTooltip,
   NGrid,
@@ -1214,6 +1215,7 @@ import {
   pollCardSubscription,
   halfPriceCheckout,
   updateCardRemark,
+  updateCardPublicQuery,
   batchFreezeCards,
   batchDeleteCards,
   getCardSmsCode,
@@ -1278,7 +1280,10 @@ const hasPhoneReceive = (card: Card): boolean => {
 // 对外展示的固定取码链接。库里仍保存各平台原始 phone_link，发货时统一换成独立取码页。
 const cursorSmsQueryUrl = (card: Card): string => {
   if (!hasPhoneReceive(card)) return ''
-  // account/pass 提前做 URL 编码，避免密码里的 # & 等特殊字符被浏览器当作分隔符处理
+  const token = (card.query_token || '').trim()
+  if (token) {
+    return `${CURSOR_SMS_QUERY_BASE_URL}?t=${token}`
+  }
   const encodedAccount = encodeURIComponent(card.account)
   const encodedPass = encodeURIComponent((card.password || '').trim())
   return `${CURSOR_SMS_QUERY_BASE_URL}?${encodedAccount}----${encodedPass}`
@@ -2539,7 +2544,7 @@ const columns = computed<DataTableColumns<Card>>(() => {
   baseColumns.push({
     title: '操作',
     key: 'actions',
-    width: 350,
+    width: category.value === 'cursor' ? 480 : 350,
     fixed: 'right',
     render: (row) => {
       const buttons = [
@@ -2618,8 +2623,8 @@ const columns = computed<DataTableColumns<Card>>(() => {
             {
               trigger: 'click',
               options: [
-                { label: '半价提链', key: 'half_price' },
                 ...gotoProTypeOptions.map(opt => ({ label: opt.label, key: opt.value })),
+                { label: '半价提链', key: 'half_price' },
               ],
               onSelect: (key: string) => {
                 if (isFrozen) return
@@ -2706,7 +2711,39 @@ const columns = computed<DataTableColumns<Card>>(() => {
         )
       }
 
-      return h(NSpace, {}, { default: () => buttons })
+      if (category.value === 'cursor') {
+        buttons.push(
+          h(
+            NTooltip,
+            { trigger: 'hover' },
+            {
+              trigger: () =>
+                h(
+                  NSwitch,
+                  {
+                    value: row.public_query === 0 ? 0 : 1,
+                    checkedValue: 1,
+                    uncheckedValue: 0,
+                    themeOverrides: {
+                      railHeightMedium: '32px',
+                      buttonHeightMedium: '26px',
+                      buttonWidthMedium: '26px',
+                      buttonWidthPressedMedium: '34px',
+                    },
+                    onUpdateValue: (val: number) => handleTogglePublicQuery(row, val),
+                  },
+                  {
+                    checked: () => h('span', { style: 'font-size: 13px' }, '开'),
+                    unchecked: () => h('span', { style: 'font-size: 13px' }, '关'),
+                  }
+                ),
+              default: () => '公开链接查询',
+            }
+          )
+        )
+      }
+
+      return h(NSpace, { align: 'center' }, { default: () => buttons })
     },
   })
 
@@ -3579,6 +3616,22 @@ const handleSubmit = async () => {
 }
 
 // 复制卡密信息到剪贴板（---- 分隔格式带标题行）
+const handleTogglePublicQuery = async (card: Card, next: number) => {
+  const prev = card.public_query === 0 ? 0 : 1
+  if (next === prev) return
+  try {
+    const response = await updateCardPublicQuery(category.value, card.id, next)
+    if (response.code !== 200) {
+      message.error(response.message || '更新失败')
+      return
+    }
+    card.public_query = next
+    message.success(next === 1 ? '已开启公开查询' : '已关闭公开查询')
+  } catch (error: any) {
+    message.error(error?.message || '更新失败')
+  }
+}
+
 const handleCopy = async (card: Card, format: string) => {
   let text = ''
   if (format === 'digiseller') {

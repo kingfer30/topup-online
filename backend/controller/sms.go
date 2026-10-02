@@ -43,8 +43,18 @@ func parseCursorPublicQuery(c *gin.Context) (account, pass string, ok bool) {
 	return account, pass, true
 }
 
-// loadCursorPublicCard 按公开取码链接定位并校验 cards_cursor 记录，失败时已写入响应
+// loadCursorPublicCard 按公开取码链接定位 cards_cursor 记录，失败时已写入响应
+// 新链接使用 t=<query_token>；旧链接仍接受 q=account----pass
 func loadCursorPublicCard(c *gin.Context) (*model.AccountCard, bool) {
+	if token := strings.TrimSpace(c.Query("t")); token != "" {
+		card, err := model.GetCardByQueryToken(cursorCardTable, token)
+		if err != nil || card == nil {
+			c.JSON(http.StatusOK, gin.H{"code": 404, "message": "Account not found or inactive."})
+			return nil, false
+		}
+		return allowPublicQuery(c, card)
+	}
+
 	account, pass, ok := parseCursorPublicQuery(c)
 	if !ok {
 		return nil, false
@@ -57,6 +67,14 @@ func loadCursorPublicCard(c *gin.Context) (*model.AccountCard, bool) {
 	}
 	if card.Password != pass {
 		c.JSON(http.StatusOK, gin.H{"code": 400, "message": "Incorrect account or password."})
+		return nil, false
+	}
+	return allowPublicQuery(c, card)
+}
+
+func allowPublicQuery(c *gin.Context, card *model.AccountCard) (*model.AccountCard, bool) {
+	if card.PublicQuery == 0 {
+		c.JSON(http.StatusOK, gin.H{"code": 403, "message": "This lookup link has been disabled."})
 		return nil, false
 	}
 	return card, true

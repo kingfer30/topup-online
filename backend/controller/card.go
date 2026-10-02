@@ -1200,6 +1200,34 @@ func UpdateCardRemark(c *gin.Context) {
 	})
 }
 
+// UpdateCardPublicQuery 单独开关公开取码链接
+func UpdateCardPublicQuery(c *gin.Context) {
+	var req struct {
+		Category    string `json:"category" binding:"required"`
+		Id          int    `json:"id" binding:"required"`
+		PublicQuery int    `json:"public_query"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusOK, gin.H{"code": 400, "message": "参数错误: " + err.Error()})
+		return
+	}
+	if req.PublicQuery != 0 && req.PublicQuery != 1 {
+		c.JSON(http.StatusOK, gin.H{"code": 400, "message": "公开查询状态无效"})
+		return
+	}
+
+	tableName := model.GetTableNameByCategory(req.Category)
+	if !model.CheckTableExists(tableName) {
+		c.JSON(http.StatusOK, gin.H{"code": 404, "message": "该卡密类别不存在"})
+		return
+	}
+	if err := model.DB.Table(tableName).Where("id = ?", req.Id).Update("public_query", req.PublicQuery).Error; err != nil {
+		c.JSON(http.StatusOK, gin.H{"code": 500, "message": "更新公开查询状态失败: " + err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 200, "message": "已更新"})
+}
+
 // BatchEnableOnDemandSpendHandler 批量为卡密开启按需付费
 func BatchEnableOnDemandSpendHandler(c *gin.Context) {
 	var req struct {

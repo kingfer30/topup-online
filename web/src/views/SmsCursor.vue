@@ -238,6 +238,7 @@ const router = useRouter()
 
 const account = ref('')
 const rawQuery = ref('')
+const queryToken = ref('')
 const paramError = ref('')
 
 const loading = ref(false)
@@ -299,6 +300,15 @@ function localizeMessage(raw?: string) {
 }
 
 function parseParams() {
+  const params = new URLSearchParams(window.location.search)
+  const token = (params.get('t') || '').trim()
+  if (token) {
+    queryToken.value = token
+    rawQuery.value = ''
+    paramError.value = ''
+    return
+  }
+
   const raw = window.location.search.replace(/^\?/, '')
   if (!raw) {
     paramError.value = 'This link is missing account information.'
@@ -312,6 +322,7 @@ function parseParams() {
   }
 
   rawQuery.value = raw
+  queryToken.value = ''
 
   const accountPart = raw.slice(0, sepIndex)
   try {
@@ -361,7 +372,7 @@ async function fetchSms() {
   stopCountdown()
   loading.value = true
   try {
-    const res = await queryCursorSms(rawQuery.value)
+    const res = await queryCursorSms(rawQuery.value, queryToken.value)
     result.value = res.data
     if (res.data.account) {
       account.value = res.data.account
@@ -391,8 +402,8 @@ async function fetchMails() {
   mailError.value = ''
   try {
     const res = activeTab.value === 'recovery'
-      ? await queryCursorRecoveryMail(rawQuery.value)
-      : await queryCursorEmail(rawQuery.value)
+      ? await queryCursorRecoveryMail(rawQuery.value, queryToken.value)
+      : await queryCursorEmail(rawQuery.value, queryToken.value)
     mailResult.value = {
       ...res.data,
       inbox: res.data.inbox || [],
@@ -540,7 +551,7 @@ async function openMailDetail(mail: CursorMailItem) {
   detailLoading.value = true
   try {
     if (activeTab.value === 'recovery' && mail.id) {
-      const res = await queryCursorRecoveryMailDetail(rawQuery.value, mail.id)
+      const res = await queryCursorRecoveryMailDetail(rawQuery.value, mail.id, queryToken.value)
       if (res.data) {
         mail.body = res.data.body || ''
         mail.html_body = res.data.html_body || ''
@@ -553,7 +564,7 @@ async function openMailDetail(mail: CursorMailItem) {
         }
       }
     } else {
-      const res = await queryCursorEmailDetail(rawQuery.value, mail)
+      const res = await queryCursorEmailDetail(rawQuery.value, mail, queryToken.value)
       if (res.data) {
         mail.body = res.data.body || ''
         mail.html_body = res.data.html_body || ''

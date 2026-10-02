@@ -38,6 +38,8 @@ export interface Card {
   code_link?: string
   phone?: string
   phone_link?: string
+  query_token?: string
+  public_query?: number
   freeze_status?: number
   freeze_time?: number
   freeze_remark?: string
@@ -369,6 +371,10 @@ export const halfPriceCheckout = (data: {
 // 单独更新卡密备注
 export const updateCardRemark = (category: string, id: number, remark: string): Promise<ApiResponse> => {
   return http.post('/admin/cards/update-remark', { category, id, remark }) as Promise<ApiResponse>
+}
+
+export const updateCardPublicQuery = (category: string, id: number, publicQuery: number): Promise<ApiResponse> => {
+  return http.post('/admin/cards/public-query', { category, id, public_query: publicQuery }) as Promise<ApiResponse>
 }
 
 // 批量冻结/解冻请求

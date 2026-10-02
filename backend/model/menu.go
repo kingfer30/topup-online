@@ -301,6 +301,8 @@ CREATE TABLE IF NOT EXISTS ` + "`" + tableName + "`" + ` (
   ` + "`code_link`" + ` varchar(300) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '接码链接',
   ` + "`phone`" + ` varchar(30) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '手机号',
   ` + "`phone_link`" + ` varchar(300) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '手机号接码地址',
+  ` + "`query_token`" + ` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '公开取码链接token',
+  ` + "`public_query`" + ` tinyint(2) NOT NULL DEFAULT 1 COMMENT '公开链接可查询 1是 0否',
   ` + "`freeze_status`" + ` tinyint(2) NOT NULL DEFAULT -1 COMMENT '冻结状态 -1未冻结 1已冻结',
   ` + "`freeze_time`" + ` bigint(20) DEFAULT NULL COMMENT '冻结时间',
   ` + "`freeze_remark`" + ` varchar(200) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '冻结备注',
@@ -309,6 +311,8 @@ CREATE TABLE IF NOT EXISTS ` + "`" + tableName + "`" + ` (
   ` + "`deleted_at`" + ` datetime(3) DEFAULT NULL,
   PRIMARY KEY (` + "`id`" + `),
   UNIQUE KEY ` + "`idx_account`" + ` (` + "`account`" + `),
+  UNIQUE KEY ` + "`idx_query_token`" + ` (` + "`query_token`" + `),
+  UNIQUE KEY ` + "`idx_query_token`" + ` (` + "`query_token`" + `),
   KEY ` + "`idx_subscription_sell`" + ` (` + "`subscription_type`" + `, ` + "`sell_status`" + `),
   KEY ` + "`idx_subscription_type`" + ` (` + "`subscription_type`" + `),
   KEY ` + "`idx_subscription_time`" + ` (` + "`subscription_time`" + `)
