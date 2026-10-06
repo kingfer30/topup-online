@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -18,10 +20,14 @@ import (
 )
 
 const (
-	digisellerApiLoginURL   = "https://api.digiseller.com/api/apilogin"
-	digisellerUniqueCodeURL = "https://api.digiseller.com/api/purchases/unique-code/%s?token=%s"
-	digisellerTokenValidMin = 120 // token 有效期 2 小时（分钟）
-	digisellerTokenPreExp   = 5   // 提前 5 分钟刷新（分钟）
+	digisellerApiLoginURL     = "https://api.digiseller.com/api/apilogin"
+	digisellerUniqueCodeURL   = "https://api.digiseller.com/api/purchases/unique-code/%s?token=%s"
+	digisellerSellerSellsURL  = "https://api.digiseller.com/api/seller-sells/v2?token=%s"
+	digisellerTokenValidMin   = 120 // token 有效期 2 小时（分钟）
+	digisellerTokenPreExp     = 5   // 提前 5 分钟刷新（分钟）
+	digisellerSyncLookbackDay = 30
+	digisellerSyncPageRows    = 1000
+	digisellerSyncMaxPages    = 20
 )
 
 // token 内存缓存，进程级别，重启后会重新获取
@@ -345,5 +351,309 @@ func CheckUniqueCode(c *gin.Context) {
 		"code":    200,
 		"message": "成功",
 		"data":    result,
+	})
+}
+
+// GetDigisellerOrderList 分页查询 digiseller_orders
+// GET /admin/digiseller/orders
+func GetDigisellerOrderList(c *gin.Context) {
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	keyword := c.Query("keyword")
+
+	if page <= 0 {
+		page = 1
+	}
+	if pageSize <= 0 || pageSize > 100 {
+		pageSize = 20
+	}
+
+	filterState := false
+	ucState := 0
+	if raw := c.Query("uc_state"); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil {
+			c.JSON(http.StatusOK, gin.H{"code": 400, "message": "唯一码状态参数无效"})
+			return
+		}
+		filterState = true
+		ucState = parsed
+	}
+
+	list, total, err := model.ListDigisellerOrders(page, pageSize, keyword, ucState, filterState)
+	if err != nil {
+		logger.SysError("查询 Digiseller 订单失败: " + err.Error())
+		c.JSON(http.StatusOK, gin.H{"code": 500, "message": "查询失败: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    200,
+		"message": "成功",
+		"data": gin.H{
+			"list":      list,
+			"total":     total,
+			"page":      page,
+			"page_size": pageSize,
+		},
+	})
+}
+
+type sellerSellsRequest struct {
+	DateStart  string `json:"date_start"`
+	DateFinish string `json:"date_finish"`
+	Returned   int    `json:"returned"`
+	Page       int    `json:"page"`
+	Rows       int    `json:"rows"`
+}
+
+type sellerSellRow struct {
+	InvoiceID      int64       `json:"invoice_id"`
+	ProductID      int64       `json:"product_id"`
+	ProductName    string      `json:"product_name"`
+	ProductEntryID int64       `json:"product_entry_id"`
+	ProductEntry   string      `json:"product_entry"`
+	DatePut        string      `json:"date_put"`
+	DatePay        string      `json:"date_pay"`
+	Email          string      `json:"email"`
+	Wmid           string      `json:"wmid"`
+	AmountIn       float64     `json:"amount_in"`
+	AmountOut      float64     `json:"amount_out"`
+	AmountCurrency string      `json:"amount_currency"`
+	MethodPay      string      `json:"method_pay"`
+	AggregatorPay  string      `json:"aggregator_pay"`
+	IP             string      `json:"ip"`
+	PartnerID      interface{} `json:"partner_id"`
+	Lang           string      `json:"lang"`
+	Returned       int         `json:"returned"`
+	Owner          int         `json:"owner"`
+}
+
+type sellerSellsResponse struct {
+	Retval    int             `json:"retval"`
+	Retdesc   *string         `json:"retdesc"`
+	TotalRows int             `json:"total_rows"`
+	Pages     int             `json:"pages"`
+	Page      int             `json:"page"`
+	Rows      []sellerSellRow `json:"rows"`
+}
+
+func parsePartnerID(v interface{}) int {
+	switch n := v.(type) {
+	case float64:
+		return int(n)
+	case string:
+		i, _ := strconv.Atoi(strings.TrimSpace(n))
+		return i
+	default:
+		return 0
+	}
+}
+
+func parseDigisellerMoscowTime(s string) *time.Time {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return nil
+	}
+	loc := time.FixedZone("MSK", 3*3600)
+	if t, err := time.ParseInLocation("2006-01-02 15:04:05", s, loc); err == nil {
+		return &t
+	}
+	return parseDigisellerTime(s)
+}
+
+func truncateLog(s string, max int) string {
+	if len(s) <= max {
+		return s
+	}
+	return s[:max] + "...(truncated)"
+}
+
+func callSellerSellsAPI(token, dateStart, dateFinish string, page, rows int) (*sellerSellsResponse, int, error) {
+	reqBody := sellerSellsRequest{
+		DateStart:  dateStart,
+		DateFinish: dateFinish,
+		Returned:   0,
+		Page:       page,
+		Rows:       rows,
+	}
+	bodyBytes, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, 0, fmt.Errorf("序列化请求体失败: %v", err)
+	}
+
+	reqURL := fmt.Sprintf(digisellerSellerSellsURL, url.QueryEscape(token))
+	logger.SysLog(fmt.Sprintf(
+		"Digiseller seller-sells/v2 请求 start=%s finish=%s returned=0 page=%d rows=%d",
+		dateStart, dateFinish, page, rows,
+	))
+
+	httpReq, err := http.NewRequest(http.MethodPost, reqURL, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return nil, 0, fmt.Errorf("创建请求失败: %v", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Accept", "application/json")
+
+	client := &http.Client{Timeout: 45 * time.Second}
+	resp, err := client.Do(httpReq)
+	if err != nil {
+		logger.SysError("Digiseller seller-sells/v2 请求失败: " + err.Error())
+		return nil, 0, fmt.Errorf("请求 Digiseller seller-sells/v2 失败: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusUnauthorized {
+		logger.SysError("Digiseller seller-sells/v2 返回 401")
+		return nil, http.StatusUnauthorized, nil
+	}
+
+	respBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		logger.SysError(fmt.Sprintf("Digiseller seller-sells/v2 读取响应失败 status=%d: %v", resp.StatusCode, err))
+		return nil, resp.StatusCode, fmt.Errorf("读取响应失败: %v", err)
+	}
+	bodyText := truncateLog(string(respBytes), 2000)
+
+	var result sellerSellsResponse
+	if err = json.Unmarshal(respBytes, &result); err != nil {
+		logger.SysError(fmt.Sprintf("Digiseller seller-sells/v2 解析失败 status=%d body=%s err=%v", resp.StatusCode, bodyText, err))
+		return nil, resp.StatusCode, fmt.Errorf("解析响应失败: %v, status=%d, body: %s", err, resp.StatusCode, bodyText)
+	}
+	if resp.StatusCode != http.StatusOK || result.Retval != 0 {
+		logger.SysError(fmt.Sprintf(
+			"Digiseller seller-sells/v2 失败 status=%d retval=%d body=%s",
+			resp.StatusCode, result.Retval, bodyText,
+		))
+	}
+	return &result, resp.StatusCode, nil
+}
+
+func sellerSellToOrder(row sellerSellRow) (*model.DigisellerOrder, error) {
+	extra, err := json.Marshal(map[string]any{
+		"product_name":     row.ProductName,
+		"product_entry_id": row.ProductEntryID,
+		"product_entry":    row.ProductEntry,
+		"date_put":         row.DatePut,
+		"wmid":             row.Wmid,
+		"method_pay":       row.MethodPay,
+		"aggregator_pay":   row.AggregatorPay,
+		"ip":               row.IP,
+		"lang":             row.Lang,
+		"returned":         row.Returned,
+		"owner":            row.Owner,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &model.DigisellerOrder{
+		Inv:         row.InvoiceID,
+		IdGoods:     row.ProductID,
+		Amount:      row.AmountIn,
+		TypeCurr:    row.AmountCurrency,
+		Profit:      strconv.FormatFloat(row.AmountOut, 'f', -1, 64),
+		DatePay:     parseDigisellerMoscowTime(row.DatePay),
+		Email:       row.Email,
+		AgentId:     parsePartnerID(row.PartnerID),
+		OptionsJson: string(extra),
+	}, nil
+}
+
+// SyncDigisellerOrders 拉取近 30 天销售并写入 digiseller_orders
+// POST /admin/digiseller/orders/sync
+func SyncDigisellerOrders(c *gin.Context) {
+	token, err := getDigisellerToken()
+	if err != nil {
+		logger.SysError("获取 Digiseller token 失败: " + err.Error())
+		c.JSON(http.StatusOK, gin.H{"code": 500, "message": "获取 Digiseller token 失败: " + err.Error()})
+		return
+	}
+
+	loc := time.FixedZone("MSK", 3*3600)
+	now := time.Now().In(loc)
+	dateFinish := now.Format("2006-01-02 15:04:05")
+	dateStart := now.AddDate(0, 0, -digisellerSyncLookbackDay).Format("2006-01-02 15:04:05")
+
+	saved := 0
+	failed := 0
+	totalRows := 0
+	pages := 0
+
+	for page := 1; page <= digisellerSyncMaxPages; page++ {
+		if page > 1 {
+			// 官方限制每分钟最多 4 次
+			time.Sleep(16 * time.Second)
+		}
+		result, statusCode, callErr := callSellerSellsAPI(token, dateStart, dateFinish, page, digisellerSyncPageRows)
+		if statusCode == http.StatusUnauthorized {
+			logger.SysLog("Digiseller seller-sells/v2 返回 401，刷新 token 后重试")
+			token, err = forceRefreshDigisellerToken()
+			if err != nil {
+				logger.SysError("强制刷新 Digiseller token 失败: " + err.Error())
+				c.JSON(http.StatusOK, gin.H{"code": 500, "message": "刷新 Digiseller token 失败: " + err.Error()})
+				return
+			}
+			result, statusCode, callErr = callSellerSellsAPI(token, dateStart, dateFinish, page, digisellerSyncPageRows)
+			if statusCode == http.StatusUnauthorized {
+				c.JSON(http.StatusOK, gin.H{"code": 401, "message": "Digiseller token 无效，请检查 API Key 和 Seller ID 配置"})
+				return
+			}
+		}
+		if callErr != nil {
+			logger.SysError("拉取 Digiseller 销售失败: " + callErr.Error())
+			c.JSON(http.StatusOK, gin.H{"code": 500, "message": "拉取 Digiseller 销售失败: " + callErr.Error()})
+			return
+		}
+		if result.Retval != 0 {
+			desc := ""
+			if result.Retdesc != nil {
+				desc = *result.Retdesc
+			}
+			logger.SysError(fmt.Sprintf("Digiseller 拉单失败 page=%d retval=%d desc=%s", page, result.Retval, desc))
+			c.JSON(http.StatusOK, gin.H{
+				"code":    result.Retval,
+				"message": fmt.Sprintf("Digiseller 拉单失败，retval=%d, desc=%s", result.Retval, desc),
+			})
+			return
+		}
+
+		totalRows = result.TotalRows
+		pages = result.Pages
+		for _, row := range result.Rows {
+			if row.InvoiceID <= 0 {
+				failed++
+				continue
+			}
+			order, convErr := sellerSellToOrder(row)
+			if convErr != nil {
+				failed++
+				logger.SysError(fmt.Sprintf("转换 Digiseller 销售记录失败，inv=%d: %v", row.InvoiceID, convErr))
+				continue
+			}
+			if saveErr := model.UpsertDigisellerOrderFromSale(order); saveErr != nil {
+				failed++
+				logger.SysError(fmt.Sprintf("保存 Digiseller 销售记录失败，inv=%d: %v", row.InvoiceID, saveErr))
+				continue
+			}
+			saved++
+		}
+
+		if len(result.Rows) == 0 || (result.Pages > 0 && page >= result.Pages) {
+			break
+		}
+	}
+
+	logger.SysLog(fmt.Sprintf("Digiseller 拉单完成，saved=%d, failed=%d, total_rows=%d", saved, failed, totalRows))
+	c.JSON(http.StatusOK, gin.H{
+		"code":    200,
+		"message": "成功",
+		"data": gin.H{
+			"saved":       saved,
+			"failed":      failed,
+			"total_rows":  totalRows,
+			"pages":       pages,
+			"date_start":  dateStart,
+			"date_finish": dateFinish,
+		},
 	})
 }

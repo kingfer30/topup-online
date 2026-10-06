@@ -151,6 +151,12 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/ToolsvipFetch.vue'),
         meta: { title: 'toolsvip取件', requiresAuth: true },
       },
+      {
+        path: 'digiseller-orders',
+        name: 'DigisellerOrders',
+        component: () => import('@/views/DigisellerOrders.vue'),
+        meta: { title: 'Digiseller订单管理', requiresAuth: true },
+      },
     ],
   },
 ]

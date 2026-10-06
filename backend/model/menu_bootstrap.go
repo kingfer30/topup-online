@@ -202,7 +202,7 @@ func EnsureWebMailMenus() error {
 	pid := parent.Id
 
 	type childDef struct {
-		key  string
+		key   string
 		title string
 		path  string
 		sort  int
@@ -305,6 +305,85 @@ func EnsureMicrosoftMailMenus() error {
 				tx.Rollback()
 				return err
 			}
+		}
+	}
+
+	return tx.Commit().Error
+}
+
+// EnsureDigisellerMenu 幂等确保「Digiseller管理」父级菜单及「订单管理」子菜单
+func EnsureDigisellerMenu() error {
+	if DB == nil {
+		return nil
+	}
+
+	tx := DB.Begin()
+	if tx.Error != nil {
+		return tx.Error
+	}
+
+	var parent Menu
+	err := tx.Where("`key` = ? AND is_delete = ?", "digiseller-root", -1).First(&parent).Error
+	if err != nil {
+		parent = Menu{
+			ParentId: 0,
+			Title:    "Digiseller管理",
+			Key:      "digiseller-root",
+			Path:     "",
+			Icon:     "🛒",
+			Sort:     9,
+			Status:   1,
+			IsDelete: -1,
+		}
+		if err := tx.Create(&parent).Error; err != nil {
+			tx.Rollback()
+			return err
+		}
+	} else {
+		if err := tx.Model(&Menu{}).Where("id = ?", parent.Id).Updates(map[string]any{
+			"parent_id": 0,
+			"title":     "Digiseller管理",
+			"path":      "",
+			"icon":      "🛒",
+			"sort":      9,
+			"status":    1,
+			"is_delete": -1,
+		}).Error; err != nil {
+			tx.Rollback()
+			return err
+		}
+	}
+
+	pid := parent.Id
+	var child Menu
+	childErr := tx.Where("`key` = ? AND is_delete = ?", "digiseller-orders", -1).First(&child).Error
+	if childErr != nil {
+		child = Menu{
+			ParentId: pid,
+			Title:    "订单管理",
+			Key:      "digiseller-orders",
+			Path:     "/admin/digiseller-orders",
+			Icon:     "📋",
+			Sort:     1,
+			Status:   1,
+			IsDelete: -1,
+		}
+		if err := tx.Create(&child).Error; err != nil {
+			tx.Rollback()
+			return err
+		}
+	} else {
+		if err := tx.Model(&Menu{}).Where("id = ?", child.Id).Updates(map[string]any{
+			"parent_id": pid,
+			"title":     "订单管理",
+			"path":      "/admin/digiseller-orders",
+			"icon":      "📋",
+			"sort":      1,
+			"status":    1,
+			"is_delete": -1,
+		}).Error; err != nil {
+			tx.Rollback()
+			return err
 		}
 	}
 

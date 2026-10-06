@@ -73,6 +73,9 @@ func main() {
 		if err := model.EnsureMicrosoftMailMenus(); err != nil {
 			logger.SysLog("EnsureMicrosoftMailMenus: " + err.Error())
 		}
+		if err := model.EnsureDigisellerMenu(); err != nil {
+			logger.SysLog("EnsureDigisellerMenu: " + err.Error())
+		}
 
 		// 启动镜像卡密 Token 定时获取任务（每 30 分钟执行一次）
 		logger.SysLog("Starting MirrorCard Token Scheduler...")

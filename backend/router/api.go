@@ -100,7 +100,7 @@ func SetApiRouter(router *gin.Engine) {
 			adminGroup.POST("/cards/enable-on-demand", controller.EnableOnDemandSpendHandler)            // 开启按需付费
 			adminGroup.POST("/cards/batch-enable-on-demand", controller.BatchEnableOnDemandSpendHandler) // 批量开启按需付费
 			adminGroup.POST("/cards/update-remark", controller.UpdateCardRemark)                         // 单独更新备注
-			adminGroup.POST("/cards/public-query", controller.UpdateCardPublicQuery)                 // 开关公开取码链接
+			adminGroup.POST("/cards/public-query", controller.UpdateCardPublicQuery)                     // 开关公开取码链接
 			adminGroup.POST("/cards/goto-pro", controller.GotoPro)                                       // 提链：获取 Cursor Pro 付款链接
 			adminGroup.POST("/cards/stripe-alipay", controller.SubmitStripeAlipay)                       // 自动提交 Stripe Alipay 账单并返回付款页
 			adminGroup.POST("/cards/poll-subscription", controller.PollCardSubscription)                 // 轮询卡密当前订阅类型
@@ -118,6 +118,8 @@ func SetApiRouter(router *gin.Engine) {
 			adminGroup.POST("/sales-talks/batch-tag", controller.BatchUpdateSalesTalkTag) // 批量更新标签
 
 			// Digiseller 对接接口（管理员专用）
+			adminGroup.GET("/digiseller/orders", controller.GetDigisellerOrderList)           // 订单列表
+			adminGroup.POST("/digiseller/orders/sync", controller.SyncDigisellerOrders)       // 从 seller-sells 拉单并入库
 			adminGroup.GET("/digiseller/check-code/:unique_code", controller.CheckUniqueCode) // 查询唯一码支付信息
 			adminGroup.GET("/digiseller/prices", controller.GetDigisellerPrices)              // 获取订阅类型售价配置
 			adminGroup.POST("/digiseller/prices", controller.UpsertDigisellerPrice)           // 新增或更新订阅类型售价

@@ -392,8 +392,18 @@ func seedDefaultMenus(db *gorm.DB) error {
 		}
 	}
 
-	// 8. 系统设置
-	systemMenu := &model.Menu{ParentId: 0, Title: "系统设置", Key: "system", Icon: "⚙️", Sort: 8}
+	// 8. Digiseller管理
+	digisellerMenu := &model.Menu{ParentId: 0, Title: "Digiseller管理", Key: "digiseller-root", Icon: "🛒", Sort: 9}
+	if err := createMenu(digisellerMenu); err != nil {
+		return fmt.Errorf("创建Digiseller管理菜单失败: %w", err)
+	}
+	digisellerChild := &model.Menu{ParentId: digisellerMenu.Id, Title: "订单管理", Key: "digiseller-orders", Path: "/admin/digiseller-orders", Icon: "📋", Sort: 1}
+	if err := createMenu(digisellerChild); err != nil {
+		return fmt.Errorf("创建Digiseller订单管理菜单失败: %w", err)
+	}
+
+	// 9. 系统设置
+	systemMenu := &model.Menu{ParentId: 0, Title: "系统设置", Key: "system", Icon: "⚙️", Sort: 10}
 	if err := createMenu(systemMenu); err != nil {
 		return fmt.Errorf("创建系统设置菜单失败: %w", err)
 	}
