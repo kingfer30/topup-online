@@ -2119,6 +2119,8 @@ const subscriptionTypeOptions = [
   { label: 'Ultra', value: 'ultra' },
   { label: 'Go', value: 'go' },
   { label: 'Plus', value: 'plus' },
+  { label: 'Premium', value: 'premium' },
+  { label: 'Super', value: 'super' },
   { label: 'Team', value: 'team' },
 ]
 
@@ -2184,6 +2186,8 @@ const getSubscriptionTypeTagType = (subscriptionType?: string): 'default' | 'pri
     ultra: 'error',
     go: 'info',
     plus: 'primary',
+    premium: 'success',
+    super: 'warning',
     team: 'default',
   }
   return map[t] ?? 'info'
