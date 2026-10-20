@@ -102,6 +102,10 @@ func SetApiRouter(router *gin.Engine) {
 			adminGroup.POST("/cards/update-remark", controller.UpdateCardRemark)                         // 单独更新备注
 			adminGroup.POST("/cards/public-query", controller.UpdateCardPublicQuery)                     // 开关公开取码链接
 			adminGroup.POST("/cards/goto-pro", controller.GotoPro)                                       // 提链：获取 Cursor Pro 付款链接
+			adminGroup.POST("/cards/batch-unify-free", controller.BatchUnifyFree)                   // 批量合并为 Grok Free
+			adminGroup.POST("/cards/cancel-subscription", controller.CancelSubscription)         // 用 Cursor token 换 Grok sso 后取消订阅
+			adminGroup.POST("/cards/open-subscribe", controller.OpenSubscribe)                   // 服务端提交指定档位卡支付
+			adminGroup.POST("/cards/subscribe-window", controller.SubscribeWindow)               // 只换出付款页地址，由本机浏览器填写
 			adminGroup.POST("/cards/stripe-alipay", controller.SubmitStripeAlipay)                       // 自动提交 Stripe Alipay 账单并返回付款页
 			adminGroup.POST("/cards/poll-subscription", controller.PollCardSubscription)                 // 轮询卡密当前订阅类型
 			adminGroup.POST("/cards/half-price-checkout", controller.HalfPriceCheckout)                  // 半价提链：官方 welcome-back 302 Stripe

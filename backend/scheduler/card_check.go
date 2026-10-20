@@ -83,12 +83,16 @@ func normalizeMembershipType(raw string) string {
 		return "pro_x5"
 	case "pro_x20", "prox20":
 		return "pro_x20"
-	case "ultra":
-		return "ultra"
 	case "go":
 		return "go"
-	case "plus":
+	case "plus", "xpass:plus", "xpass_plus":
 		return "plus"
+	case "premium", "xpass:premium", "xpass_premium":
+		return "premium"
+	case "super", "xpass:super", "xpass_super":
+		return "super"
+	case "ultra", "xpass:ultra", "xpass_ultra":
+		return "ultra"
 	case "team":
 		return "team"
 	default:
@@ -117,7 +121,7 @@ func IsPaidMembership(membershipType string) bool {
 // isPaidSubscriptionType 是否为付费订阅类型（手动标记为成品时使用）
 func isPaidSubscriptionType(subscriptionType string) bool {
 	switch normalizeMembershipType(subscriptionType) {
-	case "pro", "pro_plus", "pro_x5", "pro_x20", "ultra", "go", "plus", "team":
+	case "pro", "pro_plus", "pro_x5", "pro_x20", "ultra", "go", "plus", "premium", "super", "team":
 		return true
 	default:
 		return false

@@ -11,12 +11,12 @@
           <n-button v-if="cardType === 'all'" type="error" :disabled="checkedRowKeys.length === 0"
             @click="handleOpenFreezeModal(1)">
             <template #icon><span>🔒</span></template>
-            批量冻结 {{ checkedRowKeys.length > 0 ? `(${checkedRowKeys.length})` : '' }}
+            冻结 {{ checkedRowKeys.length > 0 ? `(${checkedRowKeys.length})` : '' }}
           </n-button>
           <n-button v-if="cardType === 'all'" type="default" :disabled="checkedRowKeys.length === 0"
             @click="handleOpenFreezeModal(-1)">
             <template #icon><span>🔓</span></template>
-            批量解冻 {{ checkedRowKeys.length > 0 ? `(${checkedRowKeys.length})` : '' }}
+            解冻 {{ checkedRowKeys.length > 0 ? `(${checkedRowKeys.length})` : '' }}
           </n-button>
           <n-button v-if="cardType === 'unsold'" type="success" @click="handlePickup">
             <template #icon><span>📦</span></template>
@@ -25,12 +25,21 @@
           <n-button v-if="cardType === 'unsold' || cardType === 'all'" type="warning"
             :disabled="checkedRowKeys.length === 0" @click="handleOpenBatchPickup">
             <template #icon><span>🚚</span></template>
-            批量取货 {{ checkedRowKeys.length > 0 ? `(${checkedRowKeys.length})` : '' }}
+            取货 {{ checkedRowKeys.length > 0 ? `(${checkedRowKeys.length})` : '' }}
           </n-button>
           <n-button v-if="cardType === 'all' || cardType === 'unsold' || cardType === 'sold'" type="info"
             :disabled="checkedRowKeys.length === 0" :loading="batchCheckLoading" @click="handleBatchCheck">
             <template #icon><span>🔍</span></template>
-            批量检查 {{ checkedRowKeys.length > 0 ? `(${checkedRowKeys.length})` : '' }}
+            检查 {{ checkedRowKeys.length > 0 ? `(${checkedRowKeys.length})` : '' }}
+          </n-button>
+          <n-button v-if="cardType === 'all' && category === 'cursor'" type="success"
+            :disabled="checkedRowKeys.length === 0 || batchUnifyLoading" :loading="batchUnifyLoading" @click="handleBatchUnifyFree">
+            <template #icon><span>🔗</span></template>
+            批量合并 {{ checkedRowKeys.length > 0 ? `(${checkedRowKeys.length})` : '' }}
+          </n-button>
+          <n-button v-if="category === 'cursor'" type="error"
+            :disabled="checkedRowKeys.length === 0 || cancelSubLoading" :loading="cancelSubLoading" @click="handleCancelSubscription">
+            取消订阅 {{ checkedRowKeys.length > 0 ? `(${checkedRowKeys.length})` : '' }}
           </n-button>
           <n-button v-if="cardType === 'unsold' || cardType === 'sold'" type="warning"
             :disabled="checkedRowKeys.length === 0" :loading="batchOnDemandLoading" @click="handleBatchEnableOnDemand">
@@ -48,13 +57,7 @@
           </n-button>
           <n-button type="error" :disabled="checkedRowKeys.length === 0" @click="handleBatchDelete">
             <template #icon><span>🗑️</span></template>
-            批量删除 {{ checkedRowKeys.length > 0 ? `(${checkedRowKeys.length})` : '' }}
-          </n-button>
-          <n-button type="primary" @click="handleAdd">
-            <template #icon>
-              <span>➕</span>
-            </template>
-            新增卡密
+            删除 {{ checkedRowKeys.length > 0 ? `(${checkedRowKeys.length})` : '' }}
           </n-button>
           <n-button type="info" @click="handleBatchImport">
             <template #icon>
@@ -1140,6 +1143,69 @@
       </n-form>
     </n-modal>
 
+    <n-modal v-model:show="showBatchUnifyModal" :title="batchResultTitle" preset="card" style="width: 720px">
+      <n-input :value="batchUnifyResultText" type="textarea" readonly :rows="14"
+        placeholder="账号----Grok邮箱----结果" style="font-family: monospace; font-size: 13px" />
+      <template #footer>
+        <n-space justify="end">
+          <n-button @click="handleCopyBatchUnifyResult">复制全部</n-button>
+          <n-button type="primary" @click="showBatchUnifyModal = false">关闭</n-button>
+        </n-space>
+      </template>
+    </n-modal>
+
+    <n-modal v-model:show="showSubscribeModal" :mask-closable="!subscribeBusy" :close-on-esc="!subscribeBusy"
+      preset="card" style="width: 520px" :title="`订阅 ${subscribeTierLabel}`">
+      <n-form label-placement="left" label-width="72px">
+        <n-form-item label="账号">
+          <n-text>{{ subscribeRow?.account || '' }}</n-text>
+        </n-form-item>
+        <n-form-item label="街道">
+          <n-input-group>
+            <n-input v-model:value="subscribeCard.line1" placeholder="街道地址" autocomplete="off" :disabled="subscribeBusy" />
+            <n-button :disabled="subscribeBusy" @click="copySubscribeAddress">复制地址</n-button>
+          </n-input-group>
+        </n-form-item>
+        <n-form-item label="城市">
+          <n-input v-model:value="subscribeCard.city" placeholder="城市" autocomplete="off" :disabled="subscribeBusy" />
+        </n-form-item>
+        <n-form-item label="州">
+          <n-space>
+            <n-input v-model:value="subscribeCard.state" placeholder="OR" style="width: 100px" autocomplete="off"
+              :disabled="subscribeBusy" />
+            <n-input v-model:value="subscribeCard.postal" placeholder="邮编" style="width: 120px" autocomplete="off"
+              :disabled="subscribeBusy" />
+            <n-input v-model:value="subscribeCard.country" placeholder="US" maxlength="2" style="width: 80px"
+              autocomplete="off" :disabled="subscribeBusy" />
+          </n-space>
+        </n-form-item>
+        <n-form-item label="卡号">
+          <n-input v-model:value="subscribeCard.number" placeholder="卡号" autocomplete="off" :disabled="subscribeBusy" />
+        </n-form-item>
+        <n-form-item label="有效期">
+          <n-input v-model:value="subscribeCard.expiry" placeholder="08/29" maxlength="7" style="width: 140px"
+            autocomplete="off" :disabled="subscribeBusy" />
+        </n-form-item>
+        <n-form-item label="CVV">
+          <n-input v-model:value="subscribeCard.cvc" placeholder="CVV" maxlength="4" style="width: 120px"
+            autocomplete="off" :disabled="subscribeBusy" />
+        </n-form-item>
+      </n-form>
+      <n-text v-if="subscribePollStatus" depth="3" style="font-size: 13px">{{ subscribePollStatus }}</n-text>
+      <template #footer>
+        <n-space justify="end">
+          <n-button :disabled="subscribeBusy" @click="showSubscribeModal = false">取消</n-button>
+          <n-button quaternary :loading="subscribePaying" :disabled="subscribeBusy" title="使用频率不高"
+            style="opacity: 0.55" @click="handleSubmitSubscribe">
+            自动填写
+          </n-button>
+          <n-button type="primary" :loading="subscribeOpening" :disabled="subscribeBusy" @click="handleOpenSubscribeBrowser">
+            手动填写
+          </n-button>
+        </n-space>
+      </template>
+    </n-modal>
+
     <!-- 已售列表：批量提链结果（账号----链接） -->
     <n-modal v-model:show="showBatchGotoProModal" title="批量提链结果" preset="card" style="width: 720px">
       <n-input :value="batchGotoProResultText" type="textarea" readonly :rows="14"
@@ -1167,6 +1233,7 @@ import {
   NFormItem,
   NFormItemGi,
   NInput,
+  NInputGroup,
   NInputNumber,
   NSelect,
   NSpace,
@@ -1218,6 +1285,10 @@ import {
   updateCardPublicQuery,
   batchFreezeCards,
   batchDeleteCards,
+  batchUnifyFree,
+  cancelSubscription,
+  subscribePay,
+  subscribeWindow,
   getCardSmsCode,
   type Card,
   type CardRequest,
@@ -1400,6 +1471,11 @@ const searchPromo50Off = ref(defaultPromo50Off())
 const searchPurchaseDate = ref<number | null>(null)
 const searchFreezeTime = ref<number | null>(null)
 const batchCheckLoading = ref(false)
+const batchUnifyLoading = ref(false)
+const cancelSubLoading = ref(false)
+const showBatchUnifyModal = ref(false)
+const batchUnifyResultText = ref('')
+const batchResultTitle = ref('批量合并结果')
 const batchOnDemandLoading = ref(false)
 const batchImportText = ref('')
 
@@ -1563,11 +1639,11 @@ const rememberPayer = (payer?: string | null) => {
 
 const showUpgradeModal = ref(false)
 const upgradeForm = ref({
-  subscription_type: '',
+  subscription_type: 'plus',
   subscription_time: Date.now() as number | undefined,   // 毫秒（n-date-picker）
   subscription_remaining_days: 30 as number | undefined,
-  purchase_price: undefined as number | undefined,
-  purchase_from: '支付宝',
+  purchase_price: 55 as number | undefined,
+  purchase_from: '卡充',
   purchase_date: Date.now() as number | undefined,       // 毫秒（n-date-picker）
   payer: lastPayer(),
 })
@@ -1641,6 +1717,114 @@ const gotoProTypeOptions = [
   { label: 'Pro+', value: 'pro_plus' },
   { label: 'Ultra', value: 'ultra' },
 ]
+const subscribeTierOptions = [
+  { label: 'Plus', value: 'plus' },
+  { label: 'Premium', value: 'premium' },
+  { label: 'Super', value: 'super' },
+  { label: 'Ultra', value: 'ultra' },
+]
+const SUBSCRIBE_DRAFT_COOKIE = 'cursor_subscribe_draft'
+const defaultSubscribeDraft = () => ({
+  line1: '13 Northeast Revere Avenue',
+  city: 'Bend',
+  state: 'OR',
+  postal: '97701',
+  country: 'US',
+  number: '',
+  expiry: '',
+  expMonth: '',
+  expYear: '',
+  cvc: '',
+})
+const readSubscribeDraft = () => {
+  const draft = defaultSubscribeDraft()
+  const prefix = `${SUBSCRIBE_DRAFT_COOKIE}=`
+  const raw = document.cookie.split('; ').find(item => item.startsWith(prefix))
+  if (!raw) return draft
+  try {
+    const parsed = JSON.parse(decodeURIComponent(raw.slice(prefix.length))) as Partial<ReturnType<typeof defaultSubscribeDraft>>
+    for (const key of Object.keys(draft) as Array<keyof ReturnType<typeof defaultSubscribeDraft>>) {
+      const value = parsed[key]
+      if (typeof value === 'string') draft[key] = value
+    }
+  } catch {
+    return defaultSubscribeDraft()
+  }
+  if (!draft.expiry && draft.expMonth) {
+    draft.expiry = draft.expYear ? `${draft.expMonth}/${draft.expYear}` : draft.expMonth
+  }
+  return draft
+}
+
+const parseSubscribeExpiry = (raw: string) => {
+  const text = raw.trim()
+  const separated = text.match(/^(\d{1,2})\s*[\/\-]\s*(\d{2}|\d{4})$/)
+  const digits = text.replace(/\D/g, '')
+  let monthText = ''
+  let yearText = ''
+  if (separated) {
+    monthText = separated[1]
+    yearText = separated[2]
+  } else if (digits.length === 4 || digits.length === 6) {
+    monthText = digits.slice(0, 2)
+    yearText = digits.slice(2)
+  } else if (digits.length === 3 || digits.length === 5) {
+    monthText = digits.slice(0, 1)
+    yearText = digits.slice(1)
+  }
+  const month = Number(monthText)
+  if (!monthText || month < 1 || month > 12 || !/^\d{2}(\d{2})?$/.test(yearText)) return null
+  return { expMonth: String(month), expYear: yearText }
+}
+
+const copySubscribeAddress = async () => {
+  const card = subscribeCard.value
+  const text = [
+    card.line1.trim(),
+    card.city.trim(),
+    [card.state.trim(), card.postal.trim()].filter(Boolean).join(' '),
+    card.country.trim().toUpperCase(),
+  ].filter(Boolean).join(', ')
+  if (!text) {
+    message.warning('地址是空的')
+    return
+  }
+  try {
+    await navigator.clipboard.writeText(text)
+    message.success('已复制地址')
+  } catch {
+    message.error('复制失败')
+  }
+}
+const writeSubscribeDraft = (draft: ReturnType<typeof defaultSubscribeDraft>) => {
+  const maxAge = 60 * 60 * 24 * 180
+  document.cookie = `${SUBSCRIBE_DRAFT_COOKIE}=${encodeURIComponent(JSON.stringify(draft))}; Path=/; Max-Age=${maxAge}; SameSite=Lax`
+}
+const PAY_BROWSER_ORIGIN = 'http://127.0.0.1:17321'
+const subscribeTierSku: Record<string, string> = {
+  plus: 'sku_ToYBWq565pLU',
+  premium: 'sku_iFHd43ge7daR',
+  super: 'sku_WWvZ1VL9fabh',
+  ultra: 'sku_kO0knmcEPYnA',
+}
+const defaultPayUrl = (tier: string) => {
+  const params = new URLSearchParams({ tier, host: 'web', entrypoint: 'plan_info' })
+  const sku = subscribeTierSku[tier]
+  if (sku) params.set('sku', sku)
+  return `https://cursor.com/promos/grok-upgrade?${params.toString()}`
+}
+const showSubscribeModal = ref(false)
+const subscribePaying = ref(false)
+const subscribeOpening = ref(false)
+const subscribeBusy = computed(() => subscribePaying.value || subscribeOpening.value)
+const subscribePollStatus = ref('')
+let subscribePollTimer: ReturnType<typeof setInterval> | null = null
+let subscribePollSeconds = 0
+let subscribePollBaseline = ''
+const subscribeRow = ref<Card | null>(null)
+const subscribeTier = ref('')
+const subscribeCard = ref(defaultSubscribeDraft())
+const subscribeTierLabel = computed(() => subscribeTierOptions.find(opt => opt.value === subscribeTier.value)?.label || subscribeTier.value)
 const pickupCardInfoRef = ref<HTMLPreElement | null>(null)
 
 // 取货表单
@@ -2617,23 +2801,30 @@ const columns = computed<DataTableColumns<Card>>(() => {
         )
       }
 
-      // 普号/已售列表中，token 存在时显示"提链"下拉按钮
-      // 普号列表：冻结时禁用；已售列表：始终可用
+      // Cursor：订阅下拉，由服务端提交该账号的卡支付。其他类别仍走旧提链。
       if ((cardType.value === 'all' || cardType.value === 'sold') && row.token) {
         const isFrozen = cardType.value === 'all' && row.freeze_status === 1
+        const isCursor = category.value === 'cursor'
+        const options = isCursor
+          ? subscribeTierOptions.map(opt => ({ label: opt.label, key: opt.value }))
+          : [
+              ...gotoProTypeOptions.map(opt => ({ label: opt.label, key: opt.value })),
+              { label: '半价提链', key: 'half_price' },
+            ]
         buttons.push(
           h(
             NDropdown,
             {
               trigger: 'click',
-              options: [
-                ...gotoProTypeOptions.map(opt => ({ label: opt.label, key: opt.value })),
-                { label: '半价提链', key: 'half_price' },
-              ],
+              options,
               onSelect: (key: string) => {
                 if (isFrozen) return
-                if (key === 'half_price') {
+                if (!isCursor && key === 'half_price') {
                   handleOpenHalfPrice(row)
+                  return
+                }
+                if (isCursor) {
+                  handleOpenSubscribe(row, key)
                   return
                 }
                 handleGotoProWithType(row, key)
@@ -2648,9 +2839,9 @@ const columns = computed<DataTableColumns<Card>>(() => {
                   type: isFrozen ? 'default' : 'warning',
                   loading: !!gotoProLoading.value[row.id],
                   disabled: isFrozen,
-                  title: isFrozen ? '已冻结，无法提链' : undefined,
+                  title: isFrozen ? '已冻结，无法订阅' : undefined,
                 },
-                { default: () => isFrozen ? '已冻结' : '提链' }
+                { default: () => isFrozen ? '已冻结' : (isCursor ? '订阅' : '提链') }
               ),
             }
           )
@@ -2823,6 +3014,115 @@ const handleBatchCheck = async () => {
   }
 }
 
+const handleBatchUnifyFree = () => {
+  const ids = checkedRowKeys.value as number[]
+  if (ids.length === 0) {
+    message.warning('请先勾选要合并的记录')
+    return
+  }
+  if (batchUnifyLoading.value) return
+  dialog.warning({
+    title: '确认批量合并',
+    content: `将把已勾选的 ${ids.length} 个 Cursor 账号合并为 Grok Free。不会付款。合并完成后不能解除。`,
+    positiveText: '开始合并',
+    negativeText: '取消',
+    onPositiveClick: () => {
+      if (batchUnifyLoading.value) return false
+      batchUnifyLoading.value = true
+      void runBatchUnify(ids)
+    },
+  })
+}
+
+const runBatchUnify = async (ids: number[]) => {
+  try {
+    const response = await batchUnifyFree({
+      category: category.value,
+      ids,
+    })
+    if (response.code !== 200 || !response.data) {
+      message.error(response.message || '合并失败')
+      return
+    }
+    const lines = response.data.map(item => {
+      const account = item.account || `#${item.id}`
+      const email = item.email || '-'
+      return `${account}----${email}----${item.message}`
+    })
+    batchUnifyResultText.value = lines.join('\n')
+    batchResultTitle.value = '批量合并结果'
+    showBatchUnifyModal.value = true
+    const failed = response.data.filter(item => item.status === 'failed').length
+    if (failed > 0) {
+      message.warning(response.message || '部分账号合并失败')
+    } else {
+      message.success(response.message || '合并完成')
+    }
+  } catch (error: any) {
+    message.error(error.response?.data?.message || '合并失败')
+  } finally {
+    batchUnifyLoading.value = false
+  }
+}
+
+const handleCopyBatchUnifyResult = async () => {
+  try {
+    await navigator.clipboard.writeText(batchUnifyResultText.value)
+    message.success('已复制')
+  } catch {
+    message.error('复制失败')
+  }
+}
+
+const handleCancelSubscription = () => {
+  const ids = checkedRowKeys.value as number[]
+  if (ids.length === 0) {
+    message.warning('请先勾选要取消订阅的记录')
+    return
+  }
+  if (cancelSubLoading.value) return
+  dialog.warning({
+    title: '确认取消订阅',
+    content: `将用勾选的 ${ids.length} 个 Cursor 会话换取 Grok 登录，并取消当前付费订阅。取消在当前周期结束后生效。`,
+    positiveText: '确认取消',
+    negativeText: '返回',
+    onPositiveClick: () => {
+      if (cancelSubLoading.value) return false
+      cancelSubLoading.value = true
+      void runCancelSubscription(ids)
+    },
+  })
+}
+
+const runCancelSubscription = async (ids: number[]) => {
+  try {
+    const response = await cancelSubscription({
+      category: category.value,
+      ids,
+    })
+    if (response.code !== 200 || !response.data) {
+      message.error(response.message || '取消失败')
+      return
+    }
+    batchUnifyResultText.value = response.data.map(item => {
+      const account = item.account || `#${item.id}`
+      return `${account}----${item.message}`
+    }).join('\n')
+    batchResultTitle.value = '取消订阅结果'
+    showBatchUnifyModal.value = true
+    const failed = response.data.filter(item => item.status === 'failed').length
+    if (failed > 0) {
+      message.warning(response.message || '部分账号取消失败')
+    } else {
+      message.success(response.message || '已提交取消')
+    }
+  } catch (error: any) {
+    message.error(error.response?.data?.message || '取消失败')
+  } finally {
+    cancelSubLoading.value = false
+  }
+}
+
 // 批量开启按需付费
 const handleBatchEnableOnDemand = async () => {
   const ids = checkedRowKeys.value as number[]
@@ -2964,6 +3264,208 @@ const handleCopyBatchGotoProResult = async () => {
     message.success('已复制')
   } catch {
     message.error('复制失败')
+  }
+}
+
+const handleOpenSubscribe = (row: Card, tier: string) => {
+  if (!row.token || subscribeBusy.value) return
+  subscribeRow.value = row
+  subscribeTier.value = tier
+  subscribeCard.value = readSubscribeDraft()
+  showSubscribeModal.value = true
+}
+
+const readSubscribeForm = () => {
+  const expiry = parseSubscribeExpiry(subscribeCard.value.expiry)
+  return {
+    line1: subscribeCard.value.line1.trim(),
+    city: subscribeCard.value.city.trim(),
+    state: subscribeCard.value.state.trim(),
+    postal: subscribeCard.value.postal.trim(),
+    country: subscribeCard.value.country.trim().toUpperCase(),
+    number: subscribeCard.value.number.replace(/\s+/g, ''),
+    expiry: subscribeCard.value.expiry.trim(),
+    expMonth: expiry?.expMonth || '',
+    expYear: expiry?.expYear || '',
+    cvc: subscribeCard.value.cvc.trim(),
+  }
+}
+
+const subscribeFormReady = () => {
+  const draft = readSubscribeForm()
+  if (!draft.line1 || !draft.city || !draft.state || !draft.postal || !/^[A-Za-z]{2}$/.test(draft.country)) {
+    message.error('请填写完整的账单地址')
+    return null
+  }
+  if (!/^\d{13,19}$/.test(draft.number) || !/^\d{3,4}$/.test(draft.cvc) || !draft.expMonth || !draft.expYear) {
+    message.error('请填写完整的卡号、有效期和 CVV，有效期如 08/29')
+    return null
+  }
+  subscribeCard.value = draft
+  writeSubscribeDraft(draft)
+  return draft
+}
+
+const cursorMemberTypes = ['plus', 'premium', 'super', 'ultra', 'pro', 'pro_plus', 'pro_x5', 'pro_x20', 'go', 'team']
+
+const stopSubscribePoll = () => {
+  if (subscribePollTimer) {
+    clearInterval(subscribePollTimer)
+    subscribePollTimer = null
+  }
+}
+
+const closePayBrowser = () => {
+  fetch(`${PAY_BROWSER_ORIGIN}/close`, { method: 'POST' }).catch(() => {})
+}
+
+const startSubscribePoll = (row: Card) => {
+  stopSubscribePoll()
+  subscribePollSeconds = 0
+  subscribePollBaseline = ''
+  subscribePollStatus.value = '正在确认当前订阅…'
+  const tick = async (countWait: boolean) => {
+    if (!showSubscribeModal.value) {
+      stopSubscribePoll()
+      return
+    }
+    if (countWait) subscribePollSeconds += 5
+    try {
+      const res = await pollCardSubscription(category.value, row.id)
+      const type = (res.data?.subscription_type || 'free').trim().toLowerCase()
+      const paid = !!res.data?.subscribed || cursorMemberTypes.includes(type)
+      if (!subscribePollBaseline) {
+        subscribePollBaseline = type
+      }
+      if (paid && type !== 'free' && type !== subscribePollBaseline) {
+        stopSubscribePoll()
+        closePayBrowser()
+        subscribePollStatus.value = ''
+        showSubscribeModal.value = false
+        gotoProCardId.value = row.id
+        gotoProAccount.value = row.account || ''
+        gotoProSubscriptionType.value = type || subscribeTier.value
+        message.success(`检测到订阅 ${type}，正在更新为成品`)
+        handleGotoProSuccess()
+        return
+      }
+      if (subscribePollBaseline === type && paid && type === subscribeTier.value && subscribePollSeconds === 0) {
+        subscribePollStatus.value = `当前已是 ${type}，等待套餐变化…`
+        return
+      }
+      subscribePollStatus.value = `等待付款中${subscribePollSeconds ? ` ${subscribePollSeconds} 秒` : ''}，当前：${type}`
+    } catch {
+      subscribePollStatus.value = `等待付款中 ${subscribePollSeconds} 秒，查询失败，继续等待`
+    }
+  }
+  tick(false)
+  subscribePollTimer = setInterval(() => { tick(true) }, 5000)
+}
+
+const handleOpenSubscribeBrowser = async () => {
+  if (subscribeBusy.value || !subscribeRow.value?.token) return
+  const draft = subscribeFormReady()
+  if (!draft) return
+  const row = subscribeRow.value
+  subscribeOpening.value = true
+  gotoProLoading.value[row.id] = true
+  let payUrl = ''
+  try {
+    try {
+      const response = await subscribeWindow({
+        category: category.value,
+        id: row.id,
+        tier: subscribeTier.value,
+      })
+      payUrl = response.data?.url || ''
+      if (response.code !== 200 || !payUrl) {
+        message.warning(response.message || '付款页接口没有返回地址，改用默认付款页')
+      }
+    } catch (error: any) {
+      message.warning(error?.response?.data?.message || error?.message || '付款页接口不可用，改用默认付款页')
+    }
+    if (!payUrl) payUrl = defaultPayUrl(subscribeTier.value)
+    try {
+      const local = await fetch(`${PAY_BROWSER_ORIGIN}/open`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token: row.token,
+          url: payUrl,
+          line1: draft.line1,
+          city: draft.city,
+          state: draft.state,
+          postal: draft.postal,
+          country: draft.country,
+          number: draft.number,
+          expMonth: draft.expMonth,
+          expYear: draft.expYear,
+          cvc: draft.cvc,
+        }),
+      })
+      const body = await local.json().catch(() => ({} as { message?: string }))
+      if (!local.ok) {
+        message.error(body.message || '本机付款窗口打开失败')
+        return
+      }
+      message.success(body.message || '已打开付款页，正在等待订阅生效')
+      startSubscribePoll(row)
+    } catch {
+      dialog.warning({
+        title: '本机付款窗口服务未启动',
+        content: '请先下载 pay-browser.exe，在这台电脑上运行它，保持窗口不要关，然后再点一次手动填写。',
+        positiveText: '下载',
+        negativeText: '关闭',
+        onPositiveClick: () => {
+          window.open('/pay-browser.exe', '_blank')
+        },
+      })
+    }
+  } catch (error: any) {
+    message.error(error?.response?.data?.message || '获取付款页失败')
+  } finally {
+    subscribeOpening.value = false
+    gotoProLoading.value[row.id] = false
+  }
+}
+
+const handleSubmitSubscribe = async () => {
+  if (subscribeBusy.value || !subscribeRow.value) return
+  const draft = subscribeFormReady()
+  if (!draft) return
+  const row = subscribeRow.value
+  subscribePaying.value = true
+  gotoProLoading.value[row.id] = true
+  try {
+    const response = await subscribePay({
+      category: category.value,
+      id: row.id,
+      tier: subscribeTier.value,
+      card_number: draft.number,
+      exp_month: draft.expMonth,
+      exp_year: draft.expYear,
+      cvc: draft.cvc,
+      line1: draft.line1,
+      city: draft.city,
+      state: draft.state,
+      postal: draft.postal,
+      country: draft.country,
+    })
+    if (response.code === 200 && response.data?.paid) {
+      message.success(response.message || '已提交支付')
+      showSubscribeModal.value = false
+      return
+    }
+    if (response.code === 200) {
+      message.error('服务端还是旧版本，支付没有提交。请先更新并重启后端。')
+      return
+    }
+    message.error(response.message || '支付失败')
+  } catch (error: any) {
+    message.error(error?.response?.data?.message || '支付失败')
+  } finally {
+    subscribePaying.value = false
+    gotoProLoading.value[row.id] = false
   }
 }
 
@@ -3181,8 +3683,13 @@ watch(showGotoProModal, (show) => {
   if (!show) stopSubscriptionPoll()
 })
 
+watch(showSubscribeModal, (show) => {
+  if (!show) stopSubscribePoll()
+})
+
 onUnmounted(() => {
   stopSubscriptionPoll()
+  stopSubscribePoll()
 })
 
 // 支付成功：先立刻更新为成品，再打开补充价格弹窗
@@ -3393,48 +3900,6 @@ const handlePageSizeChange = (pageSize: number) => {
   pagination.value.pageSize = pageSize
   pagination.value.page = 1
   loadCards()
-}
-
-// 新增卡密
-const handleAdd = () => {
-  isEdit.value = false
-  currentEditId.value = 0
-  formData.value = {
-    account: '',
-    password: '',
-    mail_password: '',
-    recovery_mail: '',
-    recovery_mail_pass: '',
-    recovery_mail_host: '',
-    subscription_status: 1,
-    subscription_type: '',
-    sell_status: 1,
-    account_type: 1,
-    status: 1,
-    purchase_price: 0,
-    sell_price: 0,
-    purchase_from: '',
-    purchase_by: '',
-    payer: lastPayer() || '',
-    sell_to: '',
-    api_key: '',
-    '2fa': '',
-    token: '',
-    client_id: '',
-    mail_url: '',
-    remark: '',
-    code_link: '',
-    phone: '',
-    phone_link: '',
-    sell_order_no: '',
-    subscription_credits: undefined,
-    subscription_time: undefined,
-    subscription_expired_time: undefined,
-    purchase_date: undefined,
-    sell_date: undefined,
-    is_promo_50off: 0,
-  }
-  showModal.value = true
 }
 
 // 编辑卡密
@@ -3753,11 +4218,11 @@ const handleExport = async () => {
 // 打开批量升级为成品弹窗（重置表单，避免沿用上次的订阅类型）
 const handleOpenUpgradeModal = () => {
   upgradeForm.value = {
-    subscription_type: 'pro',
+    subscription_type: 'plus',
     subscription_time: Date.now(),
     subscription_remaining_days: 30,
-    purchase_price: undefined,
-    purchase_from: '支付宝',
+    purchase_price: 55,
+    purchase_from: '卡充',
     purchase_date: Date.now(),
     payer: lastPayer(),
   }
@@ -3804,11 +4269,11 @@ const handleBatchUpgrade = async () => {
       checkedRowKeys.value = []
       // 重置表单
       upgradeForm.value = {
-        subscription_type: '',
+        subscription_type: 'plus',
         subscription_time: Date.now(),
         subscription_remaining_days: 30,
-        purchase_price: undefined,
-        purchase_from: '支付宝',
+        purchase_price: 55,
+        purchase_from: '卡充',
         purchase_date: Date.now(),
         payer: lastPayer(),
       }
@@ -4078,6 +4543,11 @@ const handleBatchPickup = async () => {
       message.error(response.message || '批量取货失败')
       return false
     }
+    const affected = Number(response.data || 0)
+    if (affected === 0) {
+      message.error('没有记录被更新为已出售')
+      return false
+    }
 
     // 取出勾选卡密的数据，按格式拼接后复制到剪贴板
     const cards = ids
@@ -4118,9 +4588,9 @@ const handleBatchPickup = async () => {
 
     try {
       await navigator.clipboard.writeText(clipboardText)
-      message.success(`批量取货完成，已复制 ${ids.length} 条卡密信息到剪贴板`)
+      message.success(`批量取货完成，${affected} 条已标记为已出售，并已复制到剪贴板`)
     } catch {
-      message.success(`批量取货完成（${response.data} 条），剪贴板复制失败请手动复制`)
+      message.success(`批量取货完成（${affected} 条已标记为已出售），剪贴板复制失败请手动复制`)
     }
 
     showBatchPickupModal.value = false

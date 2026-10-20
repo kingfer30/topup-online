@@ -139,7 +139,7 @@
               <n-form-item>
                 <n-space vertical :size="8">
                   <n-text depth="3" style="font-size: 12px">
-                    代理只用于提取 Stripe / Alipay 付款页。分开填写主机、账号、密码更方便，保存时由后端组装。主机留空则走系统环境代理。
+                    代理用于提取 Stripe / Alipay 付款页，以及 Cursor 订阅卡支付。分开填写主机、账号、密码更方便，保存时由后端组装。主机留空则走系统环境代理。
                   </n-text>
                   <n-button type="primary" :loading="cursorPaySaving" @click="handleSaveCursorPay">保存 Cursor 付款设置</n-button>
                 </n-space>

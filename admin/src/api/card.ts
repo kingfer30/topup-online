@@ -256,7 +256,7 @@ export interface CardTypeStat {
   sold_count: number                             // 今日售出数量
   product_stock_count: number                    // 成品未售库存合计（account_type=2）
   product_stock_by_type: SubscriptionTypeStat[]  // 成品按订阅类型细分
-  regular_stock_count: number                    // 普号库存合计（account_type=1，未冻结）
+  regular_stock_count: number                    // 普号库存合计（account_type=1，未冻结、未出售）
   regular_stock_by_type: SubscriptionTypeStat[]  // 普号按订阅类型细分
   revenue_usd: number                            // 今日收入（美元）
   revenue_cny: number                            // 今日收入（人民币，汇率7）
@@ -366,6 +366,53 @@ export const halfPriceCheckout = (data: {
   token: string
 }): Promise<ApiResponse<string>> => {
   return http.post('/admin/cards/half-price-checkout', data) as Promise<ApiResponse<string>>
+}
+
+export interface UnifyFreeResult {
+  id: number
+  account: string
+  email: string
+  status: 'merged' | 'already' | 'failed'
+  message: string
+}
+
+export const batchUnifyFree = (data: {
+  category: string
+  ids: number[]
+}): Promise<ApiResponse<UnifyFreeResult[]>> => {
+  return http.post('/admin/cards/batch-unify-free', data) as Promise<ApiResponse<UnifyFreeResult[]>>
+}
+
+export const cancelSubscription = (data: {
+  category: string
+  ids: number[]
+}): Promise<ApiResponse<UnifyFreeResult[]>> => {
+  return http.post('/admin/cards/cancel-subscription', data) as Promise<ApiResponse<UnifyFreeResult[]>>
+}
+
+export const subscribeWindow = (data: {
+  category: string
+  id: number
+  tier: string
+}): Promise<ApiResponse<{ url: string }>> => {
+  return http.post('/admin/cards/subscribe-window', data) as Promise<ApiResponse<{ url: string }>>
+}
+
+export const subscribePay = (data: {
+  category: string
+  id: number
+  tier: string
+  card_number: string
+  exp_month: string
+  exp_year: string
+  cvc: string
+  line1: string
+  city: string
+  state: string
+  postal: string
+  country: string
+}): Promise<ApiResponse<{ paid?: boolean }>> => {
+  return http.post('/admin/cards/open-subscribe', data) as Promise<ApiResponse<{ paid?: boolean }>>
 }
 
 // 单独更新卡密备注

@@ -132,7 +132,8 @@ func GetAllCardsForExport(tableName string, cardType string, accounts []string, 
 
 	switch cardType {
 	case "all":
-		query = query.Where("account_type = ?", 1)
+		// 普号列表：未升级成品，且尚未出售。批量取货后 sell_status=3，应离开本列表进入已售
+		query = query.Where("account_type = ?", 1).Where("(sell_status IS NULL OR sell_status != ?)", 3)
 	case "unsold":
 		query = query.Where("sell_status IN ?", []int{1, 2}).Where("subscription_status IN ?", []int{1, -2})
 	case "sold":
@@ -210,7 +211,8 @@ func GetCardList(tableName string, cardType string, page, pageSize int, accounts
 	// 根据类型筛选
 	switch cardType {
 	case "all":
-		query = query.Where("account_type = ?", 1) // 普号列表：只显示普号
+		// 普号列表：未升级成品，且尚未出售。批量取货后 sell_status=3，应离开本列表进入已售
+		query = query.Where("account_type = ?", 1).Where("(sell_status IS NULL OR sell_status != ?)", 3)
 	case "unsold":
 		query = query.Where("sell_status IN ?", []int{1, 2}).Where("subscription_status IN ?", []int{1, -2}) // 未售：已订阅或已订阅需点击pro
 	case "sold":
@@ -552,9 +554,15 @@ func BatchPickup(tableName string, ids []int, sellPrice *float64, sellTo string)
 	}
 
 	result := DB.Table(tableName).
-		Where("id IN ? AND status NOT IN ? AND sell_status IN ?", ids, []int{CardStatusDeleted, CardStatusBanned}, []int{1, 2}).
+		Where("id IN ? AND status NOT IN ? AND (sell_status IS NULL OR sell_status IN ?)", ids, []int{CardStatusDeleted, CardStatusBanned}, []int{1, 2}).
 		Updates(updates)
-	return result.RowsAffected, result.Error
+	if result.Error != nil {
+		return 0, result.Error
+	}
+	if result.RowsAffected == 0 {
+		return 0, errors.New("没有记录被更新为已出售，请确认所选卡密为未出售且未删除")
+	}
+	return result.RowsAffected, nil
 }
 
 // RollbackSoldCard 回滚已售：将已出售(3)重置为未出售(1)，并清空售出相关字段
@@ -638,7 +646,7 @@ type CardTypeStat struct {
 	SoldCount          int64                  `json:"sold_count"`
 	ProductStockCount  int64                  `json:"product_stock_count"`   // 成品未售库存合计（account_type=2）
 	ProductStockByType []SubscriptionTypeStat `json:"product_stock_by_type"` // 成品按订阅类型细分
-	RegularStockCount  int64                  `json:"regular_stock_count"`   // 普号库存合计（account_type=1，未冻结）
+	RegularStockCount  int64                  `json:"regular_stock_count"`   // 普号库存合计（account_type=1，未冻结、未出售）
 	RegularStockByType []SubscriptionTypeStat `json:"regular_stock_by_type"` // 普号按订阅类型细分
 	RevenueUSD         float64                `json:"revenue_usd"`
 	RevenueCNY         float64                `json:"revenue_cny"`
@@ -711,10 +719,10 @@ func GetDashboardStats(dateStr string) ([]CardTypeStat, error) {
 			productStock += row.Count
 		}
 
-		// 按订阅类型统计普号库存（account_type=1，排除已冻结）
+		// 按订阅类型统计普号库存（account_type=1，排除已冻结和已出售）
 		var regularRows []subTypeRow
 		DB.Raw(fmt.Sprintf(
-			"SELECT subscription_type, COUNT(*) AS cnt FROM `%s` WHERE status != -1 AND account_type = 1 AND (freeze_status IS NULL OR freeze_status != 1) AND deleted_at IS NULL GROUP BY subscription_type ORDER BY cnt DESC",
+			"SELECT subscription_type, COUNT(*) AS cnt FROM `%s` WHERE status != -1 AND account_type = 1 AND (sell_status IS NULL OR sell_status != 3) AND (freeze_status IS NULL OR freeze_status != 1) AND deleted_at IS NULL GROUP BY subscription_type ORDER BY cnt DESC",
 			tableName,
 		)).Scan(&regularRows)
 
