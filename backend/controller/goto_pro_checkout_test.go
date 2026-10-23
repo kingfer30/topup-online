@@ -5,9 +5,9 @@ import "testing"
 func TestMonthlyCheckoutTier(t *testing.T) {
 	cases := map[string]string{
 		"pro":      "pro",
-		"pro+":     "pro+",
-		"pro_plus": "pro+",
-		"ProPlus":  "pro+",
+		"pro+":     "pro_plus",
+		"pro_plus": "pro_plus",
+		"ProPlus":  "pro_plus",
 		"ultra":    "ultra",
 	}
 	for input, want := range cases {

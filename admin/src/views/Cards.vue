@@ -1640,7 +1640,7 @@ const freezeRemark = ref('')
 // 提链订阅类型选项（下拉）
 const gotoProTypeOptions = [
   { label: 'Pro', value: 'pro' },
-  { label: 'Pro+', value: 'pro+' },
+  { label: 'Pro+', value: 'pro_plus' },
   { label: 'Ultra', value: 'ultra' },
 ]
 const toStoredSubscriptionType = (value: string) => (value === 'pro+' ? 'pro_plus' : value)

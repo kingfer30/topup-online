@@ -117,7 +117,7 @@ func monthlyCheckoutTier(subscriptionType string) (string, error) {
 	case "pro":
 		return "pro", nil
 	case "pro+", "pro_plus", "proplus":
-		return "pro+", nil
+		return "pro_plus", nil
 	case "ultra":
 		return "ultra", nil
 	default:
