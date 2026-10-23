@@ -9,6 +9,7 @@ type DigisellerPrice struct {
 	Id               int       `json:"id" gorm:"primaryKey;autoIncrement"`
 	SubscriptionType string    `json:"subscription_type" gorm:"type:varchar(30);uniqueIndex;not null;comment:订阅类型"`
 	Price            float64   `json:"price" gorm:"type:decimal(10,2);default:0;comment:今日售价"`
+	CostPrice        float64   `json:"cost_price" gorm:"type:decimal(10,2);default:0;comment:成本价"`
 	CreatedAt        time.Time `json:"created_at"`
 	UpdatedAt        time.Time `json:"updated_at"`
 }
@@ -26,18 +27,20 @@ func GetAllDigisellerPrices() ([]DigisellerPrice, error) {
 	return prices, nil
 }
 
-// UpsertDigisellerPrice 新增或更新某订阅类型的售价
-func UpsertDigisellerPrice(subscriptionType string, price float64) error {
+// UpsertDigisellerPrice 新增或更新某订阅类型的今日售价和成本价
+func UpsertDigisellerPrice(subscriptionType string, price, costPrice float64) error {
 	var existing DigisellerPrice
 	result := DB.Where("subscription_type = ?", subscriptionType).First(&existing)
 	if result.Error != nil {
-		// 不存在则创建
 		record := DigisellerPrice{
 			SubscriptionType: subscriptionType,
 			Price:            price,
+			CostPrice:        costPrice,
 		}
 		return DB.Create(&record).Error
 	}
-	// 已存在则更新
-	return DB.Model(&existing).Update("price", price).Error
+	return DB.Model(&existing).Updates(map[string]interface{}{
+		"price":      price,
+		"cost_price": costPrice,
+	}).Error
 }

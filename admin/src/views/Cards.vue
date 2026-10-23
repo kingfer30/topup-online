@@ -46,11 +46,6 @@
             <template #icon><span>💸</span></template>
             批量后付费 {{ checkedRowKeys.length > 0 ? `(${checkedRowKeys.length})` : '' }}
           </n-button>
-          <n-button v-if="cardType === 'sold'" type="warning" :disabled="checkedRowKeys.length === 0"
-            :loading="batchGotoProLoading" @click="handleBatchGotoPro">
-            <template #icon><span>🔗</span></template>
-            批量提链 {{ checkedRowKeys.length > 0 ? `(${checkedRowKeys.length})` : '' }}
-          </n-button>
           <n-button v-if="cardType === 'sold'" type="error" @click="handleOpenRecharge">
             <template #icon><span>💳</span></template>
             新增代充
@@ -292,8 +287,11 @@
           </n-form-item-gi>
 
           <n-form-item-gi :span="2" label="短信接码地址" path="phone_link">
-            <n-select v-model:value="formData.phone_link" :options="phoneLinkOptions" placeholder="选择或输入短信接码地址"
-              filterable tag clearable />
+            <n-input-group>
+              <n-auto-complete v-model:value="formData.phone_link" :options="phoneLinkOptions"
+                placeholder="选择或输入短信接码地址" clearable style="width: 100%" />
+              <n-button :disabled="!(formData.phone_link || '').trim()" @click="copyFormPhoneLink">复制</n-button>
+            </n-input-group>
           </n-form-item-gi>
 
           <n-form-item-gi :span="2" label="备注" path="remark">
@@ -324,8 +322,8 @@
           </n-form-item-gi>
 
           <n-form-item-gi label="购买价格(追加)">
-            <n-input-number v-model:value="upgradeForm.purchase_price" :min="0" :precision="2" placeholder="追加到已有价格"
-              style="width: 100%" />
+            <n-input-number :key="upgradeForm.subscription_type" v-model:value="upgradeForm.purchase_price" :min="0"
+              :precision="2" placeholder="追加到已有价格" style="width: 100%" />
           </n-form-item-gi>
 
           <n-form-item-gi label="购买平台">
@@ -968,9 +966,14 @@
     <!-- 短信接码弹窗 -->
     <n-modal v-model:show="showSmsCodeModal" preset="card" title="短信接码"
       style="width: 480px; max-width: 96vw" :bordered="false">
-      <n-text depth="3" style="font-size: 13px" v-if="smsCodeRow">
-        账号：<strong>{{ smsCodeRow.account }}</strong>
-      </n-text>
+      <n-space align="center" :size="12" v-if="smsCodeRow">
+        <n-text depth="3" style="font-size: 13px">
+          账号：<strong>{{ smsCodeRow.account }}</strong>
+        </n-text>
+        <n-button v-if="smsQueryPageUrl" size="small" type="primary" @click="openSmsQueryPage">
+          打开接码页
+        </n-button>
+      </n-space>
       <n-spin :show="smsCodeLoading" style="min-height: 140px; margin-top: 12px">
         <div v-if="smsCodeResult?.status === 'received'"
           style="border-left: 4px solid #18a058; background: rgba(24,160,88,0.1); border-radius: 6px; padding: 20px; text-align: center">
@@ -1084,9 +1087,9 @@
           </n-form-item-gi>
 
           <n-form-item-gi label="购买价格(追加)">
-            <n-input-number ref="gotoProPurchasePriceRef" v-model:value="upgradeForm.purchase_price" :min="0"
-              :precision="2" placeholder="追加到已有价格" style="width: 100%"
-              @keydown.enter.prevent="handleGotoProSuccessSubmit" />
+            <n-input-number :key="upgradeForm.subscription_type" ref="gotoProPurchasePriceRef"
+              v-model:value="upgradeForm.purchase_price" :min="0" :precision="2" placeholder="追加到已有价格"
+              style="width: 100%" @keydown.enter.prevent="handleGotoProSuccessSubmit" />
           </n-form-item-gi>
 
           <n-form-item-gi label="购买平台">
@@ -1154,69 +1157,6 @@
       </template>
     </n-modal>
 
-    <n-modal v-model:show="showSubscribeModal" :mask-closable="!subscribeBusy" :close-on-esc="!subscribeBusy"
-      preset="card" style="width: 520px" :title="`订阅 ${subscribeTierLabel}`">
-      <n-form label-placement="left" label-width="72px">
-        <n-form-item label="账号">
-          <n-text>{{ subscribeRow?.account || '' }}</n-text>
-        </n-form-item>
-        <n-form-item label="街道">
-          <n-input-group>
-            <n-input v-model:value="subscribeCard.line1" placeholder="街道地址" autocomplete="off" :disabled="subscribeBusy" />
-            <n-button :disabled="subscribeBusy" @click="copySubscribeAddress">复制地址</n-button>
-          </n-input-group>
-        </n-form-item>
-        <n-form-item label="城市">
-          <n-input v-model:value="subscribeCard.city" placeholder="城市" autocomplete="off" :disabled="subscribeBusy" />
-        </n-form-item>
-        <n-form-item label="州">
-          <n-space>
-            <n-input v-model:value="subscribeCard.state" placeholder="OR" style="width: 100px" autocomplete="off"
-              :disabled="subscribeBusy" />
-            <n-input v-model:value="subscribeCard.postal" placeholder="邮编" style="width: 120px" autocomplete="off"
-              :disabled="subscribeBusy" />
-            <n-input v-model:value="subscribeCard.country" placeholder="US" maxlength="2" style="width: 80px"
-              autocomplete="off" :disabled="subscribeBusy" />
-          </n-space>
-        </n-form-item>
-        <n-form-item label="卡号">
-          <n-input v-model:value="subscribeCard.number" placeholder="卡号" autocomplete="off" :disabled="subscribeBusy" />
-        </n-form-item>
-        <n-form-item label="有效期">
-          <n-input v-model:value="subscribeCard.expiry" placeholder="08/29" maxlength="7" style="width: 140px"
-            autocomplete="off" :disabled="subscribeBusy" />
-        </n-form-item>
-        <n-form-item label="CVV">
-          <n-input v-model:value="subscribeCard.cvc" placeholder="CVV" maxlength="4" style="width: 120px"
-            autocomplete="off" :disabled="subscribeBusy" />
-        </n-form-item>
-      </n-form>
-      <n-text v-if="subscribePollStatus" depth="3" style="font-size: 13px">{{ subscribePollStatus }}</n-text>
-      <template #footer>
-        <n-space justify="end">
-          <n-button :disabled="subscribeBusy" @click="showSubscribeModal = false">取消</n-button>
-          <n-button quaternary :loading="subscribePaying" :disabled="subscribeBusy" title="使用频率不高"
-            style="opacity: 0.55" @click="handleSubmitSubscribe">
-            自动填写
-          </n-button>
-          <n-button type="primary" :loading="subscribeOpening" :disabled="subscribeBusy" @click="handleOpenSubscribeBrowser">
-            手动填写
-          </n-button>
-        </n-space>
-      </template>
-    </n-modal>
-
-    <!-- 已售列表：批量提链结果（账号----链接） -->
-    <n-modal v-model:show="showBatchGotoProModal" title="批量提链结果" preset="card" style="width: 720px">
-      <n-input :value="batchGotoProResultText" type="textarea" readonly :rows="14"
-        placeholder="无展示链接（可能均为 dashboard：仅掉订阅会回滚，其余见下方说明）" style="font-family: monospace; font-size: 13px" />
-      <template #footer>
-        <n-space justify="end">
-          <n-button @click="handleCopyBatchGotoProResult">复制全部</n-button>
-          <n-button type="primary" @click="showBatchGotoProModal = false">关闭</n-button>
-        </n-space>
-      </template>
-    </n-modal>
   </div>
 </template>
 
@@ -1243,6 +1183,7 @@ import {
   NGrid,
   NGi,
   NAlert,
+  NAutoComplete,
   NDatePicker,
   NRadio,
   NRadioGroup,
@@ -1275,20 +1216,16 @@ import {
   completePickup,
   rollbackPickup,
   rollbackSoldCard,
-  batchDashboardGotoResolve,
   batchEnableOnDemandSpend,
   gotoProUpgrade,
   submitStripeAlipay,
   pollCardSubscription,
-  halfPriceCheckout,
   updateCardRemark,
   updateCardPublicQuery,
   batchFreezeCards,
   batchDeleteCards,
   batchUnifyFree,
   cancelSubscription,
-  subscribePay,
-  subscribeWindow,
   getCardSmsCode,
   type Card,
   type CardRequest,
@@ -1393,12 +1330,6 @@ const phoneDashTitle = (card: Card): string => {
   return hasPhoneReceive(card) ? '----手机号----短信接码地址' : ''
 }
 
-// 国内格式固定追加两列（空值也占位）
-const domesticPhoneTitle = '----手机号----短信接码地址'
-const domesticPhoneSuffix = (card: Card): string => {
-  return `----${(card.phone || '').trim()}----${cursorSmsQueryUrl(card)}`
-}
-
 // 字段顺序：account, pass, mail-pass, recovery-mail, recovery-mail-pass, mail-login, phone-login
 const formatDigiseller = (card: Card): string => {
   return `account: ${card.account}\npass: ${card.password || ''}\nmail-pass: ${card.mail_password || ''}${recoveryLabeled(card, '\n')}\nmail-login: ${card.mail_url || ''}${phoneFields(card, '\n')}`
@@ -1445,9 +1376,9 @@ ${card.account}----${card.token || ''}${phoneDashSuffix(card)}`
     return `账号----接码方式${recoveryDashTitle(card)}${phoneDashTitle(card)}
 ${card.account}----${card.code_link || ''}----${card.account}----${card.mail_password || ''}${recoveryDashSuffix(card)}${phoneDashSuffix(card)}`
   } else {
-    // 国内订阅格式：账号----密码----邮箱密码----辅助邮箱----辅助邮箱密码----token----手机号----短信接码地址
-    return `账号----密码----邮箱密码${recoveryDashTitle(card)}----token${domesticPhoneTitle}
-${card.account}----${card.password || ''}----${card.mail_password || ''}${recoveryDashSuffix(card)}----${card.token || ''}${domesticPhoneSuffix(card)}`
+    // 国内订阅格式：账号----密码----邮箱密码----辅助邮箱----辅助邮箱密码----token；手机号与短信接码地址仅在有接码地址时带出
+    return `账号----密码----邮箱密码${recoveryDashTitle(card)}----token${phoneDashTitle(card)}
+${card.account}----${card.password || ''}----${card.mail_password || ''}${recoveryDashSuffix(card)}----${card.token || ''}${phoneDashSuffix(card)}`
   }
 })
 
@@ -1570,7 +1501,7 @@ const exportPreview = computed(() => {
   }
   return exportSelectedFields.value
     .map(v => {
-      if (v === 'code_method') return '接码链接----账号----邮箱密码'
+      if (v === 'code_method') return '接码链接----账号----邮箱密码（辅助邮箱、短信接码链接有则带出）'
       return exportFieldOptions.find(o => o.value === v)?.label ?? v
     })
     .join('----')
@@ -1642,7 +1573,7 @@ const upgradeForm = ref({
   subscription_type: 'plus',
   subscription_time: Date.now() as number | undefined,   // 毫秒（n-date-picker）
   subscription_remaining_days: 30 as number | undefined,
-  purchase_price: 55 as number | undefined,
+  purchase_price: 55 as number | null,
   purchase_from: '卡充',
   purchase_date: Date.now() as number | undefined,       // 毫秒（n-date-picker）
   payer: lastPayer(),
@@ -1698,11 +1629,6 @@ const stripeAlipayCompleted = ref(false)
 const stripePollStatus = ref('')
 const stripePollStatusType = ref<'default' | 'info' | 'success' | 'warning' | 'error'>('info')
 
-// 已售列表：批量提链结果弹窗
-const showBatchGotoProModal = ref(false)
-const batchGotoProResultText = ref('')
-const batchGotoProLoading = ref(false)
-
 // 未售列表：订阅状态 -2 标签点击复制（俄语说明）
 const CURSOR_PRO_DELAY_RU_TEXT =
   'Подписка Cursor иногда обновляется с задержкой. Вы можете ещё раз нажать кнопку обновления подписки. Если после обновления страницы отображается Pro — всё в порядке.\n\nЕсли по-прежнему отображается Free или вас сразу перенаправляет на страницу оплаты — пожалуйста, свяжитесь со мной для решения проблемы.'
@@ -1714,117 +1640,10 @@ const freezeRemark = ref('')
 // 提链订阅类型选项（下拉）
 const gotoProTypeOptions = [
   { label: 'Pro', value: 'pro' },
-  { label: 'Pro+', value: 'pro_plus' },
+  { label: 'Pro+', value: 'pro+' },
   { label: 'Ultra', value: 'ultra' },
 ]
-const subscribeTierOptions = [
-  { label: 'Plus', value: 'plus' },
-  { label: 'Premium', value: 'premium' },
-  { label: 'Super', value: 'super' },
-  { label: 'Ultra', value: 'ultra' },
-]
-const SUBSCRIBE_DRAFT_COOKIE = 'cursor_subscribe_draft'
-const defaultSubscribeDraft = () => ({
-  line1: '13 Northeast Revere Avenue',
-  city: 'Bend',
-  state: 'OR',
-  postal: '97701',
-  country: 'US',
-  number: '',
-  expiry: '',
-  expMonth: '',
-  expYear: '',
-  cvc: '',
-})
-const readSubscribeDraft = () => {
-  const draft = defaultSubscribeDraft()
-  const prefix = `${SUBSCRIBE_DRAFT_COOKIE}=`
-  const raw = document.cookie.split('; ').find(item => item.startsWith(prefix))
-  if (!raw) return draft
-  try {
-    const parsed = JSON.parse(decodeURIComponent(raw.slice(prefix.length))) as Partial<ReturnType<typeof defaultSubscribeDraft>>
-    for (const key of Object.keys(draft) as Array<keyof ReturnType<typeof defaultSubscribeDraft>>) {
-      const value = parsed[key]
-      if (typeof value === 'string') draft[key] = value
-    }
-  } catch {
-    return defaultSubscribeDraft()
-  }
-  if (!draft.expiry && draft.expMonth) {
-    draft.expiry = draft.expYear ? `${draft.expMonth}/${draft.expYear}` : draft.expMonth
-  }
-  return draft
-}
-
-const parseSubscribeExpiry = (raw: string) => {
-  const text = raw.trim()
-  const separated = text.match(/^(\d{1,2})\s*[\/\-]\s*(\d{2}|\d{4})$/)
-  const digits = text.replace(/\D/g, '')
-  let monthText = ''
-  let yearText = ''
-  if (separated) {
-    monthText = separated[1]
-    yearText = separated[2]
-  } else if (digits.length === 4 || digits.length === 6) {
-    monthText = digits.slice(0, 2)
-    yearText = digits.slice(2)
-  } else if (digits.length === 3 || digits.length === 5) {
-    monthText = digits.slice(0, 1)
-    yearText = digits.slice(1)
-  }
-  const month = Number(monthText)
-  if (!monthText || month < 1 || month > 12 || !/^\d{2}(\d{2})?$/.test(yearText)) return null
-  return { expMonth: String(month), expYear: yearText }
-}
-
-const copySubscribeAddress = async () => {
-  const card = subscribeCard.value
-  const text = [
-    card.line1.trim(),
-    card.city.trim(),
-    [card.state.trim(), card.postal.trim()].filter(Boolean).join(' '),
-    card.country.trim().toUpperCase(),
-  ].filter(Boolean).join(', ')
-  if (!text) {
-    message.warning('地址是空的')
-    return
-  }
-  try {
-    await navigator.clipboard.writeText(text)
-    message.success('已复制地址')
-  } catch {
-    message.error('复制失败')
-  }
-}
-const writeSubscribeDraft = (draft: ReturnType<typeof defaultSubscribeDraft>) => {
-  const maxAge = 60 * 60 * 24 * 180
-  document.cookie = `${SUBSCRIBE_DRAFT_COOKIE}=${encodeURIComponent(JSON.stringify(draft))}; Path=/; Max-Age=${maxAge}; SameSite=Lax`
-}
-const PAY_BROWSER_ORIGIN = 'http://127.0.0.1:17321'
-const subscribeTierSku: Record<string, string> = {
-  plus: 'sku_ToYBWq565pLU',
-  premium: 'sku_iFHd43ge7daR',
-  super: 'sku_WWvZ1VL9fabh',
-  ultra: 'sku_kO0knmcEPYnA',
-}
-const defaultPayUrl = (tier: string) => {
-  const params = new URLSearchParams({ tier, host: 'web', entrypoint: 'plan_info' })
-  const sku = subscribeTierSku[tier]
-  if (sku) params.set('sku', sku)
-  return `https://cursor.com/promos/grok-upgrade?${params.toString()}`
-}
-const showSubscribeModal = ref(false)
-const subscribePaying = ref(false)
-const subscribeOpening = ref(false)
-const subscribeBusy = computed(() => subscribePaying.value || subscribeOpening.value)
-const subscribePollStatus = ref('')
-let subscribePollTimer: ReturnType<typeof setInterval> | null = null
-let subscribePollSeconds = 0
-let subscribePollBaseline = ''
-const subscribeRow = ref<Card | null>(null)
-const subscribeTier = ref('')
-const subscribeCard = ref(defaultSubscribeDraft())
-const subscribeTierLabel = computed(() => subscribeTierOptions.find(opt => opt.value === subscribeTier.value)?.label || subscribeTier.value)
+const toStoredSubscriptionType = (value: string) => (value === 'pro+' ? 'pro_plus' : value)
 const pickupCardInfoRef = ref<HTMLPreElement | null>(null)
 
 // 取货表单
@@ -2172,6 +1991,29 @@ const handleCopySmsCode = async () => {
   }
 }
 
+const smsQueryPageUrl = computed(() => {
+  const row = smsCodeRow.value
+  if (!row) return ''
+  if (!(row.phone_link || '').trim() || !(row.query_token || '').trim()) return ''
+  return cursorSmsQueryUrl(row)
+})
+
+const openSmsQueryPage = () => {
+  if (!smsQueryPageUrl.value) return
+  window.open(smsQueryPageUrl.value, '_blank', 'noopener')
+}
+
+const copyFormPhoneLink = async () => {
+  const text = (formData.value.phone_link || '').trim()
+  if (!text) return
+  try {
+    await navigator.clipboard.writeText(text)
+    message.success('已复制短信接码地址')
+  } catch {
+    message.error('复制失败，请手动选择')
+  }
+}
+
 watch(showSmsCodeModal, (show) => {
   if (!show) {
     stopSmsCodeCountdown()
@@ -2335,6 +2177,8 @@ const payerOptions = [
   { label: '大姑', value: '大姑' },
   { label: '大丈', value: '大丈' },
   { label: '锐哥', value: '锐哥' },
+  { label: 'stsygejrkdk', value: 'stsygejrkdk' },
+  { label: 'Loezhuo', value: 'Loezhuo' },
 ]
 
 // 邮箱地址选项（支持手动输入）
@@ -2801,16 +2645,9 @@ const columns = computed<DataTableColumns<Card>>(() => {
         )
       }
 
-      // Cursor：订阅下拉，由服务端提交该账号的卡支付。其他类别仍走旧提链。
       if ((cardType.value === 'all' || cardType.value === 'sold') && row.token) {
         const isFrozen = cardType.value === 'all' && row.freeze_status === 1
-        const isCursor = category.value === 'cursor'
-        const options = isCursor
-          ? subscribeTierOptions.map(opt => ({ label: opt.label, key: opt.value }))
-          : [
-              ...gotoProTypeOptions.map(opt => ({ label: opt.label, key: opt.value })),
-              { label: '半价提链', key: 'half_price' },
-            ]
+        const options = gotoProTypeOptions.map(opt => ({ label: opt.label, key: opt.value }))
         buttons.push(
           h(
             NDropdown,
@@ -2819,14 +2656,6 @@ const columns = computed<DataTableColumns<Card>>(() => {
               options,
               onSelect: (key: string) => {
                 if (isFrozen) return
-                if (!isCursor && key === 'half_price') {
-                  handleOpenHalfPrice(row)
-                  return
-                }
-                if (isCursor) {
-                  handleOpenSubscribe(row, key)
-                  return
-                }
                 handleGotoProWithType(row, key)
               },
               disabled: isFrozen,
@@ -2839,9 +2668,9 @@ const columns = computed<DataTableColumns<Card>>(() => {
                   type: isFrozen ? 'default' : 'warning',
                   loading: !!gotoProLoading.value[row.id],
                   disabled: isFrozen,
-                  title: isFrozen ? '已冻结，无法订阅' : undefined,
+                  title: isFrozen ? '已冻结，无法提链' : undefined,
                 },
-                { default: () => isFrozen ? '已冻结' : (isCursor ? '订阅' : '提链') }
+                { default: () => isFrozen ? '已冻结' : '提链' }
               ),
             }
           )
@@ -3145,330 +2974,6 @@ const handleBatchEnableOnDemand = async () => {
   }
 }
 
-// 提链返回链接规范化（与后端一致：可能为 JSON 字符串）
-const normalizeGotoLinkFromResponse = (raw: string): string => {
-  let s = String(raw || '').trim()
-  try {
-    const parsed = JSON.parse(s) as unknown
-    if (typeof parsed === 'string') s = parsed.trim()
-  } catch {
-    /* 非 JSON */
-  }
-  return s.replace(/\/+$/, '')
-}
-
-const isCursorDashboardLink = (raw: string): boolean =>
-  normalizeGotoLinkFromResponse(raw) === 'https://cursor.com/dashboard'
-
-const mapSubscriptionToGotoProType = (subscriptionType?: string): string => {
-  const t = (subscriptionType || '').toLowerCase()
-  if (t === 'pro' || t === 'pro_plus' || t === 'ultra') return t
-  return 'pro'
-}
-
-// 已售列表：批量提链（展示 账号----链接；dashboard 且掉订阅(-1) 才回滚+标记 -2）
-const handleBatchGotoPro = async () => {
-  const ids = checkedRowKeys.value as number[]
-  if (ids.length === 0) {
-    message.warning('请先勾选记录')
-    return
-  }
-  batchGotoProLoading.value = true
-  const lines: string[] = []
-  const dashboardIds: number[] = []
-  const errLines: string[] = []
-
-  try {
-    for (const id of ids) {
-      const row =
-        selectedCardsMap.value.get(id) ?? cardList.value.find(c => c.id === id)
-      if (!row?.token) {
-        errLines.push(`${row?.account || `#${id}`}: 无 Token，已跳过`)
-        continue
-      }
-      const subType = mapSubscriptionToGotoProType(row.subscription_type)
-      try {
-        const response = await gotoProUpgrade(row.token, subType)
-        if (response.code !== 200 || !response.data) {
-          errLines.push(`${row.account}: ${response.message || '获取链接失败'}`)
-          continue
-        }
-        const link = normalizeGotoLinkFromResponse(String(response.data))
-        if (isCursorDashboardLink(String(response.data))) {
-          if (row.subscription_status !== -1) {
-            errLines.push(
-              `${row.account}: 提链结果为 dashboard，仅「掉订阅」可回滚，当前状态不可回滚`
-            )
-          } else {
-            dashboardIds.push(row.id)
-          }
-        } else {
-          lines.push(`${row.account}----${link}`)
-        }
-      } catch (e: any) {
-        errLines.push(`${row.account}: ${e.response?.data?.message || e.message || '请求失败'}`)
-      }
-    }
-
-    let dashboardResultMessage = ''
-    let dashboardBatchOk = false
-    if (dashboardIds.length > 0) {
-      const res = await batchDashboardGotoResolve({
-        category: category.value,
-        ids: dashboardIds,
-      })
-      if (res.code !== 200) {
-        errLines.push(`Dashboard 批量处理: ${res.message || '失败'}`)
-      } else {
-        dashboardBatchOk = true
-        dashboardResultMessage = res.message || ''
-      }
-    }
-
-    const parts: string[] = []
-    if (lines.length) {
-      parts.push('--- 账号----链接 ---')
-      parts.push(...lines)
-    }
-    if (errLines.length) {
-      parts.push('--- 异常或跳过 ---')
-      parts.push(...errLines)
-    }
-    if (dashboardIds.length) {
-      parts.push(
-        dashboardResultMessage
-          ? `--- ${dashboardResultMessage} ---`
-          : `--- 已为 ${dashboardIds.length} 条 dashboard（掉订阅）执行回滚并标记「已订阅需点击pro」---`
-      )
-    }
-    batchGotoProResultText.value = parts.join('\n') || '（无链接行输出，请查看上方说明）'
-    showBatchGotoProModal.value = true
-
-    const ok = lines.length + (dashboardBatchOk ? dashboardIds.length : 0)
-    message.success(
-      ok > 0
-        ? `处理完成：展示链接 ${lines.length} 条，dashboard 回滚/标记 ${dashboardIds.length} 条（仅掉订阅可回滚）`
-        : '处理结束（请查看结果中的错误信息）'
-    )
-    checkedRowKeys.value = []
-    selectedCardsMap.value.clear()
-    await loadCards()
-  } finally {
-    batchGotoProLoading.value = false
-  }
-}
-
-const handleCopyBatchGotoProResult = async () => {
-  try {
-    await navigator.clipboard.writeText(batchGotoProResultText.value)
-    message.success('已复制')
-  } catch {
-    message.error('复制失败')
-  }
-}
-
-const handleOpenSubscribe = (row: Card, tier: string) => {
-  if (!row.token || subscribeBusy.value) return
-  subscribeRow.value = row
-  subscribeTier.value = tier
-  subscribeCard.value = readSubscribeDraft()
-  showSubscribeModal.value = true
-}
-
-const readSubscribeForm = () => {
-  const expiry = parseSubscribeExpiry(subscribeCard.value.expiry)
-  return {
-    line1: subscribeCard.value.line1.trim(),
-    city: subscribeCard.value.city.trim(),
-    state: subscribeCard.value.state.trim(),
-    postal: subscribeCard.value.postal.trim(),
-    country: subscribeCard.value.country.trim().toUpperCase(),
-    number: subscribeCard.value.number.replace(/\s+/g, ''),
-    expiry: subscribeCard.value.expiry.trim(),
-    expMonth: expiry?.expMonth || '',
-    expYear: expiry?.expYear || '',
-    cvc: subscribeCard.value.cvc.trim(),
-  }
-}
-
-const subscribeFormReady = () => {
-  const draft = readSubscribeForm()
-  if (!draft.line1 || !draft.city || !draft.state || !draft.postal || !/^[A-Za-z]{2}$/.test(draft.country)) {
-    message.error('请填写完整的账单地址')
-    return null
-  }
-  if (!/^\d{13,19}$/.test(draft.number) || !/^\d{3,4}$/.test(draft.cvc) || !draft.expMonth || !draft.expYear) {
-    message.error('请填写完整的卡号、有效期和 CVV，有效期如 08/29')
-    return null
-  }
-  subscribeCard.value = draft
-  writeSubscribeDraft(draft)
-  return draft
-}
-
-const cursorMemberTypes = ['plus', 'premium', 'super', 'ultra', 'pro', 'pro_plus', 'pro_x5', 'pro_x20', 'go', 'team']
-
-const stopSubscribePoll = () => {
-  if (subscribePollTimer) {
-    clearInterval(subscribePollTimer)
-    subscribePollTimer = null
-  }
-}
-
-const closePayBrowser = () => {
-  fetch(`${PAY_BROWSER_ORIGIN}/close`, { method: 'POST' }).catch(() => {})
-}
-
-const startSubscribePoll = (row: Card) => {
-  stopSubscribePoll()
-  subscribePollSeconds = 0
-  subscribePollBaseline = ''
-  subscribePollStatus.value = '正在确认当前订阅…'
-  const tick = async (countWait: boolean) => {
-    if (!showSubscribeModal.value) {
-      stopSubscribePoll()
-      return
-    }
-    if (countWait) subscribePollSeconds += 5
-    try {
-      const res = await pollCardSubscription(category.value, row.id)
-      const type = (res.data?.subscription_type || 'free').trim().toLowerCase()
-      const paid = !!res.data?.subscribed || cursorMemberTypes.includes(type)
-      if (!subscribePollBaseline) {
-        subscribePollBaseline = type
-      }
-      if (paid && type !== 'free' && type !== subscribePollBaseline) {
-        stopSubscribePoll()
-        closePayBrowser()
-        subscribePollStatus.value = ''
-        showSubscribeModal.value = false
-        gotoProCardId.value = row.id
-        gotoProAccount.value = row.account || ''
-        gotoProSubscriptionType.value = type || subscribeTier.value
-        message.success(`检测到订阅 ${type}，正在更新为成品`)
-        handleGotoProSuccess()
-        return
-      }
-      if (subscribePollBaseline === type && paid && type === subscribeTier.value && subscribePollSeconds === 0) {
-        subscribePollStatus.value = `当前已是 ${type}，等待套餐变化…`
-        return
-      }
-      subscribePollStatus.value = `等待付款中${subscribePollSeconds ? ` ${subscribePollSeconds} 秒` : ''}，当前：${type}`
-    } catch {
-      subscribePollStatus.value = `等待付款中 ${subscribePollSeconds} 秒，查询失败，继续等待`
-    }
-  }
-  tick(false)
-  subscribePollTimer = setInterval(() => { tick(true) }, 5000)
-}
-
-const handleOpenSubscribeBrowser = async () => {
-  if (subscribeBusy.value || !subscribeRow.value?.token) return
-  const draft = subscribeFormReady()
-  if (!draft) return
-  const row = subscribeRow.value
-  subscribeOpening.value = true
-  gotoProLoading.value[row.id] = true
-  let payUrl = ''
-  try {
-    try {
-      const response = await subscribeWindow({
-        category: category.value,
-        id: row.id,
-        tier: subscribeTier.value,
-      })
-      payUrl = response.data?.url || ''
-      if (response.code !== 200 || !payUrl) {
-        message.warning(response.message || '付款页接口没有返回地址，改用默认付款页')
-      }
-    } catch (error: any) {
-      message.warning(error?.response?.data?.message || error?.message || '付款页接口不可用，改用默认付款页')
-    }
-    if (!payUrl) payUrl = defaultPayUrl(subscribeTier.value)
-    try {
-      const local = await fetch(`${PAY_BROWSER_ORIGIN}/open`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          token: row.token,
-          url: payUrl,
-          line1: draft.line1,
-          city: draft.city,
-          state: draft.state,
-          postal: draft.postal,
-          country: draft.country,
-          number: draft.number,
-          expMonth: draft.expMonth,
-          expYear: draft.expYear,
-          cvc: draft.cvc,
-        }),
-      })
-      const body = await local.json().catch(() => ({} as { message?: string }))
-      if (!local.ok) {
-        message.error(body.message || '本机付款窗口打开失败')
-        return
-      }
-      message.success(body.message || '已打开付款页，正在等待订阅生效')
-      startSubscribePoll(row)
-    } catch {
-      dialog.warning({
-        title: '本机付款窗口服务未启动',
-        content: '请先下载 pay-browser.exe，在这台电脑上运行它，保持窗口不要关，然后再点一次手动填写。',
-        positiveText: '下载',
-        negativeText: '关闭',
-        onPositiveClick: () => {
-          window.open('/pay-browser.exe', '_blank')
-        },
-      })
-    }
-  } catch (error: any) {
-    message.error(error?.response?.data?.message || '获取付款页失败')
-  } finally {
-    subscribeOpening.value = false
-    gotoProLoading.value[row.id] = false
-  }
-}
-
-const handleSubmitSubscribe = async () => {
-  if (subscribeBusy.value || !subscribeRow.value) return
-  const draft = subscribeFormReady()
-  if (!draft) return
-  const row = subscribeRow.value
-  subscribePaying.value = true
-  gotoProLoading.value[row.id] = true
-  try {
-    const response = await subscribePay({
-      category: category.value,
-      id: row.id,
-      tier: subscribeTier.value,
-      card_number: draft.number,
-      exp_month: draft.expMonth,
-      exp_year: draft.expYear,
-      cvc: draft.cvc,
-      line1: draft.line1,
-      city: draft.city,
-      state: draft.state,
-      postal: draft.postal,
-      country: draft.country,
-    })
-    if (response.code === 200 && response.data?.paid) {
-      message.success(response.message || '已提交支付')
-      showSubscribeModal.value = false
-      return
-    }
-    if (response.code === 200) {
-      message.error('服务端还是旧版本，支付没有提交。请先更新并重启后端。')
-      return
-    }
-    message.error(response.message || '支付失败')
-  } catch (error: any) {
-    message.error(error?.response?.data?.message || '支付失败')
-  } finally {
-    subscribePaying.value = false
-    gotoProLoading.value[row.id] = false
-  }
-}
-
 // 提链：获取 Cursor Pro 付款链接
 // 提链：选择订阅类型后直接发起请求
 const handleGotoProWithType = async (row: Card, subscriptionType: string) => {
@@ -3479,7 +2984,7 @@ const handleGotoProWithType = async (row: Card, subscriptionType: string) => {
     if (response.code === 200 && response.data) {
       gotoProCardId.value = row.id
       gotoProAccount.value = row.account || ''
-      gotoProSubscriptionType.value = subscriptionType
+      gotoProSubscriptionType.value = toStoredSubscriptionType(subscriptionType)
       gotoProLink.value = response.data
       showGotoProModal.value = true
       runStripeAlipay(response.data)
@@ -3488,31 +2993,6 @@ const handleGotoProWithType = async (row: Card, subscriptionType: string) => {
     }
   } catch (error: any) {
     message.error(error.response?.data?.message || '获取付款链接失败')
-  } finally {
-    gotoProLoading.value[row.id] = false
-  }
-}
-
-const handleOpenHalfPrice = async (row: Card) => {
-  if (!row.token) {
-    message.error('当前卡密没有 Token')
-    return
-  }
-  gotoProLoading.value[row.id] = true
-  try {
-    const response = await halfPriceCheckout({ token: row.token })
-    if (response.code === 200 && response.data) {
-      gotoProCardId.value = row.id
-      gotoProAccount.value = row.account || ''
-      gotoProSubscriptionType.value = 'pro'
-      gotoProLink.value = response.data
-      showGotoProModal.value = true
-      runStripeAlipay(response.data)
-      return
-    }
-    message.error(response.message || '半价提链失败')
-  } catch (error: any) {
-    message.error(error.response?.data?.message || '半价提链失败')
   } finally {
     gotoProLoading.value[row.id] = false
   }
@@ -3683,13 +3163,8 @@ watch(showGotoProModal, (show) => {
   if (!show) stopSubscriptionPoll()
 })
 
-watch(showSubscribeModal, (show) => {
-  if (!show) stopSubscribePoll()
-})
-
 onUnmounted(() => {
   stopSubscriptionPoll()
-  stopSubscribePoll()
 })
 
 // 支付成功：先立刻更新为成品，再打开补充价格弹窗
@@ -3699,11 +3174,12 @@ const handleGotoProSuccess = async () => {
   showGotoProModal.value = false
 
   const subscriptionType = (gotoProSubscriptionType.value || '').trim()
+  await loadDigisellerPrices()
   upgradeForm.value = {
     subscription_type: subscriptionType,
     subscription_time: Date.now(),
     subscription_remaining_days: 30,
-    purchase_price: undefined,
+    purchase_price: upgradePurchasePrice(subscriptionType, lastPayer()),
     purchase_from: '支付宝',
     purchase_date: Date.now(),
     payer: lastPayer(),
@@ -3793,7 +3269,7 @@ const handleGotoProSuccessSubmit = async () => {
       subscription_type: subscriptionType,
       subscription_time: subscriptionTime,
       subscription_remaining_days: upgradeForm.value.subscription_remaining_days,
-      purchase_price: upgradeForm.value.purchase_price,
+      purchase_price: upgradeForm.value.purchase_price ?? undefined,
       purchase_from: upgradeForm.value.purchase_from || undefined,
       purchase_date: purchaseDate,
       payer: upgradeForm.value.payer || undefined,
@@ -4113,8 +3589,8 @@ const handleCopy = async (card: Card, format: string) => {
     // 接码方式：标题 账号----接码方式；数据 账号----接码链接----账号----邮箱密码
     text = `账号----接码方式${recoveryDashTitle(card)}${phoneDashTitle(card)}\n${card.account}----${card.code_link || ''}----${card.account}----${card.mail_password || ''}${recoveryDashSuffix(card)}${phoneDashSuffix(card)}`
   } else {
-    // 国内格式：账号----密码----邮箱密码----辅助邮箱----辅助邮箱密码----token----手机号----短信接码地址
-    text = `账号----密码----邮箱密码${recoveryDashTitle(card)}----token${domesticPhoneTitle}\n${card.account}----${card.password || ''}----${card.mail_password || ''}${recoveryDashSuffix(card)}----${card.token || ''}${domesticPhoneSuffix(card)}`
+    // 国内格式：账号----密码----邮箱密码----辅助邮箱----辅助邮箱密码----token；无接码地址时不带手机号和短信接码地址
+    text = `账号----密码----邮箱密码${recoveryDashTitle(card)}----token${phoneDashTitle(card)}\n${card.account}----${card.password || ''}----${card.mail_password || ''}${recoveryDashSuffix(card)}----${card.token || ''}${phoneDashSuffix(card)}`
   }
   try {
     await navigator.clipboard.writeText(text)
@@ -4128,8 +3604,8 @@ const handleCopy = async (card: Card, format: string) => {
 const getFieldValue = (card: Card, field: string): string => {
   switch (field) {
     case 'code_method':
-      // 接码方式：接码链接----账号----邮箱密码
-      return `${card.code_link || ''}----${card.account || ''}----${card.mail_password || ''}${recoveryDashSuffix(card)}`
+      // 接码方式：接码链接----账号----邮箱密码；短信接码链接与复制一样走 query_token 取码页
+      return `${card.code_link || ''}----${card.account || ''}----${card.mail_password || ''}${recoveryDashSuffix(card)}${phoneDashSuffix(card)}`
     case 'phone_link':
       return cursorSmsQueryUrl(card)
     case 'subscription_time':
@@ -4216,12 +3692,13 @@ const handleExport = async () => {
 }
 
 // 打开批量升级为成品弹窗（重置表单，避免沿用上次的订阅类型）
-const handleOpenUpgradeModal = () => {
+const handleOpenUpgradeModal = async () => {
+  await loadDigisellerPrices()
   upgradeForm.value = {
     subscription_type: 'plus',
     subscription_time: Date.now(),
     subscription_remaining_days: 30,
-    purchase_price: 55,
+    purchase_price: getDigisellerCost('plus') ?? 55,
     purchase_from: '卡充',
     purchase_date: Date.now(),
     payer: lastPayer(),
@@ -4257,7 +3734,7 @@ const handleBatchUpgrade = async () => {
       subscription_type: subscriptionType,
       subscription_time: subscriptionTime,
       subscription_remaining_days: upgradeForm.value.subscription_remaining_days,
-      purchase_price: upgradeForm.value.purchase_price,
+      purchase_price: upgradeForm.value.purchase_price ?? undefined,
       purchase_from: upgradeForm.value.purchase_from || undefined,
       purchase_date: purchaseDate,
       payer: upgradeForm.value.payer || undefined,
@@ -4272,7 +3749,7 @@ const handleBatchUpgrade = async () => {
         subscription_type: 'plus',
         subscription_time: Date.now(),
         subscription_remaining_days: 30,
-        purchase_price: 55,
+        purchase_price: getDigisellerCost('plus') ?? 55,
         purchase_from: '卡充',
         purchase_date: Date.now(),
         payer: lastPayer(),
@@ -4566,7 +4043,7 @@ const handleBatchPickup = async () => {
         // 接码方式：账号----接码链接----账号----邮箱密码
         return `${card.account}----${card.code_link || ''}----${card.account}----${card.mail_password || ''}${recoveryDashSuffix(card)}${phoneDashSuffix(card)}`
       } else {
-        return `${card.account}----${card.password || ''}----${card.mail_password || ''}${recoveryDashSuffix(card)}----${card.token || ''}${domesticPhoneSuffix(card)}`
+        return `${card.account}----${card.password || ''}----${card.mail_password || ''}${recoveryDashSuffix(card)}----${card.token || ''}${phoneDashSuffix(card)}`
       }
     })
 
@@ -4575,7 +4052,7 @@ const handleBatchPickup = async () => {
     const recoveryTitle = cards.some(hasRecoveryFields) ? '----辅助邮箱----辅助邮箱密码' : ''
     let clipboardText = ''
     if (fmt === 'domestic') {
-      clipboardText = `账号----密码----邮箱密码${recoveryTitle}----token${domesticPhoneTitle}\n` + lines.join('\n')
+      clipboardText = `账号----密码----邮箱密码${recoveryTitle}----token${phoneTitle}\n` + lines.join('\n')
     } else if (fmt === 'reverse') {
       clipboardText = `账号----token${phoneTitle}\n` + lines.join('\n')
     } else if (fmt === 'code_method') {
@@ -4882,6 +4359,68 @@ const getDigisellerPrice = (subscriptionType: string): number | undefined => {
   const matched = digisellerPrices.value.find(p => p.subscription_type === subscriptionType)
   return matched?.price
 }
+
+const subscriptionTypeAliases = (subscriptionType: string): string[] => {
+  const type = subscriptionType.trim().toLowerCase()
+  if (!type) return []
+  if (type === 'pro+' || type === 'proplus' || type === 'pro_plus') return ['pro+', 'pro_plus']
+  return [type]
+}
+
+const readPositivePrice = (raw: unknown): number | undefined => {
+  const cost = typeof raw === 'string' ? Number(raw) : raw
+  if (typeof cost !== 'number' || Number.isNaN(cost) || cost <= 0) return undefined
+  return cost
+}
+
+const getDigisellerCost = (subscriptionType: string): number | undefined => {
+  const type = subscriptionType.trim().toLowerCase()
+  const aliases = [type, ...subscriptionTypeAliases(type).filter(alias => alias !== type)]
+  for (const alias of aliases) {
+    const matched = digisellerPrices.value.find(p => p.subscription_type.trim().toLowerCase() === alias)
+    const cost = readPositivePrice(matched?.cost_price)
+    if (cost !== undefined) return cost
+  }
+  return undefined
+}
+
+const keepsUpgradeCostPrice = (payer?: string | null) => {
+  const name = (payer || '').trim()
+  if (!name) return true
+  if (/^kingfer/i.test(name) || /^easan/i.test(name)) return true
+  return ['小姑', '大姑', '大丈', '锐哥'].includes(name)
+}
+
+const upgradePriceMarkup = (subscriptionType: string) => {
+  const type = subscriptionType.trim().toLowerCase()
+  if (type === 'pro') return 5
+  if (type === 'pro+' || type === 'proplus' || type === 'pro_plus') return 10
+  if (type === 'ultra') return 20
+  return 0
+}
+
+const upgradePurchasePrice = (subscriptionType: string, payer?: string | null): number | null => {
+  const cost = getDigisellerCost(subscriptionType)
+  if (cost === undefined) return null
+  if (keepsUpgradeCostPrice(payer)) return cost
+  return cost + upgradePriceMarkup(subscriptionType)
+}
+
+let upgradeCostRequest = 0
+const syncUpgradeCostPrice = async (subscriptionType: string) => {
+  const requestId = ++upgradeCostRequest
+  await loadDigisellerPrices()
+  if (requestId !== upgradeCostRequest) return
+  upgradeForm.value.purchase_price = upgradePurchasePrice(subscriptionType, upgradeForm.value.payer)
+}
+
+watch(
+  () => [upgradeForm.value.subscription_type, upgradeForm.value.payer] as const,
+  ([type]) => {
+    if (!showUpgradeModal.value && !showGotoProSuccessModal.value) return
+    void syncUpgradeCostPrice(type || '')
+  }
+)
 
 // 初始化
 onMounted(() => {

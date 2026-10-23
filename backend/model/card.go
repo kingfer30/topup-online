@@ -587,37 +587,6 @@ func RollbackSoldCard(tableName string, id int) error {
 	return nil
 }
 
-// BatchDashboardGotoAfterResolve 提链返回 dashboard 时：仅当订阅状态为掉订阅(-1)时才回滚已售至未售，并标记订阅状态为已订阅需点击pro（-2）、检查成功
-func BatchDashboardGotoAfterResolve(tableName string, ids []int) (success int, errMsgs []string) {
-	for _, id := range ids {
-		if id == 0 {
-			continue
-		}
-		card, err := GetCardById(tableName, id)
-		if err != nil || card == nil {
-			errMsgs = append(errMsgs, fmt.Sprintf("ID %d: 记录不存在", id))
-			continue
-		}
-		if card.SubscriptionStatus != -1 {
-			errMsgs = append(errMsgs, fmt.Sprintf("ID %d (%s): 订阅状态非掉订阅，不可回滚", id, card.Account))
-			continue
-		}
-		if err := RollbackSoldCard(tableName, id); err != nil {
-			errMsgs = append(errMsgs, fmt.Sprintf("ID %d 回滚: %v", id, err))
-			continue
-		}
-		if err := DB.Table(tableName).Where("id = ?", id).Updates(map[string]interface{}{
-			"subscription_status": -2,
-			"is_check":            1,
-		}).Error; err != nil {
-			errMsgs = append(errMsgs, fmt.Sprintf("ID %d 更新状态: %v", id, err))
-			continue
-		}
-		success++
-	}
-	return success, errMsgs
-}
-
 // RollbackPickup 回滚取货：将发货中(2)重置为未出售(1)
 func RollbackPickup(tableName string, id int) error {
 	if id == 0 {

@@ -1091,29 +1091,6 @@ func RollbackPickup(c *gin.Context) {
 	})
 }
 
-// BatchDashboardGotoResolve 批量处理提链结果为 cursor dashboard 的卡密：仅掉订阅(-1)回滚已售并标记订阅状态 -2、检查成功
-func BatchDashboardGotoResolve(c *gin.Context) {
-	var req struct {
-		Category string `json:"category" binding:"required"`
-		IDs      []int  `json:"ids" binding:"required"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusOK, gin.H{"code": 400, "message": "参数错误: " + err.Error()})
-		return
-	}
-	tableName := model.GetTableNameByCategory(req.Category)
-	if !model.CheckTableExists(tableName) {
-		c.JSON(http.StatusOK, gin.H{"code": 404, "message": "该卡密类别不存在"})
-		return
-	}
-	success, errMsgs := model.BatchDashboardGotoAfterResolve(tableName, req.IDs)
-	msg := fmt.Sprintf("已处理 %d 条（dashboard 回滚+标记）", success)
-	if len(errMsgs) > 0 {
-		msg += "；" + strings.Join(errMsgs, "；")
-	}
-	c.JSON(http.StatusOK, gin.H{"code": 200, "message": msg, "data": success})
-}
-
 // EnableOnDemandSpendHandler 为指定卡密开启按需付费
 func EnableOnDemandSpendHandler(c *gin.Context) {
 	var req struct {

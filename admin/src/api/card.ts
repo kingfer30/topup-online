@@ -236,14 +236,6 @@ export const rollbackSoldCard = (data: RollbackPickupRequest): Promise<ApiRespon
   return http.post('/admin/cards/rollback-sold', data) as Promise<ApiResponse>
 }
 
-// 提链结果为 cursor dashboard 且掉订阅时：批量回滚已售并标记订阅 -2、检查成功
-export const batchDashboardGotoResolve = (data: {
-  category: string
-  ids: number[]
-}): Promise<ApiResponse<number>> => {
-  return http.post('/admin/cards/batch-dashboard-goto-resolve', data) as Promise<ApiResponse<number>>
-}
-
 // 按订阅类型细分的库存
 export interface SubscriptionTypeStat {
   subscription_type: string
@@ -362,12 +354,6 @@ export const pollCardSubscription = (category: string, id: number): Promise<ApiR
   return http.post('/admin/cards/poll-subscription', { category, id }) as Promise<ApiResponse<PollSubscriptionResult>>
 }
 
-export const halfPriceCheckout = (data: {
-  token: string
-}): Promise<ApiResponse<string>> => {
-  return http.post('/admin/cards/half-price-checkout', data) as Promise<ApiResponse<string>>
-}
-
 export interface UnifyFreeResult {
   id: number
   account: string
@@ -388,31 +374,6 @@ export const cancelSubscription = (data: {
   ids: number[]
 }): Promise<ApiResponse<UnifyFreeResult[]>> => {
   return http.post('/admin/cards/cancel-subscription', data) as Promise<ApiResponse<UnifyFreeResult[]>>
-}
-
-export const subscribeWindow = (data: {
-  category: string
-  id: number
-  tier: string
-}): Promise<ApiResponse<{ url: string }>> => {
-  return http.post('/admin/cards/subscribe-window', data) as Promise<ApiResponse<{ url: string }>>
-}
-
-export const subscribePay = (data: {
-  category: string
-  id: number
-  tier: string
-  card_number: string
-  exp_month: string
-  exp_year: string
-  cvc: string
-  line1: string
-  city: string
-  state: string
-  postal: string
-  country: string
-}): Promise<ApiResponse<{ paid?: boolean }>> => {
-  return http.post('/admin/cards/open-subscribe', data) as Promise<ApiResponse<{ paid?: boolean }>>
 }
 
 // 单独更新卡密备注

@@ -139,7 +139,7 @@
               <n-form-item>
                 <n-space vertical :size="8">
                   <n-text depth="3" style="font-size: 12px">
-                    代理用于提取 Stripe / Alipay 付款页，以及 Cursor 订阅卡支付。分开填写主机、账号、密码更方便，保存时由后端组装。主机留空则走系统环境代理。
+                    代理用于提取 Stripe / Alipay 付款页。分开填写主机、账号、密码更方便，保存时由后端组装。主机留空则走系统环境代理。
                   </n-text>
                   <n-button type="primary" :loading="cursorPaySaving" @click="handleSaveCursorPay">保存 Cursor 付款设置</n-button>
                 </n-space>
@@ -238,14 +238,15 @@
           </n-tab-pane>
 
           <n-tab-pane name="digiseller" tab="Digiseller设置">
-            <div class="max-w-2xl">
-              <p class="text-sm text-gray-500 mb-4">配置各订阅类型的今日售价，取货时将自动填充对应售价。</p>
+            <div class="max-w-3xl">
+              <p class="text-sm text-gray-500 mb-4">配置各订阅类型的今日售价（美元）和成本价（人民币）。今日售价在取货时自动填充，成本价在更新为成品时自动填入追加价格。</p>
               <n-spin :show="digisellerLoading">
                 <n-table :bordered="false" :single-line="false" size="small">
                   <thead>
                     <tr>
                       <th style="width: 160px">订阅类型</th>
                       <th>今日售价（USD）</th>
+                      <th>成本价（人民币）</th>
                       <th style="width: 100px">操作</th>
                     </tr>
                   </thead>
@@ -264,6 +265,18 @@
                           style="width: 160px"
                         >
                           <template #prefix>$</template>
+                        </n-input-number>
+                      </td>
+                      <td>
+                        <n-input-number
+                          v-model:value="item.cost_price"
+                          :min="0"
+                          :precision="2"
+                          :step="0.5"
+                          placeholder="请输入成本价"
+                          style="width: 160px"
+                        >
+                          <template #prefix>¥</template>
                         </n-input-number>
                       </td>
                       <td>
@@ -525,17 +538,18 @@ const handleTestEmail = () => {
 }
 
 // 所有订阅类型
-const allSubscriptionTypes = ['free', 'pro', 'pro_plus', 'pro_x5', 'pro_x20', 'ultra', 'go', 'plus', 'team']
+const allSubscriptionTypes = ['free', 'pro', 'pro_plus', 'pro+', 'pro_x5', 'pro_x20', 'ultra', 'go', 'plus', 'premium', 'super', 'team']
 
 interface DigisellerPriceRow {
   subscription_type: string
   price: number
+  cost_price: number
   saving: boolean
 }
 
 const digisellerLoading = ref(false)
 const digisellerPriceList = ref<DigisellerPriceRow[]>(
-  allSubscriptionTypes.map((t) => ({ subscription_type: t, price: 0, saving: false }))
+  allSubscriptionTypes.map((t) => ({ subscription_type: t, price: 0, cost_price: 0, saving: false }))
 )
 
 // 加载已保存的价格配置
@@ -544,10 +558,12 @@ const loadDigisellerPrices = async () => {
   try {
     const res = await getDigisellerPrices()
     if (res.code === 200 && res.data) {
-      const map = new Map(res.data.map((item) => [item.subscription_type, item.price]))
+      const map = new Map(res.data.map((item) => [item.subscription_type, item]))
       digisellerPriceList.value.forEach((row) => {
-        if (map.has(row.subscription_type)) {
-          row.price = map.get(row.subscription_type)!
+        const saved = map.get(row.subscription_type)
+        if (saved) {
+          row.price = saved.price
+          row.cost_price = saved.cost_price || 0
         }
       })
     }
@@ -565,6 +581,7 @@ const handleSaveDigisellerPrice = async (item: DigisellerPriceRow) => {
     const res = await upsertDigisellerPrice({
       subscription_type: item.subscription_type,
       price: item.price,
+      cost_price: item.cost_price || 0,
     })
     if (res.code === 200) {
       message.success(`${item.subscription_type} 售价保存成功`)

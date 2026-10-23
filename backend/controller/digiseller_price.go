@@ -24,10 +24,11 @@ func GetDigisellerPrices(c *gin.Context) {
 	})
 }
 
-// UpsertDigisellerPriceRequest 设置售价请求
+// UpsertDigisellerPriceRequest 设置售价和成本价请求
 type UpsertDigisellerPriceRequest struct {
 	SubscriptionType string  `json:"subscription_type" binding:"required"`
-	Price            float64 `json:"price" binding:"required,min=0"`
+	Price            float64 `json:"price" binding:"min=0"`
+	CostPrice        float64 `json:"cost_price" binding:"min=0"`
 }
 
 // UpsertDigisellerPrice 新增或更新某订阅类型的今日售价
@@ -41,7 +42,7 @@ func UpsertDigisellerPrice(c *gin.Context) {
 		return
 	}
 
-	if err := model.UpsertDigisellerPrice(req.SubscriptionType, req.Price); err != nil {
+	if err := model.UpsertDigisellerPrice(req.SubscriptionType, req.Price, req.CostPrice); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code":    500,
 			"message": "保存价格配置失败: " + err.Error(),
