@@ -42,7 +42,7 @@ func GotoPro(c *gin.Context) {
 		return
 	}
 
-	link, err := createMonthlyCheckoutLink(req.Token, req.SubscriptionType)
+	link, email, err := createMonthlyCheckoutLink(req.Token, req.SubscriptionType)
 	if err != nil {
 		status := http.StatusInternalServerError
 		code := 500
@@ -61,38 +61,43 @@ func GotoPro(c *gin.Context) {
 		"code":    200,
 		"message": "成功",
 		"data":    link,
+		"email":   email,
 	})
 }
 
-func createMonthlyCheckoutLink(rawToken, subscriptionType string) (string, error) {
+func createMonthlyCheckoutLink(rawToken, subscriptionType string) (string, string, error) {
 	token, err := normalizeCursorCookieToken(rawToken)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	tier, err := monthlyCheckoutTier(subscriptionType)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	if err := rejectMergedAccount(rawToken); err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	httpClient := cursorAuthHTTPClient(40*time.Second, true)
 	email := cursorAccountEmail(httpClient, token)
+	accountEmail := email
+	if accountEmail == "user@example.com" {
+		accountEmail = ""
+	}
 	if err := pinOldStripeChannel(httpClient, token, email); err != nil {
-		return "", err
+		return "", "", err
 	}
 	link, err := cursorCheckoutLink(httpClient, token, tier, false)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	if strings.Contains(link, "stripe.com") {
-		return link, nil
+		return link, accountEmail, nil
 	}
 	if strings.Contains(strings.ToLower(link), "unify") {
-		return "", fmt.Errorf("账号没钉住老通道，结账走到了 unify")
+		return "", "", fmt.Errorf("账号没钉住老通道，结账走到了 unify")
 	}
-	return "", fmt.Errorf("未拿到 Stripe 结账链接: %s", clipGotoText(link))
+	return "", "", fmt.Errorf("未拿到 Stripe 结账链接: %s", clipGotoText(link))
 }
 
 func rejectMergedAccount(rawToken string) error {

@@ -105,6 +105,7 @@ func SetApiRouter(router *gin.Engine) {
 			adminGroup.POST("/cards/cancel-subscription", controller.CancelSubscription)                 // 用 Cursor token 换 Grok sso 后取消订阅
 			adminGroup.POST("/cards/stripe-alipay", controller.SubmitStripeAlipay)                       // 自动提交 Stripe Alipay 账单并返回付款页
 			adminGroup.POST("/cards/poll-subscription", controller.PollCardSubscription)                 // 轮询卡密当前订阅类型
+			adminGroup.POST("/cards/poll-token-subscription", controller.PollTokenSubscription)          // 用 token 轮询订阅类型
 			adminGroup.POST("/cards/half-price-checkout", controller.HalfPriceCheckout)                  // 半价提链：官方 welcome-back 302 Stripe
 			adminGroup.POST("/cards/batch-freeze", controller.BatchFreezeCards)                          // 批量冻结/解冻普号
 			adminGroup.POST("/cards/batch-delete", controller.BatchDeleteCards)                          // 批量删除（status=-1）

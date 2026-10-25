@@ -35,17 +35,24 @@
           <n-button v-if="cardType === 'all' && category === 'cursor'" type="success"
             :disabled="checkedRowKeys.length === 0 || batchUnifyLoading" :loading="batchUnifyLoading" @click="handleBatchUnifyFree">
             <template #icon><span>🔗</span></template>
-            批量合并 {{ checkedRowKeys.length > 0 ? `(${checkedRowKeys.length})` : '' }}
+            合并 {{ checkedRowKeys.length > 0 ? `(${checkedRowKeys.length})` : '' }}
           </n-button>
           <n-button v-if="category === 'cursor'" type="error"
             :disabled="checkedRowKeys.length === 0 || cancelSubLoading" :loading="cancelSubLoading" @click="handleCancelSubscription">
-            取消订阅 {{ checkedRowKeys.length > 0 ? `(${checkedRowKeys.length})` : '' }}
+            退订 {{ checkedRowKeys.length > 0 ? `(${checkedRowKeys.length})` : '' }}
           </n-button>
           <n-button v-if="cardType === 'unsold' || cardType === 'sold'" type="warning"
             :disabled="checkedRowKeys.length === 0" :loading="batchOnDemandLoading" @click="handleBatchEnableOnDemand">
             <template #icon><span>💸</span></template>
             批量后付费 {{ checkedRowKeys.length > 0 ? `(${checkedRowKeys.length})` : '' }}
           </n-button>
+          <n-dropdown v-if="cardType === 'sold' && category === 'cursor'" trigger="click"
+            :options="gotoProHeaderOptions" @select="handleOpenTokenGotoPro">
+            <n-button type="warning">
+              <template #icon><span>🔗</span></template>
+              提链
+            </n-button>
+          </n-dropdown>
           <n-button v-if="cardType === 'sold'" type="error" @click="handleOpenRecharge">
             <template #icon><span>💳</span></template>
             新增代充
@@ -1007,6 +1014,17 @@
       </n-spin>
     </n-modal>
 
+    <n-modal v-model:show="showTokenGotoProModal" :title="`提链 - ${tokenGotoProTypeLabel}`" preset="dialog"
+      positive-text="开始提链" negative-text="取消" :positive-button-props="{ loading: tokenGotoProLoading }"
+      @positive-click="handleTokenGotoProSubmit" style="width: 560px">
+      <n-form label-placement="left" label-width="72px" style="margin-top: 16px">
+        <n-form-item label="Token">
+          <n-input v-model:value="tokenGotoProInput" type="textarea" :rows="4"
+            placeholder="WorkosCursorSessionToken，形如 user_xxx::eyJ..." />
+        </n-form-item>
+      </n-form>
+    </n-modal>
+
     <!-- 提链结果弹窗 -->
     <n-modal
       v-model:show="showGotoProModal"
@@ -1220,6 +1238,7 @@ import {
   gotoProUpgrade,
   submitStripeAlipay,
   pollCardSubscription,
+  pollTokenSubscription,
   updateCardRemark,
   updateCardPublicQuery,
   batchFreezeCards,
@@ -1643,6 +1662,15 @@ const gotoProTypeOptions = [
   { label: 'Pro+', value: 'pro_plus' },
   { label: 'Ultra', value: 'ultra' },
 ]
+const gotoProHeaderOptions = gotoProTypeOptions.map(opt => ({ label: opt.label, key: opt.value }))
+const showTokenGotoProModal = ref(false)
+const tokenGotoProInput = ref('')
+const tokenGotoProType = ref('')
+const tokenGotoProLoading = ref(false)
+const tokenGotoProMode = ref(false)
+const tokenGotoProToken = ref('')
+const tokenGotoProSaving = ref(false)
+const tokenGotoProTypeLabel = computed(() => gotoProTypeOptions.find(opt => opt.value === tokenGotoProType.value)?.label || tokenGotoProType.value)
 const toStoredSubscriptionType = (value: string) => (value === 'pro+' ? 'pro_plus' : value)
 const pickupCardInfoRef = ref<HTMLPreElement | null>(null)
 
@@ -2976,12 +3004,109 @@ const handleBatchEnableOnDemand = async () => {
 
 // 提链：获取 Cursor Pro 付款链接
 // 提链：选择订阅类型后直接发起请求
+const resetTokenGotoPro = () => {
+  tokenGotoProMode.value = false
+  tokenGotoProToken.value = ''
+  tokenGotoProSaving.value = false
+}
+
+const handleOpenTokenGotoPro = (subscriptionType: string) => {
+  tokenGotoProType.value = subscriptionType
+  tokenGotoProInput.value = ''
+  showTokenGotoProModal.value = true
+}
+
+const handleTokenGotoProSubmit = async () => {
+  const token = tokenGotoProInput.value.trim()
+  if (!token) {
+    message.error('请输入 Token')
+    return false
+  }
+  tokenGotoProLoading.value = true
+  try {
+    const response = await gotoProUpgrade(token, tokenGotoProType.value)
+    if (response.code !== 200 || !response.data) {
+      message.error(response.message || '获取付款链接失败')
+      return false
+    }
+    const email = (response.email || '').trim()
+    if (!email) {
+      message.warning('已生成付款链接，但没有从 Token 读到邮箱，支付成功后无法自动写入')
+    }
+    resetTokenGotoPro()
+    tokenGotoProMode.value = true
+    tokenGotoProToken.value = token
+    gotoProCardId.value = 0
+    gotoProAccount.value = email
+    gotoProSubscriptionType.value = toStoredSubscriptionType(tokenGotoProType.value)
+    gotoProLink.value = response.data
+    showTokenGotoProModal.value = false
+    showGotoProModal.value = true
+    runStripeAlipay(response.data)
+  } catch (error: any) {
+    message.error(error.response?.data?.message || '获取付款链接失败')
+    return false
+  } finally {
+    tokenGotoProLoading.value = false
+  }
+}
+
+const saveTokenGotoProCard = async (subscriptionType: string) => {
+  if (tokenGotoProSaving.value) return
+  const email = gotoProAccount.value.trim()
+  const token = tokenGotoProToken.value.trim()
+  if (!email) {
+    message.error('没有读到邮箱，无法写入已售记录')
+    return
+  }
+  if (!token) {
+    message.error('没有 Token，无法写入已售记录')
+    return
+  }
+  tokenGotoProSaving.value = true
+  stopSubscriptionPoll()
+  closeAlipayPayWindow()
+  const storedType = toStoredSubscriptionType(subscriptionType || gotoProSubscriptionType.value)
+  const now = Math.floor(Date.now() / 1000)
+  await loadDigisellerPrices()
+  try {
+    const response = await createCard(category.value, {
+      account: email,
+      token,
+      subscription_type: storedType,
+      subscription_status: 1,
+      subscription_time: now,
+      purchase_date: now,
+      purchase_price: upgradePurchasePrice(storedType, undefined) ?? undefined,
+      sell_price: getDigisellerPrice(storedType) ?? 20,
+      sell_to: 'Digiseller',
+      sell_status: 3,
+      sell_date: now,
+      account_type: 2,
+      status: 1,
+    })
+    if (response.code !== 200) {
+      tokenGotoProSaving.value = false
+      message.error(response.message || '写入已售记录失败')
+      return
+    }
+    message.success(`已写入已售记录 ${email}`)
+    showGotoProModal.value = false
+    resetTokenGotoPro()
+    await loadCards()
+  } catch (error: any) {
+    tokenGotoProSaving.value = false
+    message.error(error.response?.data?.message || '写入已售记录失败')
+  }
+}
+
 const handleGotoProWithType = async (row: Card, subscriptionType: string) => {
   if (!row.token) return
   gotoProLoading.value[row.id] = true
   try {
     const response = await gotoProUpgrade(row.token, subscriptionType)
     if (response.code === 200 && response.data) {
+      resetTokenGotoPro()
       gotoProCardId.value = row.id
       gotoProAccount.value = row.account || ''
       gotoProSubscriptionType.value = toStoredSubscriptionType(subscriptionType)
@@ -3137,7 +3262,9 @@ const startSubscriptionPoll = () => {
       return
     }
     try {
-      const res = await pollCardSubscription(category.value, gotoProCardId.value)
+      const res = tokenGotoProMode.value
+        ? await pollTokenSubscription(tokenGotoProToken.value)
+        : await pollCardSubscription(category.value, gotoProCardId.value)
       if (res.code === 200 && res.data?.subscribed) {
         stopSubscriptionPoll()
         const subType = (res.data.subscription_type || '').trim()
@@ -3148,7 +3275,11 @@ const startSubscriptionPoll = () => {
         stripePollStatus.value = `已检测到订阅 ${subType || '已付费'}，正在自动确认支付成功`
         message.success(`检测到订阅 ${subType || ''}，已自动确认支付成功`)
         closeAlipayPayWindow()
-        handleGotoProSuccess()
+        if (tokenGotoProMode.value) {
+          await saveTokenGotoProCard(subType || gotoProSubscriptionType.value)
+        } else {
+          handleGotoProSuccess()
+        }
         return
       }
       subscriptionWaitMembership = res.data?.subscription_type || 'free'
@@ -3169,6 +3300,10 @@ onUnmounted(() => {
 
 // 支付成功：先立刻更新为成品，再打开补充价格弹窗
 const handleGotoProSuccess = async () => {
+  if (tokenGotoProMode.value) {
+    await saveTokenGotoProCard(gotoProSubscriptionType.value)
+    return
+  }
   stopSubscriptionPoll()
   closeAlipayPayWindow()
   showGotoProModal.value = false
@@ -4388,7 +4523,7 @@ const keepsUpgradeCostPrice = (payer?: string | null) => {
   const name = (payer || '').trim()
   if (!name) return true
   if (/^kingfer/i.test(name) || /^easan/i.test(name)) return true
-  return ['小姑', '大姑', '大丈', '锐哥'].includes(name)
+  return ['锐哥'].includes(name)
 }
 
 const upgradePriceMarkup = (subscriptionType: string) => {

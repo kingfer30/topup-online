@@ -328,8 +328,8 @@ export const batchEnableOnDemandSpend = (category: string, ids: number[]): Promi
 }
 
 // 提链：获取 Cursor Pro 付款链接
-export const gotoProUpgrade = (token: string, subscriptionType: string): Promise<ApiResponse<string>> => {
-  return http.post('/admin/cards/goto-pro', { token, subscription_type: subscriptionType }) as Promise<ApiResponse<string>>
+export const gotoProUpgrade = (token: string, subscriptionType: string): Promise<ApiResponse<string> & { email?: string }> => {
+  return http.post('/admin/cards/goto-pro', { token, subscription_type: subscriptionType }) as Promise<ApiResponse<string> & { email?: string }>
 }
 
 export interface StripeAlipayResult {
@@ -352,6 +352,10 @@ export interface PollSubscriptionResult {
 
 export const pollCardSubscription = (category: string, id: number): Promise<ApiResponse<PollSubscriptionResult>> => {
   return http.post('/admin/cards/poll-subscription', { category, id }) as Promise<ApiResponse<PollSubscriptionResult>>
+}
+
+export const pollTokenSubscription = (token: string): Promise<ApiResponse<PollSubscriptionResult>> => {
+  return http.post('/admin/cards/poll-token-subscription', { token }) as Promise<ApiResponse<PollSubscriptionResult>>
 }
 
 export interface UnifyFreeResult {

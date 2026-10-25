@@ -821,6 +821,30 @@ func BatchCheckCards(c *gin.Context) {
 	})
 }
 
+// PollTokenSubscription 用会话 token 查询当前订阅类型，不写卡密
+func PollTokenSubscription(c *gin.Context) {
+	var req struct {
+		Token string `json:"token" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusOK, gin.H{"code": 400, "message": "参数错误"})
+		return
+	}
+	membership, err := scheduler.PeekCursorMembership(req.Token)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"code": 500, "message": "查询订阅失败: " + err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"code":    200,
+		"message": "成功",
+		"data": gin.H{
+			"subscription_type": membership,
+			"subscribed":        scheduler.IsPaidMembership(membership),
+		},
+	})
+}
+
 // PollCardSubscription 只查询当前订阅类型，不改卡密状态
 func PollCardSubscription(c *gin.Context) {
 	var req struct {
