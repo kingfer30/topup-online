@@ -129,6 +129,8 @@ func SetApiRouter(router *gin.Engine) {
 			// AI 模型设置与翻译（管理员专用）
 			adminGroup.GET("/settings/ai", controller.GetAdminAISettings)
 			adminGroup.PUT("/settings/ai", controller.UpdateAdminAISettings)
+			adminGroup.GET("/settings/api-platform", controller.GetAdminAPIPlatformSettings)
+			adminGroup.PUT("/settings/api-platform", controller.UpdateAdminAPIPlatformSettings)
 			adminGroup.GET("/settings/cursor-pay", controller.GetAdminCursorPaySettings)
 			adminGroup.PUT("/settings/cursor-pay", controller.UpdateAdminCursorPaySettings)
 			adminGroup.POST("/ai/translate", controller.AdminAITranslate)
@@ -193,6 +195,27 @@ func SetApiRouter(router *gin.Engine) {
 			adminGroup.PUT("/ad-configs/:id", controller.UpdateAdConfig)
 			adminGroup.DELETE("/ad-configs/:id", controller.DeleteAdConfig)
 			adminGroup.POST("/upload/ad-image", controller.UploadAdImage)
+
+			// API 跑付 / Azure 台子
+			adminGroup.GET("/api-platforms", controller.ListApiPlatforms)
+			adminGroup.POST("/api-platforms", controller.CreateApiPlatform)
+			adminGroup.GET("/api-platforms/:id", controller.GetApiPlatform)
+			adminGroup.PUT("/api-platforms/:id", controller.UpdateApiPlatform)
+			adminGroup.DELETE("/api-platforms/:id", controller.DeleteApiPlatform)
+			adminGroup.GET("/api-platforms/:id/channels", controller.ListApiPlatformChannels)
+			adminGroup.POST("/api-platforms/:id/channels/pull", controller.PullApiPlatformChannels)
+			adminGroup.POST("/api-platforms/:id/channels/save", controller.SaveApiPlatformChannels)
+			adminGroup.POST("/api-platforms/:id/channels/sync", controller.SyncApiPlatformChannels)
+			adminGroup.POST("/api-platforms/:id/channels/prices", controller.BatchUpdateApiPlatformChannelPrices)
+			adminGroup.PUT("/api-platforms/:id/channels/:channelRowId", controller.UpdateApiPlatformChannelMoney)
+			adminGroup.POST("/api-platforms/:id/channels/:channelRowId/test", controller.TestApiPlatformChannel)
+			adminGroup.PUT("/api-platforms/:id/channels/:channelRowId/models", controller.UpdateApiPlatformChannelModels)
+			adminGroup.POST("/api-platforms/:id/channels/:channelRowId/status", controller.UpdateApiPlatformChannelStatus)
+			adminGroup.GET("/api-platforms/:id/bills", controller.ListApiPlatformBills)
+			adminGroup.POST("/api-platforms/:id/bills", controller.CreateApiPlatformBill)
+			adminGroup.GET("/api-platforms/:id/bills/:billId", controller.GetApiPlatformBill)
+			adminGroup.POST("/api-platforms/:id/bills/:billId/pay", controller.PayApiPlatformBill)
+			adminGroup.POST("/api-platforms/:id/bills/:billId/void", controller.VoidApiPlatformBill)
 		}
 
 		// 用户认证相关（无需认证）

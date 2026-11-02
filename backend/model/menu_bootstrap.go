@@ -445,3 +445,73 @@ func EnsureAIMenuPlacement() error {
 
 	return tx.Commit().Error
 }
+
+// EnsureApiRunpayMenu 幂等确保「API跑付 / Azure」菜单
+func EnsureApiRunpayMenu() error {
+	if DB == nil {
+		return nil
+	}
+	tx := DB.Begin()
+	if tx.Error != nil {
+		return tx.Error
+	}
+
+	var parent Menu
+	err := tx.Where("`key` = ? AND is_delete = ?", "api-runpay", -1).First(&parent).Error
+	if err != nil {
+		parent = Menu{
+			ParentId: 0,
+			Title:    "API跑付",
+			Key:      "api-runpay",
+			Path:     "",
+			Icon:     "☁️",
+			Sort:     11,
+			Status:   1,
+			IsDelete: -1,
+		}
+		if err := tx.Create(&parent).Error; err != nil {
+			tx.Rollback()
+			return err
+		}
+	} else if err := tx.Model(&Menu{}).Where("id = ?", parent.Id).Updates(map[string]any{
+		"parent_id": 0,
+		"title":     "API跑付",
+		"path":      "",
+		"icon":      "☁️",
+		"sort":      11,
+		"status":    1,
+		"is_delete": -1,
+	}).Error; err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	var child Menu
+	err = tx.Where("`key` = ? AND is_delete = ?", "api-runpay-azure", -1).First(&child).Error
+	if err != nil {
+		child = Menu{
+			ParentId: parent.Id,
+			Title:    "Azure",
+			Key:      "api-runpay-azure",
+			Path:     "/admin/api-runpay/azure",
+			Sort:     1,
+			Status:   1,
+			IsDelete: -1,
+		}
+		if err := tx.Create(&child).Error; err != nil {
+			tx.Rollback()
+			return err
+		}
+	} else if err := tx.Model(&Menu{}).Where("id = ?", child.Id).Updates(map[string]any{
+		"parent_id": parent.Id,
+		"title":     "Azure",
+		"path":      "/admin/api-runpay/azure",
+		"sort":      1,
+		"status":    1,
+		"is_delete": -1,
+	}).Error; err != nil {
+		tx.Rollback()
+		return err
+	}
+	return tx.Commit().Error
+}

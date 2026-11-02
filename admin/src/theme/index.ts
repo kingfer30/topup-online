@@ -112,11 +112,11 @@ export const themeOverrides: GlobalThemeOverrides = {
   },
   DataTable: {
     borderRadius: '12px',
-    thColor: 'rgba(0, 0, 0, 0.02)',
+    thColor: '#fafafa',
     thTextColor: '#86868b',
     thFontWeight: '600',
     tdColor: '#ffffff',
-    tdColorHover: 'rgba(0, 122, 255, 0.04)',
+    tdColorHover: '#f5faff',
     borderColor: 'rgba(0, 0, 0, 0.06)',
     thPaddingMedium: '14px 16px',
     tdPaddingMedium: '14px 16px',

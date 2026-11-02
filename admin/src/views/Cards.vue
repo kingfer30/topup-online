@@ -2915,6 +2915,7 @@ const runBatchUnify = async (ids: number[]) => {
     } else {
       message.success(response.message || '合并完成')
     }
+    await loadCards()
   } catch (error: any) {
     message.error(error.response?.data?.message || '合并失败')
   } finally {

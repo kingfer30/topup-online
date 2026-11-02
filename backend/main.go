@@ -76,6 +76,9 @@ func main() {
 		if err := model.EnsureDigisellerMenu(); err != nil {
 			logger.SysLog("EnsureDigisellerMenu: " + err.Error())
 		}
+		if err := model.EnsureApiRunpayMenu(); err != nil {
+			logger.SysLog("EnsureApiRunpayMenu: " + err.Error())
+		}
 
 		// 启动镜像卡密 Token 定时获取任务（每 30 分钟执行一次）
 		logger.SysLog("Starting MirrorCard Token Scheduler...")
@@ -112,6 +115,10 @@ func main() {
 			promoMailCheckScheduler.Start()
 			logger.SysLog("PromoMail Check Scheduler started successfully")
 		}
+
+		logger.SysLog("Starting API platform schedulers...")
+		scheduler.StartAPIPlatformSchedulers()
+		logger.SysLog("API platform schedulers started")
 	} else {
 		logger.SysLog("System not initialized yet, waiting for initialization...")
 	}

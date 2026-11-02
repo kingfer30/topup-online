@@ -94,6 +94,9 @@ func BatchUnifyFree(c *gin.Context) {
 		switch item.Status {
 		case "merged":
 			merged++
+			if err := model.DB.Table(tableName).Where("id = ?", card.Id).Update("remark", "新版未付").Error; err != nil {
+				logger.SysLog(fmt.Sprintf("免费合并 [ID:%d Account:%s] 备注更新失败: %v", card.Id, card.Account, err))
+			}
 		case "already":
 			already++
 		default:

@@ -323,6 +323,29 @@
               />
             </n-spin>
           </n-tab-pane>
+
+          <n-tab-pane name="api-platform" tab="API台子设置">
+            <n-form label-placement="left" label-width="140" class="max-w-2xl">
+              <n-form-item label="同步渠道">
+                <n-switch v-model:value="apiPlatformSettings.sync_enabled" />
+              </n-form-item>
+              <n-form-item label="同步间隔(分钟)">
+                <n-input-number v-model:value="apiPlatformSettings.sync_minutes" :min="1" :precision="0" style="width: 180px" />
+              </n-form-item>
+              <n-form-item label="发现新渠道">
+                <n-switch v-model:value="apiPlatformSettings.discover_enabled" />
+              </n-form-item>
+              <n-form-item label="发现间隔(分钟)">
+                <n-input-number v-model:value="apiPlatformSettings.discover_minutes" :min="1" :precision="0" style="width: 180px" />
+              </n-form-item>
+              <n-form-item label="测试模型">
+                <n-dynamic-tags v-model:value="apiPlatformSettings.test_models" />
+              </n-form-item>
+              <n-form-item>
+                <n-button type="primary" :loading="apiPlatformSaving" @click="handleSaveApiPlatform">保存</n-button>
+              </n-form-item>
+            </n-form>
+          </n-tab-pane>
         </n-tabs>
       </n-card>
     </n-space>
@@ -352,13 +375,58 @@ import {
   NText,
   NDataTable,
   NPopconfirm,
+  NDynamicTags,
   useMessage,
   type DataTableColumns,
 } from 'naive-ui'
 import { getDigisellerPrices, upsertDigisellerPrice } from '@/api/digiseller'
 import { getAdminAISettings, updateAdminAISettings } from '@/api/ai'
 import { getAdminCursorPaySettings, updateAdminCursorPaySettings } from '@/api/cursorPay'
+import { getAdminApiPlatformSettings, updateAdminApiPlatformSettings } from '@/api/api-platform'
 import { getAdminSessions, kickSession, kickAllSessions, type AdminSession } from '@/api/admin'
+
+const apiPlatformSaving = ref(false)
+const apiPlatformSettings = ref({
+  sync_enabled: true,
+  sync_minutes: 30,
+  discover_enabled: true,
+  discover_minutes: 30,
+  test_models: [] as string[],
+})
+
+const loadApiPlatformSettings = async () => {
+  try {
+    const res = await getAdminApiPlatformSettings()
+    if (res.code === 200 && res.data) {
+      apiPlatformSettings.value = {
+        sync_enabled: res.data.sync_enabled,
+        sync_minutes: res.data.sync_minutes || 30,
+        discover_enabled: res.data.discover_enabled,
+        discover_minutes: res.data.discover_minutes || 30,
+        test_models: res.data.test_models || [],
+      }
+    }
+  } catch {
+    message.error('加载 API 台子设置失败')
+  }
+}
+
+const handleSaveApiPlatform = async () => {
+  apiPlatformSaving.value = true
+  try {
+    const res = await updateAdminApiPlatformSettings(apiPlatformSettings.value)
+    if (res.code === 200) {
+      message.success('API 台子设置已保存')
+      if (res.data) apiPlatformSettings.value.test_models = res.data.test_models || apiPlatformSettings.value.test_models
+    } else {
+      message.error(res.message || '保存失败')
+    }
+  } catch {
+    message.error('保存失败')
+  } finally {
+    apiPlatformSaving.value = false
+  }
+}
 
 const router = useRouter()
 
@@ -679,6 +747,7 @@ onMounted(() => {
   loadDigisellerPrices()
   loadAISettings()
   loadCursorPaySettings()
+  loadApiPlatformSettings()
   loadSessions()
 })
 </script>

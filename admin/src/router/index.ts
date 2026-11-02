@@ -20,6 +20,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '登录' },
   },
   {
+    path: '/bill-print/:platformId/:billId',
+    name: 'ApiPlatformBillPrint',
+    component: () => import('@/views/ApiPlatformBillPrint.vue'),
+    meta: { title: '账单', requiresAuth: true },
+  },
+  {
     path: '/admin',
     component: () => import('@/layouts/AdminLayout.vue'),
     redirect: '/admin/dashboard',
@@ -156,6 +162,12 @@ const routes: RouteRecordRaw[] = [
         name: 'DigisellerOrders',
         component: () => import('@/views/DigisellerOrders.vue'),
         meta: { title: 'Digiseller订单管理', requiresAuth: true },
+      },
+      {
+        path: 'api-runpay/azure',
+        name: 'ApiRunpayAzure',
+        component: () => import('@/views/ApiPlatform.vue'),
+        meta: { title: 'Azure', requiresAuth: true },
       },
     ],
   },

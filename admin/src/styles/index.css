@@ -105,9 +105,18 @@ body {
   color: inherit;
 }
 
-/* Naive UI 全局覆盖 - Apple 风格微调 */
-:deep(.n-card) {
-  border: 1px solid rgba(0, 0, 0, 0.04) !important;
+/* 横向滚动表格的固定列必须用不透明底色，否则悬停时后面的字段会透出来盖住按钮 */
+.n-data-table-th--fixed-left,
+.n-data-table-th--fixed-right {
+  background-color: #fafafa;
+}
+.n-data-table-td--fixed-left,
+.n-data-table-td--fixed-right {
+  background-color: #ffffff;
+}
+.n-data-table-tr:hover .n-data-table-td--fixed-left,
+.n-data-table-tr:hover .n-data-table-td--fixed-right {
+  background-color: #f5faff;
 }
 
 /* 过渡动画 */

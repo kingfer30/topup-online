@@ -12,6 +12,8 @@
     "@types/crypto-js": "^4.2.2",
     "axios": "^1.6.8",
     "crypto-js": "^4.2.0",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^4.2.1",
     "naive-ui": "^2.38.1",
     "pinia": "^2.1.7",
     "vue": "^3.4.21",

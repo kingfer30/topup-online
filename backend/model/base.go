@@ -101,6 +101,18 @@ func migrateDB() error {
 	if err = DB.AutoMigrate(&AdConfig{}); err != nil {
 		return err
 	}
+	if err = DB.AutoMigrate(&ApiPlatform{}); err != nil {
+		return err
+	}
+	if err = DB.AutoMigrate(&ApiPlatformChannel{}); err != nil {
+		return err
+	}
+	if err = DB.AutoMigrate(&ApiPlatformBill{}); err != nil {
+		return err
+	}
+	if err = DB.AutoMigrate(&ApiPlatformBillItem{}); err != nil {
+		return err
+	}
 	// 对所有 cards_* 动态表执行新增列迁移
 	if err = MigrateCardTableColumns(); err != nil {
 		return err
